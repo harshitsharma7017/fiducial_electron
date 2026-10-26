@@ -1,0 +1,44 @@
+{
+  "name": "fqf-spike-m1",
+  "version": "0.0.0",
+  "private": true,
+  "description": "M1 feasibility spike for Fiducial Quote Fetcher. Throwaway experiment code, not the product application.",
+  "license": "UNLICENSED",
+  "main": "dist/main/index.js",
+  "packageManager": "npm@11.6.2",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-static.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint . --max-warnings=0 && prettier --check .",
+    "format": "prettier --write .",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "electron:install": "install-electron",
+    "spike": "electron .",
+    "package": "npm run build && node scripts/package.mjs",
+    "debug-port-check": "node scripts/debug-port-check.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3-multiple-ciphers": "13.0.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@electron/fuses": "2.1.3",
+    "@electron/packager": "20.3.0",
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.1",
+    "electron": "45.0.0",
+    "eslint": "10.12.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.13.0",
+    "pdfjs-dist": "6.4.299",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.0",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}

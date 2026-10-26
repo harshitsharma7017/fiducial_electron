@@ -276,3 +276,35 @@ R1 needs no PaneManager, orchestrator, driver or adapters. Its runtime surface i
 | AR-14 | Signing identities have long external lead times: Apple organisation enrolment needs a D-U-N-S number, and Windows certificates need organisation validation and an HSM or cloud signing service | High / High | Start Q-D04 and Q-D05 now. Agree in writing whether UAT may use unsigned builds |
 | AR-15 | Electron's ~24-week support window per line, with no auto-updater in R1 | High / Medium | Maintenance release cadence in the support plan. Treat P1-04 auto-update as a priority for R2 |
 | AR-16 | Chromium may start the DevTools server from a command-line switch before app code runs | Unknown / High (Track B only) | Measured in S2. If confirmed, document it, keep insurer sessions out of R1, and evaluate mitigations before R2 |
+
+---
+
+## 8. M1 evidence (26 October 2026)
+
+Source: [docs/evidence/M1/](docs/evidence/M1/README.md). Platform: **macOS 15.7.2 on Apple M4 only**, in development and packaged (ad-hoc, fused) builds. Each item below is labelled **Confirmed here** (measured on this platform), **Corrected** (an earlier statement in this document was wrong or incomplete) or **New**. Sections 1–7 are unchanged; where this section corrects them, this section wins.
+
+| Topic | Label | Finding | Affects |
+|---|---|---|---|
+| Electron 45 runtime | Confirmed here | Launches, sandboxed renderer, context isolation, strict-Zod IPC rejection, clean shutdown (S1) | §3.3, §7.2 |
+| Partition isolation and default-deny policy | Confirmed here | No cross-partition cookie, storage or HTTP leakage; navigation, redirect, popup and permission requests blocked (S2, mock portal) | §7.4 |
+| Cookies at rest | **New** | Without the `EnableCookieEncryption` fuse, insurer cookies are stored in **plaintext**; with it they are stored only as `v10` ciphertext. The fuse is **mandatory** if DM-03 option A is adopted | §7.4, C-08 |
+| Launch guard vs. fuses | **Corrected** | §7.5 treated the guard as the main control. Measured: `--inspect`, `--inspect-brk` and `NODE_OPTIONS=--inspect` open Node's inspector **before** app code runs, and `--inspect-brk` blocks the guard entirely. Only the `EnableNodeCliInspectArguments`, `EnableNodeOptionsEnvironmentVariable` and `RunAsNode` fuses closed these. The guard remains useful for `--remote-debugging-port/-pipe` | §7.5, DM-04 |
+| AR-16 (DevTools port before guard) | Confirmed here (narrowly) | Without a guard, port 9222 accepted connections at ~162 ms; with the guard, the app exited first and no port was observed. Timing-dependent; re-measure on Windows and slow hardware | AR-16 |
+| `safeStorage` API | **Corrected** | §3.9 and §7.3 named the synchronous `safeStorage` calls. They are deprecated in Electron 45 and documented for **removal in Electron 46**. Use `isAsyncEncryptionAvailable` / `encryptStringAsync` / `decryptStringAsync`. Old sync ciphertext decrypts with the async API. Storage reports *unavailable* before `ready` | §3.9, §7.3 |
+| `safeStorage` integrity | **New** | Ciphertext is **not integrity-protected** on this Mac: 27 of 48 single-bit tamperings decrypted to corrupted values instead of failing. The SQLCipher database stays fail-closed (no corrupted key opened it), but secrets stored with `safeStorage` alone could be silently corrupted. **Proposal (needs DM-02 security review):** use `safeStorage` only to wrap random data keys; protect secrets and evidence files with AES-256-GCM. **Implemented in the spike as Q-M1-01** (data keys verified by an HKDF key-check value; AES-256-GCM envelope v1 with authenticated header and name). On real macOS `safeStorage` every tampering attempt was rejected ([evidence](docs/evidence/M1/Q-M1-01-secret-vault.md)) | §3.9, §7.3, P1-02 |
+| Encrypted SQLite | Confirmed here | SQLCipher v4 mode via `better-sqlite3-multiple-ciphers` 13.0.3: no plaintext header or data in the database or WAL; wrong or missing key gives `SQLITE_NOTADB`; N-API prebuild works in the packaged, asar-integrity-checked app with `asarUnpack: **/*.node` | §3.8, §7.3, AR-11 |
+| PDF ₹ | Confirmed here | Bundled Noto Sans (OFL 1.1, licence verified in the font files) renders ₹ as extractable U+20B9; the regression test detects ■, ?, � and fallback fonts | §7.6 |
+| PDF header and footer | **New** | `printToPDF` `headerTemplate`/`footerTemplate` do not use page fonts (footer embedded as Times-Roman). Keep branding and any ₹ in the page body | §3.10, §7.6 |
+| Packaging hygiene | **New** | `@electron/packager` pruning removes devDependency modules but not non-module folders such as `.bin` and caches. The product packaging config needs an explicit filter and a content check in CI. All eight platforms' SQLite prebuilds were shipped and should be trimmed per target | M10 |
+| Development environment | **New** | The IDE exports `ELECTRON_RUN_AS_NODE=1`, so unfused Electron binaries run as Node. Launch scripts must clear it. This is also a live demonstration of why the `RunAsNode` fuse matters | §7.5 |
+
+### 8.1 Risk register additions and updates
+
+| ID | Risk | Likelihood / impact | Mitigation |
+|---|---|---|---|
+| AR-11 (update) | Native-module packaging | Reduced on macOS arm64 (works packaged); **open** for Windows x64 and macOS x64 | Complete S3 on those targets |
+| AR-16 (update) | DevTools port before guard | Not observed on macOS arm64; open elsewhere | Fuses always on; re-measure on Windows |
+| AR-17 | Sync `safeStorage` removed in Electron 46 (expected around mid-December 2026) | Certain / High if sync calls are used | Async API only; lint rule banning the sync methods |
+| AR-18 | `safeStorage` ciphertext lacks integrity protection | Confirmed on macOS / Medium | AES-256-GCM with a `safeStorage`-wrapped data key for all non-database secrets. **Mitigation implemented and tested on macOS (Q-M1-01)**, with 7 internal-review defects fixed (including the keyring lost-update and non-exclusive initialisation). Windows and the independent security review are still pending; limitations L1–L11 are unresolved, not accepted |
+| AR-19 | Developer tooling environment variables (`ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS`) change runtime behaviour | High in development / Medium | Clean environments in scripts and CI; fuses in every packaged build |
+| AR-20 | Dev-only files shipped in the package | Medium / Low–Medium | Explicit packaging allowlist plus a CI check of `app.asar` contents |

@@ -148,6 +148,29 @@ These are unchanged from sections B and D. "W" means weeks after the decisions a
 | W9 (M11) | Q-D03 (dummy data and PRD cases), Q-D06 (hosting), Q-D09 (legal review) |
 | Track B (R2) | Q-D01, Q-D02, Q-B16, Q-E06, Q-E07 |
 
+### 0.4 M1 evidence against the decision register (26 October 2026)
+
+Evidence: [docs/evidence/M1/](docs/evidence/M1/README.md). Tested on **macOS 15.7.2 arm64 only**. **No decision status changes**: every DM item is still a provisional direction, and no PO, client or security approval has been given. The table records only what has now been *tested*.
+
+| ID | Evidence from M1 | Still pending |
+|---|---|---|
+| DM-01 | Electron 45.0.0 runs on macOS 15 arm64 (dev and packaged) | Windows 10/11 x64, Intel Mac and **macOS 13** testing; PO confirmation of the macOS floor |
+| DM-02 | Encrypted SQLite verified on disk; key wrapped by OS storage; packaged native module works. **Finding:** `safeStorage` ciphertext is not integrity-protected (database still fail-closed). **Q-M1-01 vault implemented and tested** (every tampering rejected on macOS) | Security review of the vault design (Q-M1-01); Windows; supervised Keychain scenarios |
+| DM-03 | Partition isolation verified on a mock portal. Cookies are **plaintext at rest without the cookie-encryption fuse**, encrypted with it | Security review; real-portal behaviour (R2) |
+| DM-04 | Fused packaged build exposes no debug port under any tested switch. **The launch guard alone does not stop `--inspect*` or `NODE_OPTIONS`** (fuses are required) | Windows re-measurement (AR-16) |
+| DM-05, DM-06, DM-09 | Not testable by spikes | Unchanged |
+| DM-07 | TypeScript 6.0.3, Zod 4.6.7, Vitest 5.0.3, ESLint 10.12.0 and Prettier 3.9.9 work together with Electron 45 on this Mac. **Zod 4.6.5 and Vite 8.3.2 (the team's current pins) have published advisories**; the spike uses patched versions | Packager choice; Windows |
+| DM-08 | Noto Sans (OFL 1.1, verified in the font files) renders ₹ correctly; automated regression test in place | Windows rendering (TC-17); client brand font, if any; legal acceptance of the OFL (Q-D09) |
+
+**New questions raised by M1**
+
+| ID | Question | Why it matters | Owner | Blocks |
+|---|---|---|---|---|
+| Q-M1-01 | Approve the revised secret design: `safeStorage` wraps random data keys only, and secrets and evidence files use AES-256-GCM (authenticated)? **Status (26 Oct 2026): technically tested on macOS 15 arm64** (development and packaged); every tampering attempt rejected. An internal review found and fixed 7 defects (R1–R7, including a keyring lost-update that could strand secrets); 84 tests pass. **Awaiting independent security review; not approved; no risk accepted.** Windows credential storage and file-system behaviour, crash/power-loss testing, fuzzing, supervised Keychain scenarios and signing are outstanding. Review package: [design record](docs/evidence/M1/Q-M1-01-secret-vault.md) and [checklist](docs/evidence/M1/Q-M1-01-review-checklist.md). Open sub-decisions: rollback (L1), keyring metadata HMAC (L2), same-user access (L3), recovery/escrow (L5), single-instance lock (L6), usage cap, SQLCipher key placement, quarantine retention | `safeStorage` alone lets tampered secrets decrypt to corrupted values (AR-18) | Security reviewer, Tech | M4, P1-02 |
+| Q-M1-02 | When can Windows 10/11 x64, an Intel Mac and a macOS 13 machine be made available (Q-D07)? | M1 cannot complete without Windows results | Tech, Client | M1 exit |
+| Q-M1-03 | Can a person be present for supervised Keychain tests (identity change, second user, locked keychain)? These raise OS dialogs and were deliberately not run unattended | Key-loss behaviour (AR-13) must be documented for support | Tech | M4, M11 |
+| Q-M1-04 | Should the team's other repositories be told about the zod and vite advisories? This spike did not modify them | Same advisories apply wherever those pins are used | Tech | — |
+
 ## A. Must be answered before any implementation
 
 | ID | Question | Why it matters | Owner | Blocks |

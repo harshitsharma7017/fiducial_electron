@@ -1,0 +1,111 @@
+{
+  "run": "dev",
+  "report": {
+    "bundled-font": {
+      "pages": 1,
+      "fonts": [
+        {
+          "name": "AAAAAA+NotoSans-Bold",
+          "embedded": true
+        },
+        {
+          "name": "BAAAAA+NotoSans-Regular",
+          "embedded": true
+        },
+        {
+          "name": "CAAAAA+Times-Roman",
+          "embedded": true
+        }
+      ],
+      "rupeeRuns": 9,
+      "textProblems": [],
+      "fontProblems": [],
+      "sampleLines": [
+        "Sum insured: ₹5,00,000 — cover type \"Floater\" (2A + 1C); GST @ 18% / fees & charges: ₹ 2,345.00, it’s",
+        "Child) ₹1,23,456.00",
+        "Child) ₹9,999",
+        "Child) ₹0.50"
+      ]
+    },
+    "control-substituted-glyph": {
+      "pages": 1,
+      "fonts": [
+        {
+          "name": "AAAAAA+NotoSans-Bold",
+          "embedded": true
+        },
+        {
+          "name": "BAAAAA+NotoSans-Regular",
+          "embedded": true
+        },
+        {
+          "name": "CAAAAA+LucidaGrande",
+          "embedded": true
+        },
+        {
+          "name": "DAAAAA+Times-Roman",
+          "embedded": true
+        }
+      ],
+      "rupeeRuns": 0,
+      "textProblems": [
+        "no U+20B9 rupee sign found",
+        "substitute glyph present: U+25A0 BLACK SQUARE",
+        "expected text missing: ₹1,23,456.00",
+        "expected text missing: ₹9,999",
+        "expected text missing: ₹0.50",
+        "expected text missing: ₹12,34,56,789.99",
+        "expected text missing: ₹15,000",
+        "expected text missing: ₹7,250.75",
+        "expected text missing: ₹45,600",
+        "expected text missing: ₹1,00,000.00",
+        "expected text missing: Sum insured: ₹5,00,000 — cover type \"Floater\" (2A + 1C); GST @ 18% / fees & charges: ₹ 2,345.00, it’s indicative!"
+      ],
+      "fontProblems": [
+        "no text run contains U+20B9"
+      ],
+      "sampleLines": [
+        "Sum insured: ■5,00,000 — cover type \"Floater\" (2A + 1C); GST @ 18% / fees & charges: ■ 2,345.00, it’s",
+        "Child) ■1,23,456.00",
+        "Child) ■9,999",
+        "Child) ■0.50"
+      ]
+    },
+    "control-system-font": {
+      "pages": 1,
+      "fonts": [
+        {
+          "name": "AAAAAA+Helvetica-Bold",
+          "embedded": true
+        },
+        {
+          "name": "BAAAAA+Helvetica",
+          "embedded": true
+        },
+        {
+          "name": "CAAAAA+Helvetica",
+          "embedded": true
+        },
+        {
+          "name": "DAAAAA+Helvetica-Bold",
+          "embedded": true
+        },
+        {
+          "name": "EAAAAA+Times-Roman",
+          "embedded": true
+        }
+      ],
+      "rupeeRuns": 9,
+      "textProblems": [],
+      "fontProblems": [
+        "rupee drawn with CAAAAA+Helvetica, expected NotoSans"
+      ],
+      "sampleLines": [
+        "Sum insured: ₹5,00,000 — cover type \"Floater\" (2A + 1C); GST @ 18% / fees & charges: ₹ 2,345.00, it’s",
+        "Child) ₹1,23,456.00",
+        "Child) ₹9,999",
+        "Child) ₹0.50"
+      ]
+    }
+  }
+}

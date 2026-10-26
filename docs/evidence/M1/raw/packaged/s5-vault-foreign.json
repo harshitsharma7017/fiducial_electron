@@ -1,0 +1,38 @@
+{
+  "spike": "s5",
+  "phase": "vault-foreign",
+  "status": "pass",
+  "startedAt": "2026-10-26T15:00:53.220Z",
+  "environment": {
+    "electron": "45.0.0",
+    "chrome": "156.0.8078.48",
+    "node": "24.22.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "osVersion": "15.7.2",
+    "osRelease": "24.6.0",
+    "cpuModel": "Apple M4",
+    "runningUnderARM64Translation": false,
+    "isPackaged": true,
+    "appName": "fqf-spike-m1-packaged",
+    "appRoot": "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/package/fqf-spike-m1-packaged-darwin-arm64/fqf-spike-m1-packaged.app/Contents/Resources/app.asar",
+    "userData": "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/runs/packaged/user-data"
+  },
+  "checks": [
+    {
+      "id": "s5v.foreign-identity",
+      "description": "Another app identity cannot open this vault (key unusable)",
+      "expected": "KEY_UNWRAP_FAILED or KEY_CHECK_FAILED",
+      "actual": "KEY_UNWRAP_FAILED",
+      "pass": true
+    },
+    {
+      "id": "s5v.foreign-no-writes",
+      "description": "The foreign vault files were not modified",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    }
+  ],
+  "facts": {}
+}

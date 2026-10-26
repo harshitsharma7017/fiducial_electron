@@ -1,0 +1,20 @@
+{
+  "run": "packaged",
+  "report": {
+    "insurer-mock-a": [
+      {
+        "name": "fqf_mock_http",
+        "plainLength": 0,
+        "encryptedLength": 51,
+        "encryptedPrefix": "v10"
+      },
+      {
+        "name": "fqf_mock_js",
+        "plainLength": 0,
+        "encryptedLength": 51,
+        "encryptedPrefix": "v10"
+      }
+    ],
+    "insurer-mock-b": []
+  }
+}

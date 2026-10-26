@@ -1,0 +1,95 @@
+{
+  "spike": "s5",
+  "phase": "write",
+  "status": "pass",
+  "startedAt": "2026-10-26T15:00:48.886Z",
+  "environment": {
+    "electron": "45.0.0",
+    "chrome": "156.0.8078.48",
+    "node": "24.22.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "osVersion": "15.7.2",
+    "osRelease": "24.6.0",
+    "cpuModel": "Apple M4",
+    "runningUnderARM64Translation": false,
+    "isPackaged": false,
+    "appName": "fqf-spike-m1",
+    "appRoot": "~/Desktop/spirezen/fiducial_electron/spikes/m1",
+    "userData": "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/runs/dev/user-data"
+  },
+  "checks": [
+    {
+      "id": "s5.available",
+      "description": "safeStorage.isAsyncEncryptionAvailable() after ready",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s5.ciphertext-not-plaintext",
+      "description": "Ciphertext does not contain the secret",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "id": "s5.round-trip",
+      "description": "Async decrypt in the same process returns the secret",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s5.legacy-sync-readable",
+      "description": "Ciphertext from deprecated encryptString() decrypts with decryptStringAsync()",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s5.no-plaintext-files",
+      "description": "Secret not found in any file under userData or the output folder",
+      "expected": [],
+      "actual": [],
+      "pass": true
+    },
+    {
+      "id": "s5v.put",
+      "description": "Three random secrets stored",
+      "expected": 3,
+      "actual": 3,
+      "pass": true
+    },
+    {
+      "id": "s5v.no-plaintext",
+      "description": "No secret plaintext in any file (userData, results, logs)",
+      "expected": [],
+      "actual": [],
+      "pass": true
+    }
+  ],
+  "facts": {
+    "vault": {
+      "fingerprints": {
+        "portal.mock-a": "41003442ec8ce39f",
+        "portal.mock-b": "d044cae5d04c60dc",
+        "unicode": "661cd00cccdf8338"
+      },
+      "files": [
+        "keyring.json",
+        "portal.mock-a.fqse",
+        "portal.mock-b.fqse",
+        "unicode.fqse"
+      ]
+    },
+    "fingerprint": "e9e743aebaed1fa5",
+    "ciphertextBytes": 51,
+    "ciphertextPrefix": "v10",
+    "shouldReEncrypt": false,
+    "preReadySync": "false",
+    "preReadyAsync": "false",
+    "appName": "fqf-spike-m1",
+    "expectedKeychainService": "fqf-spike-m1 Safe Storage"
+  }
+}

@@ -1,0 +1,5 @@
+# M1 spike: generated output only. Source, lockfile and the verified fonts are tracked.
+node_modules/
+dist/
+out/
+*.tsbuildinfo

@@ -1,0 +1,15 @@
+/dist/main
+/dist/preload
+/dist/renderer
+/dist/shared
+/dist/shared/vault
+/dist/shared/vault/atomic-write.js
+/dist/shared/vault/envelope.js
+/dist/shared/vault/errors.js
+/dist/shared/vault/keyring.js
+/dist/shared/vault/vault.js
+/node_modules/better-sqlite3-multiple-ciphers/package.json
+/node_modules/node-addon-api/package.json
+/node_modules/zod/package.json
+/package.json
+/resources/fonts

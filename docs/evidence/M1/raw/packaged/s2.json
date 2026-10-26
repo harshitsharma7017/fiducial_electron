@@ -1,0 +1,168 @@
+{
+  "spike": "s2",
+  "phase": null,
+  "status": "pass",
+  "startedAt": "2026-10-26T14:59:30.459Z",
+  "environment": {
+    "electron": "45.0.0",
+    "chrome": "156.0.8078.48",
+    "node": "24.22.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "osVersion": "15.7.2",
+    "osRelease": "24.6.0",
+    "cpuModel": "Apple M4",
+    "runningUnderARM64Translation": false,
+    "isPackaged": true,
+    "appName": "fqf-spike-m1-packaged",
+    "appRoot": "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/package/fqf-spike-m1-packaged-darwin-arm64/fqf-spike-m1-packaged.app/Contents/Resources/app.asar",
+    "userData": "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/runs/packaged/user-data"
+  },
+  "checks": [
+    {
+      "id": "s2.control-a-state",
+      "description": "Positive control: partition A sees its own cookies and storage",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s2.b-no-a-cookies-api",
+      "description": "Partition B cookie store has none of A's cookies",
+      "expected": 0,
+      "actual": 0,
+      "pass": true
+    },
+    {
+      "id": "s2.b-no-a-document-cookie",
+      "description": "B's page cannot read A's cookie via document.cookie",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "id": "s2.b-no-a-local-storage",
+      "description": "B's page cannot read A's localStorage",
+      "expected": null,
+      "actual": null,
+      "pass": true
+    },
+    {
+      "id": "s2.b-no-a-session-storage",
+      "description": "B's page cannot read A's sessionStorage",
+      "expected": null,
+      "actual": null,
+      "pass": true
+    },
+    {
+      "id": "s2.b-requests-no-a-cookie",
+      "description": "B's HTTP requests never carried A's cookies (incl. HttpOnly)",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "id": "s2.no-node-in-insurer-view",
+      "description": "Insurer view has no require/process/module/preload bridge",
+      "expected": {
+        "require": "undefined",
+        "process": "undefined",
+        "module": "undefined",
+        "bridge": "undefined"
+      },
+      "actual": {
+        "require": "undefined",
+        "process": "undefined",
+        "module": "undefined",
+        "bridge": "undefined"
+      },
+      "pass": true
+    },
+    {
+      "id": "s2.permissions-denied",
+      "description": "Notification, geolocation and camera requests are denied",
+      "expected": "none granted",
+      "actual": {
+        "notification": "denied",
+        "geolocation": "error-code-1",
+        "camera": "denied:NotAllowedError",
+        "permissionsQueryGeolocation": "denied"
+      },
+      "pass": true
+    },
+    {
+      "id": "s2.popup-denied",
+      "description": "window.open is denied and creates no window",
+      "expected": {
+        "returned": "null",
+        "newWindows": 0
+      },
+      "actual": {
+        "returned": "null",
+        "newWindows": 0
+      },
+      "pass": true
+    },
+    {
+      "id": "s2.navigation-blocked",
+      "description": "Navigation to another origin is blocked",
+      "expected": "http://127.0.0.1:58014",
+      "actual": "http://127.0.0.1:58014",
+      "pass": true
+    },
+    {
+      "id": "s2.redirect-blocked",
+      "description": "Server redirect to another origin is blocked",
+      "expected": "http://127.0.0.1:58014",
+      "actual": "http://127.0.0.1:58014",
+      "pass": true
+    },
+    {
+      "id": "s2.other-origin-untouched",
+      "description": "The other origin never received a request",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "id": "s2.cdp-driver",
+      "description": "CDP driver typed, clicked and read the mock form",
+      "expected": "MOCK premium for self aged 35: INR 8500",
+      "actual": "MOCK premium for self aged 35: INR 8500",
+      "pass": true
+    },
+    {
+      "id": "s2.cdp-mouse-click",
+      "description": "CDP mouse click works on a hidden window",
+      "expected": "cdp-mouse",
+      "actual": "cdp-mouse",
+      "pass": true
+    }
+  ],
+  "facts": {
+    "partitions": [
+      "persist:insurer-mock-a",
+      "persist:insurer-mock-b"
+    ],
+    "storagePaths": [
+      "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/runs/packaged/user-data/Partitions/insurer-mock-a",
+      "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/runs/packaged/user-data/Partitions/insurer-mock-b"
+    ],
+    "cookieNamesA": [
+      "fqf_mock_http",
+      "fqf_mock_js"
+    ],
+    "mouseClick": "dispatched",
+    "policy": {
+      "blockedNavigations": 1,
+      "blockedRedirects": 1,
+      "deniedPopups": 1,
+      "deniedPermissionRequests": [
+        "geolocation",
+        "media",
+        "notifications"
+      ],
+      "deniedPermissionChecks": 2
+    }
+  }
+}

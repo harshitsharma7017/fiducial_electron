@@ -1,0 +1,120 @@
+{
+  "packaged": true,
+  "executable": "<spike>/out/package/fqf-spike-m1-packaged-darwin-arm64/fqf-spike-m1-packaged.app/Contents/MacOS/fqf-spike-m1-packaged",
+  "results": [
+    {
+      "id": "baseline",
+      "args": [
+        "--spike=s1"
+      ],
+      "env": [],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 414,
+      "polls": 14,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": null
+    },
+    {
+      "id": "remote-debugging-port",
+      "args": [
+        "--remote-debugging-port=9222",
+        "--spike=s1"
+      ],
+      "env": [],
+      "exitCode": 78,
+      "signal": null,
+      "durationMs": 206,
+      "polls": 7,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": "refusing to start: unsafe launch options: --remote-debugging-port"
+    },
+    {
+      "id": "remote-debugging-pipe",
+      "args": [
+        "--remote-debugging-pipe",
+        "--spike=s1"
+      ],
+      "env": [],
+      "exitCode": 78,
+      "signal": null,
+      "durationMs": 203,
+      "polls": 7,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": "refusing to start: unsafe launch options: --remote-debugging-pipe"
+    },
+    {
+      "id": "inspect",
+      "args": [
+        "--inspect=9229",
+        "--spike=s1"
+      ],
+      "env": [],
+      "exitCode": 78,
+      "signal": null,
+      "durationMs": 208,
+      "polls": 7,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": "refusing to start: unsafe launch options: --inspect"
+    },
+    {
+      "id": "inspect-brk",
+      "args": [
+        "--inspect-brk=9229",
+        "--spike=s1"
+      ],
+      "env": [],
+      "exitCode": 78,
+      "signal": null,
+      "durationMs": 204,
+      "polls": 7,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": "refusing to start: unsafe launch options: --inspect-brk"
+    },
+    {
+      "id": "node-options-inspect",
+      "args": [
+        "--spike=s1"
+      ],
+      "env": [
+        "NODE_OPTIONS"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 388,
+      "polls": 13,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": null
+    },
+    {
+      "id": "run-as-node",
+      "args": [
+        "-e",
+        "process.exit(42)"
+      ],
+      "env": [
+        "ELECTRON_RUN_AS_NODE"
+      ],
+      "exitCode": 64,
+      "signal": null,
+      "durationMs": 202,
+      "polls": 7,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": null
+    }
+  ]
+}

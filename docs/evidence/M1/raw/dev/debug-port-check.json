@@ -1,0 +1,147 @@
+{
+  "packaged": false,
+  "executable": "<spike>/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+  "results": [
+    {
+      "id": "baseline",
+      "args": [
+        "--spike=s1"
+      ],
+      "env": [],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 365,
+      "polls": 12,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": null
+    },
+    {
+      "id": "remote-debugging-port",
+      "args": [
+        "--remote-debugging-port=9222",
+        "--spike=s1"
+      ],
+      "env": [],
+      "exitCode": 78,
+      "signal": null,
+      "durationMs": 204,
+      "polls": 7,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": "refusing to start: unsafe launch options: --remote-debugging-port"
+    },
+    {
+      "id": "remote-debugging-pipe",
+      "args": [
+        "--remote-debugging-pipe",
+        "--spike=s1"
+      ],
+      "env": [],
+      "exitCode": 78,
+      "signal": null,
+      "durationMs": 203,
+      "polls": 7,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": "refusing to start: unsafe launch options: --remote-debugging-pipe"
+    },
+    {
+      "id": "inspect",
+      "args": [
+        "--inspect=9229",
+        "--spike=s1"
+      ],
+      "env": [],
+      "exitCode": 78,
+      "signal": null,
+      "durationMs": 206,
+      "polls": 7,
+      "watchedPortsThatAcceptedConnections": [
+        9229
+      ],
+      "firstAcceptMs": 163,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": "refusing to start: unsafe launch options: --inspect"
+    },
+    {
+      "id": "inspect-brk",
+      "args": [
+        "--inspect-brk=9229",
+        "--spike=s1"
+      ],
+      "env": [],
+      "exitCode": null,
+      "signal": "SIGKILL",
+      "durationMs": 30057,
+      "polls": 925,
+      "watchedPortsThatAcceptedConnections": [
+        9229
+      ],
+      "firstAcceptMs": 163,
+      "listeningPortsSeenByLsof": [
+        9229
+      ],
+      "guardMessage": null
+    },
+    {
+      "id": "node-options-inspect",
+      "args": [
+        "--spike=s1"
+      ],
+      "env": [
+        "NODE_OPTIONS"
+      ],
+      "exitCode": 78,
+      "signal": null,
+      "durationMs": 207,
+      "polls": 7,
+      "watchedPortsThatAcceptedConnections": [
+        9230
+      ],
+      "firstAcceptMs": 164,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": "refusing to start: unsafe launch options: NODE_OPTIONS(--inspect*)"
+    },
+    {
+      "id": "run-as-node",
+      "args": [
+        "-e",
+        "process.exit(42)"
+      ],
+      "env": [
+        "ELECTRON_RUN_AS_NODE"
+      ],
+      "exitCode": 42,
+      "signal": null,
+      "durationMs": 149,
+      "polls": 5,
+      "watchedPortsThatAcceptedConnections": [],
+      "firstAcceptMs": null,
+      "listeningPortsSeenByLsof": [],
+      "guardMessage": null
+    },
+    {
+      "id": "control-no-guard",
+      "args": [
+        "--remote-debugging-port=9222"
+      ],
+      "env": [],
+      "exitCode": 0,
+      "signal": null,
+      "durationMs": 3240,
+      "polls": 100,
+      "watchedPortsThatAcceptedConnections": [
+        9222
+      ],
+      "firstAcceptMs": 163,
+      "listeningPortsSeenByLsof": [
+        9222
+      ],
+      "guardMessage": null
+    }
+  ]
+}

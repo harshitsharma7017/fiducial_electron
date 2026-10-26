@@ -62,6 +62,25 @@ The two `PARTIAL` items are documentation: the user guide (doc 11) and the insta
 
 M1 spike results (IMPLEMENTATION_PLAN §9) will be recorded here per platform. A spike result counts only for the platforms it actually ran on.
 
+## 1b. M1 update (26 October 2026): feasibility evidence
+
+Evidence: [docs/evidence/M1/](docs/evidence/M1/README.md). Spike code: `spikes/m1/` on branch `spike/m1-feasibility`. **Tested platform: macOS 15.7.2 on Apple M4 (arm64) only**, in both development and packaged (ad-hoc signed, fused) builds. Windows x64, Intel Mac and macOS 13 have not been tested.
+
+| Spike | Result on macOS 15 arm64 | Not yet tested |
+|---|---|---|
+| S1 Electron 45 launch | **PASS** (13/13 checks in each build) | Windows 10/11 x64, Intel Mac, macOS 13 |
+| S2 Session isolation and debug port | **PASS** (14/14 checks in each build; debug ports closed in the fused build). Launch guard alone is insufficient; fuses are required | Windows; real portals (Track B) |
+| S3 Encrypted SQLite | **PASS** (17/17 checks across create and reopen in each build; native module works packaged) | Windows x64, macOS x64 |
+| S4 PDF ₹ | **PASS** (text and font checks; negative controls detected; visual check done) | **Windows (TC-17)**; 1/2/4/8 layouts (M7) |
+| S5 Secret storage | **PASS after Q-M1-01** (final runs 26 Oct, 14:57–15:01 UTC, after internal review fixes): authenticated vault rejects every tampering attempt, including 48/48 wrapped-key flips on real `safeStorage`. Raw `safeStorage` still rejects only 21/48 (recorded finding). **Q-M1-01: technically tested on macOS, awaiting independent security review.** *Was PARTIAL before Q-M1-01* | Windows DPAPI; supervised Keychain scenarios; independent security review |
+| S6 Signing and notarisation | **BLOCKED** (0 identities; ad-hoc app `rejected` by Gatekeeper) | Everything |
+
+**No product requirement changed status.** Spike code is not product code, and the requirement rows above stay as recorded. The evidence reduces technical risk for NFR-COMPAT (macOS arm64 only), SEC-01 to SEC-07, SEC-10, SEC-12, DATA-01 to DATA-03, FR-13 and TC-17 (macOS only), TC-21 and TC-22, TC-23 (mock pages), but none of these is verified for the product.
+
+Automated checks for the spike, run on 26 Oct 2026: `npm run typecheck` passed, `npm run lint` passed (ESLint and Prettier), and `npm test` passed 10 files and 52 tests. After Q-M1-01: 11 files, 77 tests. After the Q-M1-01 internal review (7 regression tests added): **11 files, 84 tests**, all passing.
+
+**Q-M1-01 / DM-02 security status:** technically tested on macOS 15 arm64 only. **Independent security review is outstanding; neither is approved.** Windows credential storage (DPAPI) and Windows file-system behaviour are untested. Crash/power-loss testing, fuzzing, supervised Keychain scenarios and code signing are outstanding. **No unresolved risk has been accepted.** The vault's integrity protection is separate from the OS layer: raw `safeStorage` still rejected only 21/48 tamperings (recorded finding). `npm audit` reported 0 vulnerabilities after zod and vite were raised to patched versions.
+
 ---
 
 ## 2. P0 functional requirements (`01_PRD §9`)

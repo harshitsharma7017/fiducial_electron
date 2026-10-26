@@ -1,0 +1,95 @@
+{
+  "spike": "s3",
+  "phase": "reopen",
+  "status": "pass",
+  "startedAt": "2026-10-26T14:59:16.500Z",
+  "environment": {
+    "electron": "45.0.0",
+    "chrome": "156.0.8078.48",
+    "node": "24.22.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "osVersion": "15.7.2",
+    "osRelease": "24.6.0",
+    "cpuModel": "Apple M4",
+    "runningUnderARM64Translation": false,
+    "isPackaged": true,
+    "appName": "fqf-spike-m1-packaged",
+    "appRoot": "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/package/fqf-spike-m1-packaged-darwin-arm64/fqf-spike-m1-packaged.app/Contents/Resources/app.asar",
+    "userData": "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/runs/packaged/user-data"
+  },
+  "checks": [
+    {
+      "id": "s3.reopen-read",
+      "description": "New process unwraps the key and reads the row",
+      "expected": "FQF-S3-MARKER-7f8ba581a4273678",
+      "actual": "FQF-S3-MARKER-7f8ba581a4273678",
+      "pass": true
+    },
+    {
+      "id": "s3.integrity",
+      "description": "PRAGMA integrity_check",
+      "expected": "ok",
+      "actual": "ok",
+      "pass": true
+    },
+    {
+      "id": "s3.reopen-foreign-keys",
+      "description": "Foreign keys enforced after reopen",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s3.wrong-key-rejected",
+      "description": "Random wrong key cannot open the database",
+      "expected": "SQLITE_NOTADB",
+      "actual": "SQLITE_NOTADB",
+      "pass": true
+    },
+    {
+      "id": "s3.no-key-rejected",
+      "description": "Opening without a key fails",
+      "expected": "SQLITE_NOTADB",
+      "actual": "SQLITE_NOTADB",
+      "pass": true
+    },
+    {
+      "id": "s3.tampered-wrapped-key",
+      "description": "No bit-flipped wrapped key (any position) opens the database (fail closed at DB level)",
+      "expected": {
+        "openedDb": 0,
+        "returnedOriginalKey": 0
+      },
+      "actual": {
+        "openedDb": 0,
+        "returnedOriginalKey": 0
+      },
+      "pass": true
+    },
+    {
+      "id": "s3.control-plain-visible",
+      "description": "Positive control: plain database shows header and marker",
+      "expected": {
+        "header": true,
+        "marker": true
+      },
+      "actual": {
+        "header": true,
+        "marker": true
+      },
+      "pass": true
+    }
+  ],
+  "facts": {
+    "nativeModules": [
+      "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/package/fqf-spike-m1-packaged-darwin-arm64/fqf-spike-m1-packaged.app/Contents/Resources/app.asar/node_modules/better-sqlite3-multiple-ciphers/prebuilds/darwin-arm64.node"
+    ],
+    "safeStorageTamperTrials": {
+      "trials": 48,
+      "rejected": 20,
+      "acceptedWithDifferentValue": 28,
+      "acceptedWithOriginalValue": 0
+    }
+  }
+}

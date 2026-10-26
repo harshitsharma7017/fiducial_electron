@@ -1,0 +1,183 @@
+{
+  "spike": "s5",
+  "phase": "read",
+  "status": "pass",
+  "startedAt": "2026-10-26T15:00:50.329Z",
+  "environment": {
+    "electron": "45.0.0",
+    "chrome": "156.0.8078.48",
+    "node": "24.22.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "osVersion": "15.7.2",
+    "osRelease": "24.6.0",
+    "cpuModel": "Apple M4",
+    "runningUnderARM64Translation": false,
+    "isPackaged": false,
+    "appName": "fqf-spike-m1",
+    "appRoot": "~/Desktop/spirezen/fiducial_electron/spikes/m1",
+    "userData": "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/runs/dev/user-data"
+  },
+  "checks": [
+    {
+      "id": "s5.restart-read",
+      "description": "New process decrypts the stored secret",
+      "expected": "e9e743aebaed1fa5",
+      "actual": "e9e743aebaed1fa5",
+      "pass": true
+    },
+    {
+      "id": "s5.tamper-never-original",
+      "description": "No bit-flipped ciphertext decrypts to the original secret",
+      "expected": 0,
+      "actual": 0,
+      "pass": true
+    },
+    {
+      "id": "s5.no-plaintext-anywhere",
+      "description": "Secret absent from userData, results and captured logs",
+      "expected": [],
+      "actual": [],
+      "pass": true
+    },
+    {
+      "id": "s5v.restart-read",
+      "description": "All secrets read back in a new process (fingerprints match)",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s5v.envelope-bitflips",
+      "description": "Every single-byte change (170 trials) is rejected",
+      "expected": {
+        "RETURNED_VALUE": 0
+      },
+      "actual": {
+        "ENVELOPE_MALFORMED": 28,
+        "ENVELOPE_UNSUPPORTED_VERSION": 2,
+        "ENVELOPE_UNSUPPORTED_ALGORITHM": 2,
+        "KEY_NOT_FOUND": 18,
+        "SECRET_AUTH_FAILED": 120
+      },
+      "pass": true
+    },
+    {
+      "id": "s5v.truncations",
+      "description": "Every truncation (85 lengths) is rejected",
+      "expected": {
+        "RETURNED_VALUE": 0
+      },
+      "actual": {
+        "ENVELOPE_MALFORMED": 53,
+        "SECRET_AUTH_FAILED": 32
+      },
+      "pass": true
+    },
+    {
+      "id": "s5v.special-cases",
+      "description": "Extended, unsupported-version, moved and legacy-format envelopes are rejected",
+      "expected": {
+        "extended": "SECRET_AUTH_FAILED",
+        "version2": "ENVELOPE_UNSUPPORTED_VERSION",
+        "movedToOtherName": "SECRET_AUTH_FAILED",
+        "legacyRawSafeStorageBlob": "ENVELOPE_MALFORMED"
+      },
+      "actual": {
+        "extended": "SECRET_AUTH_FAILED",
+        "version2": "ENVELOPE_UNSUPPORTED_VERSION",
+        "movedToOtherName": "SECRET_AUTH_FAILED",
+        "legacyRawSafeStorageBlob": "ENVELOPE_MALFORMED"
+      },
+      "pass": true
+    },
+    {
+      "id": "s5v.no-overwrite-unreadable",
+      "description": "put() over an unreadable secret is refused and the file is unchanged",
+      "expected": {
+        "code": "SECRET_UNREADABLE_EXISTS",
+        "unchanged": true
+      },
+      "actual": {
+        "code": "SECRET_UNREADABLE_EXISTS",
+        "unchanged": true
+      },
+      "pass": true
+    },
+    {
+      "id": "s5v.wrapped-key-tamper",
+      "description": "Every single-byte change to the safeStorage-wrapped data key (48 trials) is rejected",
+      "expected": {
+        "RETURNED_VALUE": 0
+      },
+      "actual": {
+        "KEY_CHECK_FAILED": 28,
+        "KEY_UNWRAP_FAILED": 20
+      },
+      "pass": true
+    },
+    {
+      "id": "s5v.wrapped-key-tamper-no-writes",
+      "description": "No file changed during wrapped-key tamper trials",
+      "expected": 0,
+      "actual": 0,
+      "pass": true
+    },
+    {
+      "id": "s5v.keyring-failures",
+      "description": "Malformed keyring, missing keyring and missing key are rejected",
+      "expected": {
+        "malformed": "KEYRING_MALFORMED",
+        "missing": "KEYRING_MISSING",
+        "keyRemoved": "KEY_NOT_FOUND"
+      },
+      "actual": {
+        "malformed": "KEYRING_MALFORMED",
+        "missing": "KEYRING_MISSING",
+        "keyRemoved": "KEY_NOT_FOUND"
+      },
+      "pass": true
+    },
+    {
+      "id": "s5v.rotation",
+      "description": "Rotate, re-encrypt all, prune retired key, read back after reopen",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s5v.real-store-untouched",
+      "description": "Real vault files byte-identical and readable after every failure test",
+      "expected": {
+        "unchanged": true,
+        "readable": true
+      },
+      "actual": {
+        "unchanged": true,
+        "readable": true
+      },
+      "pass": true
+    },
+    {
+      "id": "s5v.no-plaintext-anywhere",
+      "description": "No secret plaintext in userData, results or logs",
+      "expected": [],
+      "actual": [],
+      "pass": true
+    }
+  ],
+  "facts": {
+    "appName": "fqf-spike-m1",
+    "shouldReEncrypt": false,
+    "rawSafeStorageTamper": {
+      "trials": 48,
+      "rejected": 21,
+      "acceptedWithDifferentValue": 27,
+      "acceptedWithOriginalValue": 0
+    },
+    "vault": {
+      "envelopeBytes": 85,
+      "wrappedKeyBytes": 51
+    }
+  }
+}

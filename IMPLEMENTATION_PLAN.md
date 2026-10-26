@@ -305,3 +305,40 @@ M0 is **finalised**. The formal approvals remain open and are tracked in the dec
 3. Run **S1, S3, S4 and S5 on the local macOS arm64 machine first**, because it is available today. Record evidence.
 4. Repeat on Windows x64 and the Intel/macOS 13 targets as soon as Q-D07 provides access.
 5. In parallel, start the non-engineering lead-time items now: signing identities (Q-D04, Q-D05), named approvers (Q-D08) and the R1 business inputs (OPEN_QUESTIONS §0.3).
+
+---
+
+# Revision 2 — M1 progress (26 October 2026)
+
+Evidence: [docs/evidence/M1/](docs/evidence/M1/README.md). Spike code: `spikes/m1/` (branch `spike/m1-feasibility`; committed in the M1 spike commit after an internal code review; **not** independently security-reviewed).
+
+## 12. M1 status against §9
+
+| Spike | M-A (macOS 15 arm64, local) | M-13 | M-X | W-10 / W-11 |
+|---|---|---|---|---|
+| S1 | **Pass** (dev and packaged) | Not run | Not run | Not run |
+| S2 | **Pass** (mock portal; fused build exposes no debug port) | n/a | n/a | Not run |
+| S3 | **Pass** (dev and packaged) | n/a | Not run | Not run |
+| S4 | **Pass** (dev and packaged) | Not run | n/a | Not run |
+| S5 | **Pass after Q-M1-01** (authenticated vault; raw `safeStorage` integrity finding recorded) | n/a | Not run | Not run |
+| S6 | **Blocked**: no identities (Q-D04, Q-D05) | — | — | — |
+
+**M1 exit criteria (§9) are not met.** Still required: S1, S3, S4 and S5 on at least one Windows x64 platform; **approval** of the S5 integrity resolution (Q-M1-01 is implemented and tested on macOS); and S2 recorded on Windows.
+
+## 13. Remaining work to complete M1
+
+1. **Windows x64 runs** (Q-D07): S1, S3, S4 (TC-17) and S5 (DPAPI), plus S2 and the debug-port check, on Windows 10 22H2 and/or 11. The spike's `package.mjs` is macOS-only and needs a Windows target, either `@electron/packager` for `win32` or the M2 packager decision.
+2. **macOS 13 and Intel (M-13, M-X)**: S1 on macOS 13 (the proposed floor) and S3 on x64.
+3. **S5 follow-up (Q-M1-01)**: design implemented and tested on macOS (every tampering attempt rejected, including 48/48 wrapped-key flips; [evidence](docs/evidence/M1/Q-M1-01-secret-vault.md)). An internal review fixed 7 defects (R1–R7; 84 tests pass); a review package and checklist are ready. **Remaining:** independent security review and approval (including decisions on limitations L1–L11, for example a mandatory single-instance lock), and the Windows run.
+4. **Supervised Keychain tests**: same-app signing-identity change, a second macOS user, a locked keychain. These need a person present and, for identity change, S6 identities.
+5. **S6** once signing identities exist (prerequisites and steps in `docs/evidence/M1/S6-signing-blocked.md`).
+6. **Review and commit** the spike branch: internal review done and committed in the M1 spike commit (experimental spike only, not production approval).
+
+**Q-M1-01 / DM-02 security status:** technically tested on macOS 15 arm64 only. **Independent security review is outstanding; neither is approved.** Windows credential storage (DPAPI) and Windows file-system behaviour are untested. Crash/power-loss testing, fuzzing, supervised Keychain scenarios and code signing are outstanding. **No unresolved risk has been accepted.** The vault's integrity protection is separate from the OS layer: raw `safeStorage` still rejected only 21/48 tamperings (recorded finding).
+
+## 14. Plan adjustments arising from M1 (proposed, for approval)
+
+- **M2:** add a lint rule or wrapper banning sync `safeStorage` methods (AR-17); clean the launch environment in all scripts and CI (AR-19); add a packaged-content check (AR-20).
+- **M4:** the SecretStore design moves from "`safeStorage` per secret" to "`safeStorage` wraps data keys; AES-256-GCM for secrets and evidence" (pending DM-02 review).
+- **M7:** keep ₹ and branding out of `printToPDF` header/footer templates; reuse the S4 regression approach (text + font + negative controls) for TC-15 to TC-17.
+- **M10:** fuses are a release gate, verified with `@electron/fuses read` and the debug-port probe on every platform.

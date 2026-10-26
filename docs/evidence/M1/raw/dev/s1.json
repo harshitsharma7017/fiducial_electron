@@ -1,0 +1,125 @@
+{
+  "spike": "s1",
+  "phase": null,
+  "status": "pass",
+  "startedAt": "2026-10-26T14:57:24.868Z",
+  "environment": {
+    "electron": "45.0.0",
+    "chrome": "156.0.8078.48",
+    "node": "24.22.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "osVersion": "15.7.2",
+    "osRelease": "24.6.0",
+    "cpuModel": "Apple M4",
+    "runningUnderARM64Translation": false,
+    "isPackaged": false,
+    "appName": "fqf-spike-m1",
+    "appRoot": "~/Desktop/spirezen/fiducial_electron/spikes/m1",
+    "userData": "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/runs/dev/user-data"
+  },
+  "checks": [
+    {
+      "id": "s1.window-rendered",
+      "description": "Window reached ready-to-show",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s1.ipc-valid-accepted",
+      "description": "Valid renderer payload accepted",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s1.ipc-invalid-rejected",
+      "description": "Payload with unexpected fields rejected by main-process Zod validation",
+      "expected": "VALIDATION_FAILED",
+      "actual": "VALIDATION_FAILED",
+      "pass": true
+    },
+    {
+      "id": "s1.renderer-no-require",
+      "description": "typeof require in renderer",
+      "expected": "undefined",
+      "actual": "undefined",
+      "pass": true
+    },
+    {
+      "id": "s1.renderer-no-process",
+      "description": "typeof process in renderer",
+      "expected": "undefined",
+      "actual": "undefined",
+      "pass": true
+    },
+    {
+      "id": "s1.renderer-no-module",
+      "description": "typeof module in renderer",
+      "expected": "undefined",
+      "actual": "undefined",
+      "pass": true
+    },
+    {
+      "id": "s1.preload-bridge",
+      "description": "Narrow preload bridge is present",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s1.csp-meta",
+      "description": "App page declares a Content-Security-Policy",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s1.context-isolation",
+      "description": "Page cannot see the preload world's globals",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "id": "s1.renderer-sandboxed",
+      "description": "OS process metrics report the renderer as sandboxed",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s1.no-security-warnings",
+      "description": "No Electron security warnings in the renderer console",
+      "expected": 0,
+      "actual": 0,
+      "pass": true
+    },
+    {
+      "id": "s1.electron-line",
+      "description": "Running Electron 45.x",
+      "expected": "45.x",
+      "actual": "45.0.0",
+      "pass": true
+    },
+    {
+      "id": "s1.window-closed",
+      "description": "Window closed cleanly",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    }
+  ],
+  "facts": {
+    "secondsToFirstPaint": 0.212,
+    "processTypes": [
+      "Browser",
+      "GPU",
+      "Utility",
+      "Tab"
+    ],
+    "totalWorkingSetKb": 324784,
+    "consoleMessages": []
+  }
+}

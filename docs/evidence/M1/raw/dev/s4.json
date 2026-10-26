@@ -1,0 +1,57 @@
+{
+  "spike": "s4",
+  "phase": null,
+  "status": "pass",
+  "startedAt": "2026-10-26T14:57:34.071Z",
+  "environment": {
+    "electron": "45.0.0",
+    "chrome": "156.0.8078.48",
+    "node": "24.22.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "osVersion": "15.7.2",
+    "osRelease": "24.6.0",
+    "cpuModel": "Apple M4",
+    "runningUnderARM64Translation": false,
+    "isPackaged": false,
+    "appName": "fqf-spike-m1",
+    "appRoot": "~/Desktop/spirezen/fiducial_electron/spikes/m1",
+    "userData": "~/Desktop/spirezen/fiducial_electron/spikes/m1/out/runs/dev/user-data"
+  },
+  "checks": [
+    {
+      "id": "s4.generated",
+      "description": "All three PDFs generated (bundled font + two negative controls)",
+      "expected": 3,
+      "actual": 3,
+      "pass": true
+    },
+    {
+      "id": "s4.render-time",
+      "description": "printToPDF time for the bundled-font report (ms)",
+      "expected": "< 5000",
+      "actual": 76,
+      "pass": true
+    },
+    {
+      "id": "s4.no-network",
+      "description": "No non-file requests attempted by the render window",
+      "expected": 0,
+      "actual": 0,
+      "pass": true
+    }
+  ],
+  "facts": {
+    "timingsMs": {
+      "bundled-font": 76,
+      "control-substituted-glyph": 78,
+      "control-system-font": 79
+    },
+    "sizesBytes": {
+      "bundled-font": 38637,
+      "control-substituted-glyph": 40951,
+      "control-system-font": 55799
+    },
+    "outputDir": "s4/"
+  }
+}
