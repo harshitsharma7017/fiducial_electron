@@ -1,0 +1,181 @@
+# Architecture Review — Fiducial Quote Fetcher
+
+| | |
+|---|---|
+| Date | 26 October 2026 |
+| Inputs | `03_TECHNICAL_DESIGN`, `04_ADAPTER_SDK_AND_INSURER_MATRIX`, `05_DATA_MODEL_AND_STORAGE`, `06_SECURITY_PRIVACY_COMPLIANCE`, `08_PDF_REPORT_SPEC`, `16_IPC_ERROR_AND_EVENT_CONTRACTS`, and an audit of this repository |
+| Status | Proposed. Technical decisions marked **[Decision]** are tracked in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md), section E |
+
+## 1. Current architecture
+
+**None.** The repository contains no code, configuration or build tooling (see [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), section 1). Nothing is being replaced, so the design below is greenfield. It still follows `03_TECHNICAL_DESIGN` and uses the documents' terminology.
+
+The documents assume that several things already exist: a "frozen SDK and Zod schemas", an "existing approved driver/CDP approach", a "helper library" and a "smoke runner". **They do not exist in this workspace.** Unless they are found elsewhere (OPEN_QUESTIONS Q-01), this project must create them. The "do not create a competing contract" rule (`04 §1`, `16 §1`) then means *create exactly one contract* and treat it as frozen after the M3 review.
+
+**Reusable conventions (not code).** The team's other TypeScript projects under `../fiducial/` use TypeScript 6, Zod 4, Vitest 5, ESLint with Prettier, Husky with lint-staged, npm 11 and Node ≥ 20.12. They also use React 19, react-hook-form, Radix and Tailwind on the frontend. Adopting the same toolchain lowers onboarding cost. Those repos belong to a different product (an Express/MongoDB web app), and none of their code or schemas should be imported.
+
+## 2. Required architecture (from the documents)
+
+```
+┌──────────────────────── Main process (privileged) ────────────────────────┐
+│  IPC gateway (allowlist + Zod validation + sender check + AppResult)       │
+│  QuoteService · Orchestrator · AdapterRegistry · Comparison/Normalizer     │
+│  PaneManager/Driver · Storage (SQLite) · SecretStore · PdfService          │
+│  Retention · Settings · Logger (redacting) · Diagnostics                   │
+└───────▲─────────────────────────────────────────────────────▲──────────────┘
+        │ typed preload bridge (contextBridge)                │ CDP / DOM driver (main-side only)
+┌───────┴──────────────────┐                     ┌────────────┴────────────────────────┐
+│ App renderer (untrusted) │                     │ Insurer views (untrusted, remote)   │
+│ React UI, no Node, CSP   │                     │ one partition per insurer, NO preload│
+└──────────────────────────┘                     └─────────────────────────────────────┘
+```
+
+Trust levels (`03 §6`): the main process is privileged, the app renderer is untrusted, and insurer content is untrusted external content.
+
+## 3. Proposed concrete design
+
+### 3.1 Toolchain **[Decision E-02]**
+
+- **Electron:** the latest stable line when M1 starts, pinned exactly. Choose it only after confirming its OS support against `01 §11` (see risk AR-01).
+- **Build:** electron-vite for main, preload and renderer bundles. electron-builder for NSIS (Windows) and DMG (macOS) packages, as `03 §2` suggests.
+- **Language:** TypeScript strict mode, with React for the renderer.
+- **Validation:** Zod schemas in `src/shared/contracts`. The main process and renderer import the same schemas.
+- **Tests:** Vitest for unit, fixture and integration tests. Playwright's Electron support for end-to-end smoke tests, run against **mock** adapters only.
+
+### 3.2 Proposed source layout
+
+```
+src/
+  shared/contracts/      Zod schemas and types — the single "SDK": quote, member, insurer result,
+                         run/connection states, error codes, IPC request/response, progress events
+  shared/money.ts        integer-paise helpers and INR formatting (display layer only)
+  main/
+    index.ts             lifecycle, single-instance lock, fuses-aware startup
+    security/            webPreferences factory, CSP, navigation/popup/permission/download guards
+    ipc/                 handler registry; validate(schema) → handler → AppResult; sender check
+    quotes/              QuoteService (create/get/duplicate/delete/manual result)
+    orchestrator/        RunManager: concurrency limit, timeouts, retry policy, cancellation, events
+    panes/               PaneManager (sessions/views), Driver (CDP via webContents.debugger)
+    adapters/            registry.ts + <insurer>/ {adapter.ts, parse.ts, fields.ts, fixtures/, README.md}
+                         + mock/ (deterministic success/fail/timeout/login/OTP/CAPTCHA adapters)
+    comparison/          normalisation, comparability check, cheapest selection
+    storage/             db.ts, migrations/, repositories/, files.ts (evidence store)
+    secrets/             SecretStore (safeStorage, fail-closed)
+    pdf/                 template rendering + printToPDF
+    retention/ settings/ logging/ diagnostics/
+  preload/index.ts       contextBridge.exposeInMainWorld('fqf', typedApi)
+  renderer/              React screens per 07_UI_UX_AND_WORKFLOWS
+resources/fonts/         bundled font containing U+20B9 (₹)
+resources/pdf/           report template + CSS
+```
+
+### 3.3 Electron security baseline (`06 §2`)
+
+- Every app `BrowserWindow` uses `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true` and `webSecurity: true`. A single factory sets these, and a unit test asserts them.
+- **Serve the renderer from a custom `app://` protocol** registered with `protocol.handle`, not `file://`. This allows a strict CSP header (`default-src 'self'`, no `unsafe-eval`, no remote origins).
+- **Navigation and popups.** The app window blocks every navigation away from `app://`. Insurer views may only navigate to origins in that adapter's metadata allowlist. `setWindowOpenHandler` denies popups by default; an adapter may allowlist a same-origin popup. `will-download` is cancelled unless explicitly needed.
+- **Insurer sessions** come from `session.fromPartition('persist:insurer-<id>')`, one per insurer. Insurer views have **no preload**. Permission request and check handlers deny everything (camera, geolocation, notifications, clipboard-read and so on).
+- **IPC.** `ipcMain.handle` is used only through the registry. Each channel is a fixed constant with a Zod request schema. The handler verifies that `event.senderFrame` belongs to the app window's `app://` origin, which provides the "appropriate authorisation" for a single-user app. Responses are `AppResult<T>` (`16 §3`). Unexpected exceptions are mapped to `INTERNAL_ERROR` with a correlation ID; stack traces never reach the renderer.
+- **Release hardening.** Apply Electron Fuses: disable `RunAsNode`, `EnableNodeOptionsEnvironmentVariable` and `EnableNodeCliInspectArguments`; enable `EnableCookieEncryption`, `EnableEmbeddedAsarIntegrityValidation` and `OnlyLoadAppFromAsar`. Each fuse must be verified on both platforms.
+- **No remote debugging port.** The driver attaches through the in-process `webContents.debugger` API. Do not use `--remote-debugging-port` or Playwright `connectOverCDP` in production builds, because they would expose authenticated insurer sessions to any local process.
+
+### 3.4 State model (proposed reconciliation of C-01) **[Decision E-05]**
+
+The documents give three different state lists (`02 §2`, `04 §3`, `07 §3`), and the regression pack needs a timeout state that none of them define (TC-14). The proposal is to separate *session* state from *run* state:
+
+| ConnectionStatus (Connect board, per insurer session) | RunStatus (per insurer per run) |
+|---|---|
+| `not_connected`, `connecting`, `connected`, `login_required`, `otp_required`, `manual_action_required` (CAPTCHA or other human step), `blocked` | `pending`, `running`, `login_required`, `otp_required`, `manual_action_required`, `manual_required`, `completed`, `failed`, `timed_out`, `cancelled`, `unsupported` |
+
+- Every RunStatus maps to the user-facing copy in `07 §3`.
+- `blocked` maps to "the app cannot continue automatically" plus the manual path.
+- A manual result is `status: completed, source: manual`. It is never shown as automated.
+
+### 3.5 Orchestrator (`03 §5`, `16 §6`)
+
+- `quote.start(quoteId, insurerIds)` validates the stored quote, runs pre-flight checks against each adapter's `requiredFields` (FR-04), creates a `runId` and returns immediately. Progress is delivered through events.
+- **Concurrency** is bounded by a small configurable limit; the M1 spike sets the default. Each insurer task gets a child `AbortController` of the run.
+- **Timeouts.** Proposal: separate timers for automated steps and for waiting on the advisor (login, OTP, CAPTCHA). The PRD performance target excludes advisor time, and an OTP wait should not count as an automation timeout. See Q-E06.
+- **Retry.** At most once. Only for errors classified retryable (`PORTAL_UNAVAILABLE`, `NAVIGATION_TIMEOUT`), and only when the adapter declares the step idempotent. Never retry `AUTH_REQUIRED`, `OTP_REQUIRED`, `MANUAL_ACTION_REQUIRED`, `RATE_LIMITED`, `PARSE_FAILED` or `VALIDATION_FAILED`.
+- **Cancellation** is idempotent. Cancelling a finished run is a no-op that returns the current state.
+- **Persistence.** Each transition is written as a sanitised `quote_events` row. A terminal result and its event are written in one transaction. An adapter exception becomes a `failed` result for that insurer only (FR-09).
+- **Adapter output** is validated with the shared Zod schema. If validation fails, the result becomes `PARSE_FAILED` and no premium is recorded (TC-09).
+
+### 3.6 Adapters and driver (`04`)
+
+- **Adapter contract:** `{ id, displayName, version, mode: 'automated'|'assisted'|'manual', allowedOrigins, requiredFields, run(ctx), parse(snapshot) }`.
+- `parse` is a **pure function** of a sanitised snapshot (DOM text, JSON or OCR text) and returns a normalised result. Fixture tests target `parse` only.
+- The driver gives adapters a narrow helper API: navigate, wait-for, fill, click, read text, screenshot and dispatch input. It is implemented with `webContents.debugger` (CDP `Runtime`, `DOM` and `Input` domains) or `executeJavaScriptInIsolatedWorld`. CDP input dispatch is what makes coordinate-based Flutter/canvas interaction (HDFC) possible, but only if that interaction is permitted.
+- **No CAPTCHA, OTP or MFA handling in code.** The driver detects these challenges, sets the state to `*_required`, and waits for the advisor in the visible view or stops.
+- **OCR** (tesseract.js in a worker) is deferred until the HDFC spike shows it is necessary and permitted.
+- **Mock adapters** load local HTML fixtures through a mock origin. They allow end-to-end testing of every state without live portals.
+
+### 3.7 Money and comparison (`05 §3`, `08 §3`)
+
+- Premiums are stored as integers in paise. Parsers handle Indian digit grouping (`1,23,456.00`), the `₹`/`Rs.`/`INR` prefixes and ambiguous amounts. An ambiguous amount gives `PARSE_FAILED` with a review warning; it is never guessed.
+- **Cheapest eligibility:** status is `completed`, the premium is a valid positive integer, there are no ambiguity warnings, and the comparability key is equal across candidates. The proposed key is sum insured, cover type, member set and tenure, plus premium basis (GST-inclusive or exclusive). The rule itself is owned by the business (Q-B01, Q-B02). Whether manual results are eligible is also undecided (Q-B10).
+- If any candidate fails the comparability key, **suppress the highlight** and show the differences (TC-27).
+
+### 3.8 Storage (`05`)
+
+- **SQLite** in `userData`, accessed only from the main process. Foreign keys, WAL mode, numbered migrations with a schema-version table, transactional related writes and indexes on (customer name, created date, status). The driver is better-sqlite3, subject to the M1 packaging spike; `node:sqlite` is the fallback if Electron's Node exposes it stably **[Decision E-03]**.
+- **Single-instance lock**, which prevents two writers.
+- **Evidence screenshots** go in `userData/evidence/<quoteId>/` and are referenced by relative path. Delete and retention cover rows, evidence files and app-managed temporary PDFs. Exported PDFs saved outside the app are explicitly outside its control (`05 §6`).
+- **Corrupt or locked database:** never auto-delete. Open read-only if possible, show a recovery screen and keep the original file.
+- **Data at rest is not encrypted** by the current design: names, phone numbers and ages sit in plain SQLite. The documents list "unauthorized local access" as a threat (`06 §1`) but specify no control. Decide between relying on OS account protection plus full-disk encryption (documented and accepted) and encrypting the database. See Q-B17 and risk AR-06.
+
+### 3.9 SecretStore (`05 §4`, `06 §3`)
+
+- Uses `safeStorage` (Keychain on macOS, DPAPI on Windows). Ciphertext lives in a separate `secrets` file, not in SQLite. SQLite holds only a non-secret reference.
+- If `safeStorage.isEncryptionAvailable()` is false, all saves return `SECRET_STORE_UNAVAILABLE`. There is **no plaintext fallback** (TC-21).
+- Secrets never cross IPC to the renderer. The UI shows only "saved / not saved" (`07 §2`).
+- Persistent insurer partitions also store session cookies on disk (Chromium encrypts cookie values on both target OSes). This must be acknowledged (C-08), cleared on "Disconnect/forget", and covered by the retention policy.
+
+### 3.10 PDF service (`08`)
+
+- **Rendering.** Main builds the HTML from **persisted, validated** data with strict escaping, because plan names come from untrusted portals. It renders in a hidden window with `javascript: false`, no preload, and network requests blocked.
+- **Output.** `printToPDF` with A4, `printBackground`, a footer template carrying page numbers, and tagged PDF output for accessibility if supported.
+- **Fonts.** Bundle a font that includes U+20B9 and reference it locally with `@font-face`. This is a known failure mode: **the doc-pack PDFs themselves render ₹ as "■"** (`05 §3`, `08 §3`, `09` TC-17).
+- **Layout.** Test 1, 2, 4 and 8 insurer layouts with `break-inside: avoid` on rows and status boxes.
+- **Filenames** use the quote reference and date, not customer names (`08 §3`).
+
+### 3.11 Logging and diagnostics (`06 §6`, `13`)
+
+- Logging is structured and **allowlist-based**: events carry only typed fields (version, correlation ID, run ID, insurer ID, state, error code, timing, retry count). This is safer than regex redaction of free text.
+- Log files are rotated in `userData/logs`.
+- `diagnostics.export()` assembles the bundle, shows it to the user for review, and then writes it.
+
+## 4. Gaps between the documents and reality
+
+| # | Gap | Impact | Recommendation |
+|---|---|---|---|
+| G-1 | Frozen SDK, Zod schemas, driver/CDP approach, helper library and smoke runner are assumed to exist but are absent | The documents' "defer to the existing contract" rule has nothing to defer to | Confirm with the owner (Q-01). If they are absent, M3 creates the single contract and freezes it after review |
+| G-2 | The nine-page source PRD and the conversation task list are not in the repository | Unclear whether the four-page PRD is complete; "where required by the task plan" clauses cannot be checked | Add both to `docs/` (Q-02) |
+| G-3 | No version control | No change history, review or rollback | `git init` and push to a private remote before any code (M0) |
+| G-4 | Several business rules are undefined (comparability, premium basis, age limits, sum-insured values, retention, legal text) | FR-02, FR-03, FR-12, FR-15 and FR-18 cannot be finished | Build configurable mechanisms; release only with approved values |
+| G-5 | Per-insurer product/plan selection is unspecified | Adapters cannot know which product to quote | Owner decision per insurer (Q-B16) |
+
+## 5. Technical risks
+
+Existing RAID IDs (`14`) are cited where they apply. AR-xx are new architecture risks.
+
+| ID | Risk | Likelihood / impact | Mitigation |
+|---|---|---|---|
+| AR-01 | The macOS 12 floor (`01 §11`) may be unsupported by current Electron/Chromium; pinning an old Electron leaves security patches behind | Medium / High | Verify in M1. Prefer raising the OS floor to pinning an unsupported Electron (Q-E01) |
+| AR-02 | Native module (better-sqlite3) ABI and packaging issues across Windows x64, macOS x64 and macOS arm64 | Medium / High | M1 spike builds and runs on all three targets. Keep the `node:sqlite` fallback |
+| AR-03 | Delivery date: the documented freeze (26 Oct 2026 12:00) and handover (27 Oct) fall on or after the audit date, and no code exists | Certain / Critical | Re-plan (Q-00). The manual-first release path shortens the critical path |
+| AR-04 | Live adapter work depends entirely on external permission and accounts (R-10) | High / High | Ship the manual-first baseline; gate each adapter separately |
+| AR-05 | Memory and CPU with up to eight live insurer views at once | Medium / Medium | Bound concurrency, lazily create views, destroy views when a run ends (keep sessions) |
+| AR-06 | Unencrypted local PII in SQLite and evidence files | Medium / High | Decide Q-B17. Document the reliance on OS account and disk encryption if accepted |
+| AR-07 | Untrusted portal strings reaching the PDF or UI (injection) | Medium / High | Escape everything, PDF window with JS disabled, React default escaping, never `dangerouslySetInnerHTML` |
+| AR-08 | Persistent insurer sessions retain authenticated cookies on disk (C-08) | Medium / Medium | Cookie-encryption fuse, "Forget session" action, retention clearing |
+| AR-09 | OTP and CAPTCHA steps make automation timing unpredictable | High / Low | Separate automation and advisor-wait timers (Q-E06) |
+| AR-10 | Portal changes break parsers (R-01) | High / Medium | Pure parsers, fixtures, fast manual fallback, per-adapter version in results |
+
+## 6. Recommendations (in priority order)
+
+1. **Resolve Q-00, Q-01 and Q-02 before writing code.** If an existing codebase exists elsewhere, this plan must be re-based on it rather than duplicating it.
+2. **Adopt the manual-first release path.** Shell, storage, manual entry for all eight insurers, comparison, PDF and history meet G2, G3 and G4 and most P0 requirements without any insurer authorisation. Automated adapters are then added one at a time behind their gates.
+3. **Build the security baseline (section 3.3) and the IPC envelope in the first code milestone, not at the end.**
+4. **Freeze `src/shared/contracts` after the M3 review.** Afterwards, change it only through change control (`19`).
+5. **Run the M1 spikes on real Windows and macOS hardware early:** the native database module, the ₹ glyph in a PDF, `safeStorage`, and unsigned packaging.

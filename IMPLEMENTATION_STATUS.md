@@ -1,0 +1,207 @@
+# Implementation Status — Fiducial Quote Fetcher
+
+| | |
+|---|---|
+| Audit date | 26 October 2026 |
+| Requirements baseline | FQF-DOCS-001 v1.0 draft (PDFs `00`–`19` in the repository root; all approvals **pending** per `19_CHANGELOG_AND_APPROVALS`) |
+| Repository audited | `fiducial_electron/` (this folder) |
+| Companion documents | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) · [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) · [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) |
+
+## 1. Audit finding
+
+**No implementation exists.** The repository contains only the 21 documentation PDFs: 19 numbered documents plus two index files (`00_Project_Documentation_Index.pdf` and `00_README_DOCUMENT_INDEX.pdf`). The `docs/` folder is empty. The repository has none of the following:
+
+- `package.json`, lockfile or `node_modules`
+- Electron main, preload or renderer code
+- shared schemas, a "frozen SDK" or Zod contracts
+- a database, migrations, SecretStore, PDF service or insurer adapters
+- tests, fixtures, a smoke runner, packaging configuration or CI
+- a git repository (`git status` reports that the folder is not a repository)
+
+The documentation repeatedly defers to "the existing repository's frozen schemas, SDK and tested contracts" (`02_SRS §1`, `04 §1`, `16 §1`), an "existing approved driver/CDP approach" (`03 §2`) and a "smoke runner" (`15 §1`). **None of these were found in this workspace.** I also checked the sibling folder `../fiducial/` read-only. It contains a different product: an Express/MongoDB backend and Next.js frontends for a property-insurance placement platform. It has no Electron, Quote Fetcher, adapter or SDK code. See [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) Q-01.
+
+As a result, **every requirement below is either `NOT IMPLEMENTED` or `BLOCKED`**, and no relevant source files exist. The "Milestone" column refers to [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). The "Acceptance" column cites test IDs from `09_TEST_PLAN_AND_REGRESSION_PACK` and the traceability in `17_REQUIREMENTS_TRACEABILITY`. Where doc 17's FR numbering disagrees with the PRD, the PRD numbering is used (see OPEN_QUESTIONS C-03).
+
+### Status legend
+
+| Status | Meaning |
+|---|---|
+| `VERIFIED` | Implemented and verified by a recorded test result |
+| `NEEDS VALIDATION` | Implemented, but not yet verified by recorded evidence |
+| `PARTIAL` | Some of the functionality exists |
+| `NOT IMPLEMENTED` | Nothing exists. Work can start once its dependencies are met |
+| `BLOCKED` | Cannot be completed without external information, access or approval. The blocker is named. Parts that are not blocked may still be built |
+
+### Summary
+
+| Category | Total | Verified | Needs validation | Partial | Not implemented | Blocked |
+|---|---:|---:|---:|---:|---:|---:|
+| P0 functional (FR-01 to FR-20) | 20 | 0 | 0 | 0 | 16 | 4 |
+| P1 / P2 / deferred | 11 | 0 | 0 | 0 | 8 | 3 |
+| Non-functional | 10 | 0 | 0 | 0 | 8 | 2 |
+| Security and privacy controls | 19 | 0 | 0 | 0 | 17 | 2 |
+| Data, IPC and contracts | 11 | 0 | 0 | 0 | 10 | 1 |
+| Insurer adapters | 9 | 0 | 0 | 0 | 1 | 8 |
+| Release and handover | 12 | 0 | 0 | 2 | 7 | 3 |
+| Regression cases (TC-01 to TC-28, PRD cases 1–5) | 33 | 0 | 0 | 0 | 28 | 5 |
+
+The two `PARTIAL` items are documentation: the user guide (doc 11) and the install/UAT guide (doc 12) exist as drafts but have not been checked against a built application.
+
+---
+
+## 2. P0 functional requirements (`01_PRD §9`)
+
+| ID | Requirement | Status | Missing functionality | Depends on | Milestone | Acceptance |
+|---|---|---|---|---|---|---|
+| FR-01 | Capture customer name, phone, email, notes | NOT IMPLEMENTED | Customer schema, New Quote form, persistence | Contracts (M3), storage (M4) | M3, M4, M6 | TC-01, TC-02. The quote is saved with a stable ID and invalid input is rejected with a field error |
+| FR-02 | One or more members with relationship and age/DOB; minimise DOB; validate age limits | NOT IMPLEMENTED | Member schema, age-limit rules, relationship list, DOB minimisation | Age limits and the relationship list (Q-B04); age vs DOB (C-05) | M3, M6 | TC-03 |
+| FR-03 | Sum insured, validated pincode, floater/individual | NOT IMPLEMENTED | Quote schema, pincode validator, sum-insured rules | Allowed sum-insured values and floater rules (Q-B03, Q-B05) | M3, M6 | TC-01, TC-02 |
+| FR-04 | Validate insurer-specific required fields before starting | NOT IMPLEMENTED | Adapter metadata (`requiredFields`) and pre-flight validation | Adapter SDK (M3); per-insurer field lists come from feasibility spikes (M1, M8, M9) | M3, M5 | TC-04. A missing field blocks that insurer only |
+| FR-05 | Isolated persistent session per insurer | NOT IMPLEMENTED | PaneManager with `persist:insurer-<id>` partitions, origin allowlist, popup and permission policy | Electron spike (M1); acceptance of on-disk session persistence (C-08) | M5 | TC-06, TC-07, TC-23 |
+| FR-06 | Connection/auth states and reconnect without losing the quote | NOT IMPLEMENTED | Connection state machine, Connect board, reconnect action | State model decision (C-01), PaneManager (M5) | M5, M6 | TC-06, TC-07 |
+| FR-07 | Concurrent runs with bounded concurrency, per-insurer timeout and at most one safe retry | NOT IMPLEMENTED | Orchestrator, timeout policy, transient-error classification | Error taxonomy (C-02); how timeouts treat advisor wait time (Q-E06) | M5 | TC-05, TC-14 |
+| FR-08 | Cancellation; preserve partial results | NOT IMPLEMENTED | Per-run `AbortController`, idempotent cancel, persisted terminal states | Orchestrator, storage | M5 | TC-05, TC-13 |
+| FR-09 | One insurer failure does not block others | NOT IMPLEMENTED | Per-adapter isolation in the orchestrator | Orchestrator | M5 | TC-05, TC-12 |
+| FR-10 | Live status, premium, plan, cover, source and failure reason | NOT IMPLEMENTED | Progress events, Results view, safe messages (`07 §3`) | IPC events (M2), orchestrator (M5) | M5, M6 | TC-05, TC-09 |
+| FR-11 | Manual entry for any insurer, labelled, with optional screenshot | NOT IMPLEMENTED | Manual-entry form, evidence file store, Manual label in the UI and PDF | Storage (M4); whether evidence is mandatory per insurer (Q-B11) | M4, M6 | TC-08, TC-11, TC-28 |
+| FR-12 | Highlight cheapest valid comparable premium; never treat a missing premium as zero | BLOCKED | The comparison engine can be built with a placeholder rule. The **comparability rule and premium basis** (GST, tenure, add-ons) are undefined | Q-B01, Q-B02, Q-B10 | M3 | TC-10, TC-27 |
+| FR-13 | Branded HTML-based PDF for 1–8 insurers; rupee symbol renders | NOT IMPLEMENTED | Template, bundled font with U+20B9, `printToPDF` service, layouts | PDF spike (M1) | M7 | TC-15, TC-16, TC-17. Note: the doc-pack PDFs themselves render ₹ as "■" |
+| FR-14 | Failed, timed-out, unsupported and manual results shown in labelled boxes | NOT IMPLEMENTED | Status boxes in the UI and PDF; `timed_out` state | State model (C-01) | M6, M7 | TC-11, TC-12, TC-14 (doc 17 has no row for this; see C-03) |
+| FR-15 | PDF includes approved brand, licence/GST, disclaimer, consent and date | BLOCKED | Settings fields and template slots can be built. **The approved content is missing** | Q-B07, Q-B08 | M4, M7 | TC-18 |
+| FR-16 | Save PDF to a chosen folder and link it to quote history | NOT IMPLEMENTED | Save dialog, `pdf_exports` reference, filename policy without PII | PDF service, storage | M7 | TC-15, TC-19 |
+| FR-17 | First-run setup and branding configuration | NOT IMPLEMENTED | First-run wizard, settings persistence, logo import | Storage (M4) | M6 | TC-18, TC-24, TC-25 |
+| FR-18 | Search/reopen history; regenerate PDF; delete quote and attachments | NOT IMPLEMENTED | History list and search, duplicate, offline regeneration, cascading delete with an audit event | Storage, PDF, retention policy (Q-B06) | M4, M6, M7 | TC-19, TC-20 |
+| FR-19 | Build and smoke-test Windows and macOS installers | BLOCKED | Unsigned builds can be produced. **Signing identities, clean test machines and the OS floor** are not available | Q-D04, Q-D05, Q-D07, Q-E01 | M10 | TC-24, TC-25, TC-26 |
+| FR-20 | User and install guides plus UAT evidence | BLOCKED | Drafts exist (docs 11 and 12) but can only be finalised against a built app. UAT needs a named client representative | Built app; Q-D08 | M11 | Handover checklist (`12 §5`) |
+
+## 3. P1, P2 and deferred items (`01_PRD §10`, `02_SRS §2`)
+
+| ID | Item | Priority | Status | Notes / dependencies | Milestone |
+|---|---|---|---|---|---|
+| P1-01 | Save drafts | P1 | NOT IMPLEMENTED | Follows from the quote `status = draft` lifecycle (`03 §4` step 3 persists a draft anyway) | M4, M6 |
+| P1-02 | Optional OS-protected saved credentials | P1 | BLOCKED | SecretStore can be built. **Client policy on saving credentials** is undecided (Q-B09) | M4 |
+| P1-03 | Retention auto-delete | P1 | BLOCKED | The mechanism can be built. **The retention period (N days)** is not approved (Q-B06) | M4 |
+| P1-04 | Verified auto-update | P1 | BLOCKED | Needs update hosting and signing (Q-D06) | M10 |
+| P1-05 | Smoke CLI | P1 | NOT IMPLEMENTED | Headless run of mock adapters, then PDF generation | M5, M10 |
+| P1-06 | Sanitised fixture capture | P1 | NOT IMPLEMENTED | Developer-only capture with a redaction step, never enabled in production builds | M8 |
+| P1-07 | Advisor review/exclude results before PDF | "if approved" (`02 §2`) | NOT IMPLEMENTED | Scope decision (Q-B12) | M6 |
+| P2-01 | Settings export/import | P2 | NOT IMPLEMENTED | After v1 | — |
+| P2-02 | Developer inspector/copy-selector | P2 | NOT IMPLEMENTED | After v1 | — |
+| P2-03 | Richer plan comparison and analytics | P2 | NOT IMPLEMENTED | After v1 | — |
+| DEF-01 | Excel bulk upload producing a ZIP of PDFs | v1.1 (D-06) | NOT IMPLEMENTED | Out of v1 unless the owner moves it (Q-B13) | — |
+
+## 4. Non-functional requirements (`01_PRD §11`, `02_SRS §3`)
+
+| ID | Requirement | Status | Notes | Milestone | Acceptance |
+|---|---|---|---|---|---|
+| NFR-PERF-1 | Eight-insurer run under 3 minutes after login, excluding advisor interaction | BLOCKED | Needs live adapters and documented measurement conditions (Q-B14) | M9 | Timed run under recorded conditions |
+| NFR-PERF-2 | PDF in under 5 seconds | NOT IMPLEMENTED | Measure on the minimum-spec machine | M7 | Timed TC-16 |
+| NFR-REL | Per-insurer isolation, at most one retry, partial results preserved, no false success, transactional writes | NOT IMPLEMENTED | Orchestrator and storage | M4, M5 | TC-05, TC-09, TC-13, TC-14 |
+| NFR-USE | Standard flow learnable after a 30-minute walkthrough; plain-language errors; state not shown by colour alone | NOT IMPLEMENTED | User-facing copy from `07 §3` | M6 | UAT survey (G8) |
+| NFR-COMPAT | Windows 10/11 x64; macOS 12+ on Intel and Apple Silicon | BLOCKED | macOS 12 support in current Electron is **not verified** (Q-E01) | M1, M10 | TC-24, TC-25 |
+| NFR-MAINT | One adapter per insurer; pure parsers; at least 3 sanitised fixtures and tests per adapter | NOT IMPLEMENTED | Adapter SDK template | M3, M8, M9 | Fixture tests in CI |
+| NFR-OFFLINE | History and PDF regeneration work offline | NOT IMPLEMENTED | Local fonts and assets; no network calls in the PDF path | M7 | Offline PDF regeneration test (`08 §4`) |
+| NFR-A11Y | Keyboard navigation, focus management, contrast, selectable PDF text | NOT IMPLEMENTED | | M6, M7 | Accessibility checklist (`07 §4`) |
+| NFR-SEC | No secrets in logs; narrow IPC | NOT IMPLEMENTED | See section 5 | M2 | Release security gate (`06 §7`) |
+| NFR-PRIV | Data minimisation, safe logs, retention, deletion, export warnings | NOT IMPLEMENTED | See section 5 | M2, M4, M7 | TC-20, log review |
+
+## 5. Security, privacy and compliance controls (`06_SECURITY_PRIVACY_COMPLIANCE`)
+
+These IDs are derived for tracking only. They add no new requirements.
+
+| ID | Control | Source | Status | Milestone | Acceptance |
+|---|---|---|---|---|---|
+| SEC-01 | Renderer `nodeIntegration` disabled; `sandbox` enabled | 06 §2 | NOT IMPLEMENTED | M2 | Config unit test and review |
+| SEC-02 | `contextIsolation` enabled | 06 §2 | NOT IMPLEMENTED | M2 | Config unit test |
+| SEC-03 | Allowlisted preload methods only; no raw `ipcRenderer` | 06 §2, 16 §1 | NOT IMPLEMENTED | M2 | Test that the preload surface matches the allowlist |
+| SEC-04 | Main-process schema validation and sender verification for all IPC | 06 §2 | NOT IMPLEMENTED | M2 | TC-22 |
+| SEC-05 | Navigation and popup restrictions in app and insurer views | 06 §2 | NOT IMPLEMENTED | M2, M5 | TC-23 |
+| SEC-06 | Restrictive CSP for app-owned UI | 06 §2 | NOT IMPLEMENTED | M2 | CSP header test |
+| SEC-07 | Insurer content isolated from privileged APIs (no preload, separate partition, permissions denied) | 06 §2, 03 §6 | NOT IMPLEMENTED | M5 | TC-23 and review |
+| SEC-08 | Review Electron security guidance for the installed version | 06 §2 | NOT IMPLEMENTED | M2, M10 | Signed-off checklist |
+| SEC-09 | No credentials in source, fixtures, docs, screenshots or CLI arguments | 06 §3 | NOT IMPLEMENTED | M2 (scanner), ongoing | Secret scan clean |
+| SEC-10 | OS-backed secure storage only; fail closed | 06 §3, 05 §4 | NOT IMPLEMENTED | M4 | TC-21 |
+| SEC-11 | Never log passwords, OTPs, tokens, cookies or auth headers | 06 §3, §6 | NOT IMPLEMENTED | M2 | Logger redaction tests and log review |
+| SEC-12 | Session cookies never shared across insurers | 06 §3 | NOT IMPLEMENTED | M5 | Partition isolation test |
+| SEC-13 | Rotate development/test credentials at handover | 06 §3 | BLOCKED | M11 | Needs the credential owner (Q-D02) |
+| SEC-14 | Signing and update provenance verified | 06 §7 | BLOCKED | M10 | Needs signing identities (Q-D04, Q-D05) |
+| PRIV-01 | Collect only the fields needed; prefer age over DOB | 06 §4 | NOT IMPLEMENTED | M3 | Schema review |
+| PRIV-02 | Redact screenshots and diagnostic bundles; user reviews the bundle before export | 06 §4, 13 | NOT IMPLEMENTED | M5, M10 | Diagnostics test |
+| PRIV-03 | Warn that exported PDFs contain sensitive data | 06 §4, 07 §2 | NOT IMPLEMENTED | M7 | UI test |
+| PRIV-04 | No automatic upload or email of PDFs | 06 §4 | NOT IMPLEMENTED (by design: no such feature) | — | Review |
+| LOG-01 | Log only the allowed fields: version, run ID, insurer ID, state transition, error category, timing, retry count | 06 §6 | NOT IMPLEMENTED | M2 | Logger unit tests |
+
+## 6. Data, IPC and contracts (`05`, `16`, `04 §2–4`)
+
+| ID | Item | Status | Notes | Milestone |
+|---|---|---|---|---|
+| DATA-01 | Entities: customers, insured_members, quotes, insurer_results, quote_events, settings | NOT IMPLEMENTED | Field-level conflicts are in C-04 | M4 |
+| DATA-02 | Versioned migrations, foreign keys, transactions, indexes, upgrade test | NOT IMPLEMENTED | | M4 |
+| DATA-03 | Money stored as integer paise; never as floats | NOT IMPLEMENTED | | M3 |
+| DATA-04 | Recovery from a locked or corrupt database | NOT IMPLEMENTED | Recovery behaviour needs definition | M4 |
+| DATA-05 | Backup and restore | BLOCKED | Whether backups are required at all is undecided (Q-B15) | M4 |
+| DATA-06 | Sanitised audit event on deletion | NOT IMPLEMENTED | | M4 |
+| IPC-01 | `AppResult<T>` / `AppError` envelope | NOT IMPLEMENTED | `16 §3` | M2 |
+| IPC-02 | Error code map | NOT IMPLEMENTED | Merge the lists in 04 and 16 (C-02) | M2 |
+| IPC-03 | Progress event `{runId, insurerId, status, progressStep?, safeMessage, occurredAt}` | NOT IMPLEMENTED | `16 §4` | M2, M5 |
+| IPC-04 | API surface (`quote.*`, `history.*`, `settings.*`, `diagnostics.export`) | NOT IMPLEMENTED | Names are illustrative in 16; finalise in M2 | M2 |
+| SDK-01 | Shared adapter contract (metadata, required fields, run, parse, normalised result, states) | NOT IMPLEMENTED | The documents assume this already exists and is frozen (Q-01) | M3 |
+
+## 7. Insurer adapters (`01_PRD §7`, `04 §6`)
+
+No adapter may be marked release-ready without sanitised fixtures and a tested manual fallback (`15 §4`). "BLOCKED" here means **live** automation is blocked. Manual fallback for every insurer is covered by ADP-MANUAL and can be built now.
+
+| ID | Insurer | Planned mode | Status | Blockers | Milestone |
+|---|---|---|---|---|---|
+| ADP-MANUAL | All eight insurers (manual entry) | Required (D-05) | NOT IMPLEMENTED | None. This is the G4 baseline | M6 |
+| ADP-ICICI | ICICI Lombard | Automated candidate | BLOCKED | Written permission, test account, product/plan to quote (Q-B16), fixtures | M8 |
+| ADP-HDFC | HDFC ERGO | Automated only if the spike passes | BLOCKED | Same blockers, plus a Flutter/canvas feasibility and OCR permission spike | M9 |
+| ADP-NIVA | Niva Bupa | Automated candidate | BLOCKED | Permission, account, plan, fixtures | M9 |
+| ADP-TATA | Tata AIG | Human-assisted OTP | BLOCKED | Same blockers, plus who receives the OTP during development and test (Q-D02) | M9 |
+| ADP-STAR | Star Health | Automated or manual | BLOCKED | Public quote path needs investigation; permission | M9 |
+| ADP-UIIC | United India | Advisor-assisted or manual | BLOCKED | Image CAPTCHA (no bypass); permission | M9 |
+| ADP-BAJAJ | Bajaj Allianz | Advisor-assisted or manual | BLOCKED | Keycloak SSO and CAPTCHA; permission | M9 |
+| ADP-NIA | New India Assurance | Likely manual | BLOCKED | CAPTCHA/reCAPTCHA; permission | M9 |
+
+## 8. Release, documentation and handover (`10`, `11`, `12`, `15`)
+
+| ID | Item | Status | Notes | Milestone |
+|---|---|---|---|---|
+| REL-01 | `lint`, `typecheck`, `test` and `build` scripts | NOT IMPLEMENTED | No `package.json` exists | M2 |
+| REL-02 | Secret scan in CI and pre-release | NOT IMPLEMENTED | | M2 |
+| REL-03 | Windows build (`build:win`) | NOT IMPLEMENTED | Unsigned builds are possible | M10 |
+| REL-04 | macOS build, signing and notarisation (`build:mac`) | BLOCKED | Apple Developer identity (Q-D04) | M10 |
+| REL-05 | Windows code signing | BLOCKED | Certificate owner (Q-D05) | M10 |
+| REL-06 | Checksums, release notes, known limitations | NOT IMPLEMENTED | | M10 |
+| REL-07 | Rollback procedure and preservation of previous installers | NOT IMPLEMENTED | | M10 |
+| REL-08 | Version control and CI | NOT IMPLEMENTED | The folder is not a git repository | M0, M2 |
+| DOC-01 | User guide | PARTIAL | Draft in `11_USER_GUIDE.pdf`; validate against the built UI | M11 |
+| DOC-02 | Install, handover and UAT guide | PARTIAL | Draft in `12_INSTALLATION_HANDOVER_UAT.pdf` | M11 |
+| DOC-03 | Adapter READMEs (`04 §5`) | NOT IMPLEMENTED | One per adapter | M8, M9 |
+| UAT-01 | Client UAT sign-off | BLOCKED | Client representative not named (Q-D08) | M11 |
+
+## 9. Regression pack (`09 §2–3`)
+
+All 28 cases are **NOT IMPLEMENTED**. No test runner exists.
+
+| Group | Cases | Earliest milestone |
+|---|---|---|
+| Input validation | TC-01 to TC-04 | M3 (schema unit tests), M6 (UI) |
+| Orchestration with mock adapters | TC-05 to TC-08, TC-12 to TC-14 | M5 |
+| Parsing and comparison | TC-09, TC-10, TC-27 | M3 (TC-27 also needs Q-B01) |
+| Manual entry and evidence | TC-11, TC-28 | M6 |
+| PDF | TC-15 to TC-18 | M7 |
+| Persistence and retention | TC-19, TC-20 | M4 |
+| Security | TC-21 to TC-23 | M2, M4, M5 |
+| Platform and installers | TC-24 to TC-26 | M10 (signing blocked) |
+| **PRD standard cases 1–4 and floater case 5** | **BLOCKED** | The client must supply dummy inputs and expected values (`09 §3`, Q-D03) |
+
+## 10. Product goals (`01_PRD §3`)
+
+G1 to G8 are acceptance targets, not features. None can be measured until the relevant milestone is complete. G1, G5 and G8 also need agreed sample sizes and measurement conditions (Q-B14).
+
+---
+
+### How to maintain this file
+
+Change a status only with evidence: a test ID with its recorded result, a build ID and the platform. Per `17_REQUIREMENTS_TRACEABILITY`, "a requirement is not verified merely because a test exists." Record any scope change against the PRD and update `17` as the change-control rules in `19` require.
