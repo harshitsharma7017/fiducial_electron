@@ -8,12 +8,152 @@
 
 "Blocks" refers to milestones in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
+## 0. M0 update (26 October 2026)
+
+Sections A–F below are the original audit, kept unchanged apart from "→ M0" pointers. This section records what M0 established and what now needs approval.
+
+**Labels used in this section**
+
+| Label | Meaning |
+|---|---|
+| **Requirement** | Stated in the FQF-DOCS-001 pack |
+| **Evidence** | Checked during M0; the method is stated. *Documentary* evidence (release notes, package contents) is **not** a platform test |
+| **Direction** | Given by the project lead in the M0 instruction. Not a PO, client or security approval |
+| **Provisional direction** | Recorded by the project lead on 26 Oct 2026 (M0 finalisation). Planning and spikes may proceed against it. It is **not** a PO, client or security approval, and it is revisited if a spike fails or a pending approval goes the other way |
+| **Recommendation** | Technical proposal. Not in effect until approved |
+| **Awaiting** | Needs the named approver |
+
+### 0.1 Resolved or narrowed in M0
+
+| ID | Update | Basis |
+|---|---|---|
+| Q-01 | **No Quote Fetcher code, SDK or schemas found.** (a) The home folder was searched to depth 6 for Electron `package.json` files and quote/fetcher folders; the only hit, `~/Desktop/JARVIS`, is an unrelated workplace assistant. (b) All 60 repositories under GitHub account `harshitsharma7017` were listed, and code search for `PaneManager`, `safeStorage`, "quote fetcher" and "insurer adapter" returned nothing. (c) `../fiducial/` is a different product (audit). **The project is treated as greenfield.** Residual gap: repositories in other accounts (the client's or a previous vendor's) could not be checked, so PO confirmation is still requested | Evidence; Direction |
+| Q-00 | The project lead has directed that the original freeze and handover dates (`15 §2`) cannot be assumed achievable. **Formally replacing them is a PO and client decision and has not been made.** A revised schedule is proposed in IMPLEMENTATION_PLAN §8 (DM-09) | Direction; **Awaiting PO and client** |
+| REL-08 | The repository is under git (initialised by the project lead). Baseline commit `d21976a`. `.gitignore` and `.gitattributes` were tested against 16 sample paths | Evidence |
+| E-01 / Q-E01 | Electron facts (npm registry and electron/electron at tag `v45.0.0`). Latest stable is **45.0.0** (21 Oct 2026; Chromium 156, Node 24.22). The supported lines are **45, 44 and 43** ("latest three stable majors"). **Electron ≥ 44 requires macOS 13 (Ventura)** (`docs/breaking-changes.md`). Electron 43 is the last line that runs on macOS 12, and it should lose support when 46 ships, around **16 Dec 2026** (inferred from the observed 8-week cadence). Windows 10+ x64 is supported. **Conclusion: the PRD's "macOS 12+" target (`01 §11`) cannot be met with a supported Electron.** See DM-01 | Evidence (documentary) |
+| E-03 | `better-sqlite3@13.0.3` and `better-sqlite3-multiple-ciphers@13.0.3` both ship N-API prebuilds for `darwin-arm64`, `darwin-x64` and `win32-x64` inside the npm package. GitHub releases since v13 carry no per-Electron-ABI binaries. **Loading in Electron 45 has not been tested** (spike S3) | Evidence (documentary) |
+
+### 0.2 Decisions needing your approval
+
+Each item lists its options, a recommended default and the required approvers.
+
+#### Decision register — status recorded at M0 finalisation (26 October 2026)
+
+All nine items are **provisional directions** from the project lead. **No PO, client or security approval has been given for any of them.** No technical test has been run yet; M1 spikes are the pending compatibility tests.
+
+| ID | Provisional direction (as recorded) | Still pending | Approver(s) still required | Work that may proceed now |
+|---|---|---|---|---|
+| DM-01 | Electron 45.x; Windows 10 22H2 and 11 x64; macOS 13+ on Intel and Apple Silicon | Compatibility testing (S1, S3); PO confirmation of the macOS floor change from 12 to 13 (`01 §11`) | **PO** | M1 spikes on Electron 45.x |
+| DM-02 | Encrypted SQLite with OS-backed key storage (option B) | Security validation (S3, S5) and security review; the key-loss consequence (AR-13) must be accepted | **Security reviewer** (not yet named, Q-D08) | Spikes S3 and S5 |
+| DM-03 | Persistent per-insurer sessions (option A), **deferred to R2** | Security review; S2 results | **Security reviewer** | Spike S2 against local mock pages only |
+| DM-04 | No exposed remote debugging port in production builds | S2 verification, including AR-16 (whether Chromium opens the port before the startup guard runs). **Not yet verified** | Project lead (security reviewer to confirm in the release gate `06 §7`) | Design and spike S2 |
+| DM-05 | Manual-first R1 **recommended**; FR-05 to FR-09 and the automated parts of FR-10 proposed for R2 | Deferring P0 requirements under `19` change control | **PO** | Planning only. R1 scope is not final |
+| DM-06 | Comparability rules **provisional** (the defaults in the DM-06 table) | Every business choice in the table; there is no default for deductible, co-pay or room rent | **PO**; **client** for the highlight wording | M3 may implement the configurable engine with defaults marked *placeholder* |
+| DM-07 | **TypeScript, Zod, Vitest, ESLint and Prettier** | Compatibility checks with Electron 45.x (M1/M2). **Not covered by this direction and still undecided:** electron-vite, electron-builder, React, Playwright, the SQLite driver | Project lead (for the undecided items) | Spike scaffolding with the directed toolchain |
+| DM-08 | A bundled, appropriately licensed font, with automated ₹ (U+20B9) validation | Choosing the font (Noto Sans under SIL OFL 1.1 is the proposed candidate; confirm the licence from the files actually obtained); S4 results | Project lead; **client** if a brand font is supplied | Spike S4 |
+| DM-09 | Revised schedule (IMPLEMENTATION_PLAN §8) as a planning estimate | Agreement on dates and scope | **PO and client** | None. Dates are illustrative only |
+
+The option tables below are unchanged from the M0 analysis. Where a subsection says "Recommendation", read its status from this register.
+
+#### DM-01 — Electron line and OS support matrix (architecture and scope)
+
+| Option | Detail | Consequence |
+|---|---|---|
+| **A (recommended)** | Electron **45.x**, pinned to the latest patch at M2, with 44.9.x as fallback if S1 finds a 45.0 regression. **Windows 10 (22H2) and 11, x64. macOS 13 Ventura or later on Intel x64 and Apple Silicon arm64** | Raises the PRD macOS floor from 12 to 13, which is a P0 NFR change and needs PO approval. Electron must then be upgraded about every 8 weeks to stay in support (AR-15) |
+| B | Electron 43.x, keeping macOS 12 | Unsupported from about mid-December 2026, before R1 could ship. **Not recommended** |
+| C | Pin an older, unsupported Electron | Unpatched Chromium would render untrusted insurer content. **Rejected on security grounds** |
+
+Windows on Arm is not in the PRD and stays out of scope. **Approvers:** project lead, and PO for the NFR change. **Unblocks:** M1 S1.
+
+#### DM-02 — Customer data at rest (security)
+
+| Option | Detail | Consequence |
+|---|---|---|
+| A | Rely on the OS account and full-disk encryption (FileVault/BitLocker) as a documented install prerequisite. SQLite and evidence files stay in plaintext | Simplest. Data is readable in backups, copied profile folders, or on a disk without full-disk encryption |
+| **B (recommended)** | Encrypt the database with a SQLCipher-compatible driver (`better-sqlite3-multiple-ciphers`). A random 256-bit key is generated on first run and stored **only** wrapped by `safeStorage`. Evidence files are encrypted with AES-256-GCM under a second wrapped key. Full-disk encryption is still recommended in the install guide | Protects copied data (backups, other accounts, disk images). **Does not** protect against malware running as the same user (accepted residual risk). **If the OS key store is lost (OS reinstall, profile or keychain reset), local data is unrecoverable**; the user guide must say so. If `safeStorage` is unavailable the app cannot open its data and fails closed, consistent with `05 §4`. Adds scope to spikes S3 and S5 |
+| C | A for R1, then B later | Requires a one-way data migration on clients' machines. Not recommended |
+
+**Approvers:** project lead and security reviewer (Q-D08). **Unblocks:** M4.
+
+#### DM-03 — Insurer session isolation and storage (security; Track B only, not on the R1 path)
+
+| Option | Detail | Consequence |
+|---|---|---|
+| **A (recommended)** | One `persist:insurer-<id>` partition per insurer (FR-05). No preload. All permission requests denied. Navigation limited to the adapter's origin allowlist. Cookie-encryption fuse on. A per-insurer **"Sign out and forget"** action. All partitions wiped on app reset | Meets FR-05. Residual risk: authenticated cookies at rest, encrypted with the OS key (C-08) |
+| B | In-memory (non-persistent) partitions | No session data at rest, but the advisor signs in again (possibly with OTP) every launch. Contradicts "persistent" in FR-05, so it needs PO approval |
+
+**Approvers:** project lead and security reviewer, plus PO if B is chosen. Can wait until Track B starts; spike S2 tests option A.
+
+#### DM-04 — Portal automation without a remote debugging port (security)
+
+**Recommendation:**
+- Drive pages only through in-process `webContents.debugger` (CDP).
+- Packaged builds refuse to start if launched with `--remote-debugging-port`, `--remote-debugging-pipe`, `--inspect*` or `--js-flags`.
+- Set the `RunAsNode` and `EnableNodeCliInspectArguments` fuses off.
+- Spike S2 verifies with `lsof`/`netstat` that a packaged build opens no listening debug port.
+
+**Approver:** project lead.
+
+#### DM-05 — First-delivery scope: R1 manual-first (scope)
+
+**Recommendation (follows the M0 direction):**
+- **R1 includes:** customer and member capture, manual entry for all eight insurers, comparison, branded PDF, history, settings and first run, encrypted local storage, retention, and signed (or explicitly accepted unsigned) Windows and macOS packages with release validation.
+- **R1 excludes:** the Connect board, in-app insurer portal windows, the orchestrator and all automated adapters. **FR-05 to FR-09 and the automated parts of FR-10 move to R2.** The deferral must be recorded under the change control in `19`, because these are P0 requirements.
+
+**Alternative:** R1 also includes a Connect board with isolated in-app portal windows that the advisor uses manually, without automation. This adds the M5 PaneManager (about 4–6 days) and puts DM-03 on the R1 path.
+
+**Approvers:** PO (for deferring P0 items) and project lead.
+
+#### DM-06 — Comparability, GST, tenure, add-ons and manual ranking (business rule, PO decision)
+
+These are **business decisions**; nothing here is decided. The engine is designed so any option is a configuration change (ARCHITECTURE_REVIEW §7.7). M3 can proceed with the recommended defaults marked *placeholder*.
+
+| Topic | Options | Recommended default |
+|---|---|---|
+| Premium basis (Q-B02) | (a) Total payable **including GST**; (b) base premium excluding GST | (a). Capture base and GST separately when the insurer shows them |
+| Tenure (Q-B02) | (a) Rank 1-year quotes only; (b) annualise multi-year quotes; (c) rank within the same tenure | (a). Show multi-year quotes but do not rank them, because annualising hides multi-year discounts |
+| Add-ons and riders (Q-B02) | (a) Base plan without optional add-ons; (b) require the same advisor-chosen add-on set | (a) for v1 |
+| Sum insured (Q-B03) | Rank only when the returned sum insured equals the requested one | Equal; otherwise show but do not rank |
+| Members and cover type | Identical member set and cover type | Identical |
+| Deductible, co-pay, room-rent limits | (a) Show but ignore for ranking; (b) require equality | **No default.** This needs product knowledge. (a) would need the plan-features disclaimer |
+| Manual quotes (Q-B10) | (a) Eligible, labelled "Manual" on the highlight and in the PDF; (b) never eligible; (c) eligible only with an evidence screenshot | (a). In R1 every quote is manual, so (b) would mean R1 never highlights a cheapest premium |
+| Ties | Highlight all tied quotes | All tied |
+| Basis unknown or incomplete | Not ranked | Not ranked |
+
+Highlight wording (proposed, for client approval): "Lowest premium among comparable quotes — not a recommendation" (`08 §3`). **Approvers:** PO; client for the wording.
+
+#### DM-07 — Toolchain (E-02)
+
+**Recommendation:** electron-vite, electron-builder, strict TypeScript, React, Zod, Vitest, Playwright for Electron, and better-sqlite3 or its ciphers variant (depending on DM-02 and S3). All versions pinned exactly at M2. **Approver:** project lead. **Status:** the provisional direction covers TypeScript, Zod, Vitest, ESLint and Prettier only. The other items in this recommendation remain undecided (see the register).
+
+#### DM-08 — PDF font
+
+**Recommendation:** bundle **Noto Sans** (SIL Open Font License 1.1) for body text and ₹. A client brand font may replace it only if its licence permits embedding and it contains U+20B9. **Approver:** project lead; client if a brand font is supplied. **Status:** the provisional direction is "a bundled, appropriately licensed font with automated ₹ validation". Noto Sans remains the candidate, not a decision.
+
+#### DM-09 — Revised schedule
+
+See IMPLEMENTATION_PLAN §8. **Approvers:** PO and client.
+
+### 0.3 Still open, with the date each answer is needed
+
+These are unchanged from sections B and D. "W" means weeks after the decisions are approved; see IMPLEMENTATION_PLAN §8.
+
+| Needed by | Questions |
+|---|---|
+| Now (long lead time) | Q-D04 and Q-D05 (signing identities), Q-D07 (Windows x64 machine, Intel Mac, macOS 13 test target), Q-D08 (named approvers), Q-02, Q-03 |
+| End of W3 (M3) | Q-B03, Q-B04, Q-B05; DM-06 |
+| W4 (M4) | Q-B06 (retention days), Q-B09 (saved credentials; R1 has no portal logins, so this can wait for R2), Q-B15 |
+| W5 (M6) | Q-B11, Q-B12 |
+| W7 (M7) | Q-B07, Q-B08 (branding and legal text) |
+| W9 (M11) | Q-D03 (dummy data and PRD cases), Q-D06 (hosting), Q-D09 (legal review) |
+| Track B (R2) | Q-D01, Q-D02, Q-B16, Q-E06, Q-E07 |
+
 ## A. Must be answered before any implementation
 
 | ID | Question | Why it matters | Owner | Blocks |
 |---|---|---|---|---|
-| Q-00 | **What is the revised delivery schedule and scope?** `15 §2` set feature freeze at 26 Oct 2026 12:00 and handover on 27 Oct 2026. The repository has no code as of 26 Oct 2026 | Neither date can be met. The scope for the first delivery must be agreed. The manual-first baseline is recommended | PO, Client | Everything |
-| Q-01 | **Does an existing codebase, "frozen SDK" or set of Zod schemas exist elsewhere?** Docs 02, 03, 04, 15 and 16 defer to an existing repository, driver/CDP approach, helper library and smoke runner. None are in this workspace or in `../fiducial/` | If they exist, the plan must be re-based on them to avoid "a competing contract" (`04 §1`). If not, M3 creates the single contract | Tech, PO | M2, M3 |
+| Q-00 | **What is the revised delivery schedule and scope?** `15 §2` set feature freeze at 26 Oct 2026 12:00 and handover on 27 Oct 2026. The repository has no code as of 26 Oct 2026 | Neither date can be met. The scope for the first delivery must be agreed. The manual-first baseline is recommended. **→ M0: DM-05, DM-09** | PO, Client | Everything |
+| Q-01 | **Does an existing codebase, "frozen SDK" or set of Zod schemas exist elsewhere?** Docs 02, 03, 04, 15 and 16 defer to an existing repository, driver/CDP approach, helper library and smoke runner. None are in this workspace or in `../fiducial/` | If they exist, the plan must be re-based on them to avoid "a competing contract" (`04 §1`). If not, M3 creates the single contract. **→ M0: none found; treated as greenfield (§0.1)** | Tech, PO | M2, M3 |
 | Q-02 | **Where are the nine-page source PRD and the "task list supplied in conversation"?** `00` says the pack is derived from them; only the four-page derived PRD is here | Clauses such as "where required by the task plan" (`04 §5`, `09 §4`) and "Vitest per task list" (`03 §2`) cannot be checked | PO, Tech | M0 |
 | Q-03 | **Is the FQF-DOCS-001 v1.0 draft approved as the baseline?** Every approval in `19` is pending | Implementing against an unapproved draft risks rework. At minimum, P0 scope needs PO approval | PO, Client, Sec | M3 onward |
 
@@ -37,7 +177,7 @@
 | Q-B14 | What are the **sample size and conditions** for G1, G5, G8 and the performance targets? | Release criteria | PO, Tech | M9, M11 |
 | Q-B15 | Is **local backup and restore** required? (18 Q14, `05 §7`) | DATA-05 | Client | M4 |
 | Q-B16 | **For each insurer, which product or plan should be quoted?** Each insurer offers several health products. The documents do not say which one | Adapters cannot be specified. Comparability depends on it | PO | M8, M9 |
-| Q-B17 | **Local data protection:** is the OS account plus full-disk encryption (FileVault, BitLocker) acceptable for the SQLite database and evidence files, or are database encryption and an app lock required? `06 §1` names "unauthorized local access" as a threat but defines no control | AR-06; adding encryption later would require a data migration | Sec, Client | M4 |
+| Q-B17 | **Local data protection:** is the OS account plus full-disk encryption (FileVault, BitLocker) acceptable for the SQLite database and evidence files, or are database encryption and an app lock required? `06 §1` names "unauthorized local access" as a threat but defines no control | AR-06; adding encryption later would require a data migration. **→ M0: DM-02** | Sec, Client | M4 |
 
 ## C. Conflicts and inconsistencies in the documentation
 
@@ -52,7 +192,7 @@ Each item includes a proposed resolution, which needs the listed owner's approva
 | C-05 | **Age vs. DOB.** FR-02 allows "age or DOB"; `05` says avoid storing both. Some insurer portals may require DOB | Store age by default. Store DOB only for insurers whose required fields demand it, and document why per adapter | PO, Sec |
 | C-06 | **Licence fields.** FR-15 says "licence/GST"; `08 §2` says "licence/POSP and GST" | Make the fields configurable: licence number, POSP code (optional), GST. The client confirms which apply (Q-B07) | Client |
 | C-07 | **IPC naming.** `16 §2` has `quote.get(runId)`, which mixes up quote and run identifiers | `quote.get(quoteId)` plus `run.get(runId)`. The names in 16 are illustrative, so this is allowed | Tech |
-| C-08 | **"Persistent session" vs. secret handling.** FR-05 requires persistent insurer sessions, which means Chromium stores authenticated cookies on disk. `05 §4` and `06 §3` forbid storing cookies in app data. They do not address the browser profile | Accept partition persistence, with cookie encryption enabled, a "Forget session" action and retention clearing. Record this as an accepted risk | Sec, PO |
+| C-08 | **"Persistent session" vs. secret handling.** FR-05 requires persistent insurer sessions, which means Chromium stores authenticated cookies on disk. `05 §4` and `06 §3` forbid storing cookies in app data. They do not address the browser profile | Accept partition persistence, with cookie encryption enabled, a "Forget session" action and retention clearing. Record this as an accepted risk. **→ M0: DM-03** | Sec, PO |
 | C-09 | **Documentation format.** `00` suggests `docs/*.md`; the supplied files are PDFs in the repository root, and two index PDFs overlap | Decide which format is canonical before editing either (Q-E09) | PO |
 | C-10 | **Auto-update scope.** `01 §4` includes the updater in v1 "if configured and tested"; `01 §10` lists "verified auto-update" as P1 | Treat it as P1. Ship without the updater unless hosting and signing are ready | PO |
 
@@ -74,7 +214,7 @@ Each item includes a proposed resolution, which needs the listed owner's approva
 
 | ID | Decision | Recommendation | Decide by |
 |---|---|---|---|
-| E-01 / Q-E01 | Electron version and **minimum OS versions** (18 Q5) | Use the latest stable Electron at M1. If it no longer supports macOS 12, **ask the PO to raise the floor** rather than pin an unpatched Electron | End of M1 (PO approves an OS-floor change) |
+| E-01 / Q-E01 | Electron version and **minimum OS versions** (18 Q5) | Use the latest stable Electron at M1. If it no longer supports macOS 12, **ask the PO to raise the floor** rather than pin an unpatched Electron. **→ M0: Electron's documentation states that Electron ≥ 44 needs macOS 13; see DM-01** | End of M1 (PO approves an OS-floor change) |
 | E-02 | Build toolchain | electron-vite, electron-builder, TypeScript strict mode, Vitest, Playwright for Electron, and ESLint/Prettier/Husky matching the team's other repositories | M2 |
 | E-03 | SQLite driver | better-sqlite3 if the S3 spike passes on all targets; otherwise `node:sqlite` | End of M1 |
 | E-04 / Q-E04 | **Portal window UX**: insurer views embedded in the Connect board, or a separate "Insurer window" with one tab per insurer? | A separate window with tabs. It keeps untrusted content visually and technically apart from app UI and gives the advisor a full-size view for login, OTP and CAPTCHA | M5 (PO review of mock-up) |
@@ -83,7 +223,9 @@ Each item includes a proposed resolution, which needs the listed owner's approva
 | Q-E07 | **OCR** for HDFC ERGO's canvas UI | Defer. Add tesseract.js in a worker only if the HDFC spike shows it is necessary and the interaction is permitted | M9 |
 | Q-E08 | UI component library | Radix with Tailwind and react-hook-form with Zod, matching the team's other frontends | M2 |
 | Q-E09 | Documentation location and format | Keep the PDFs as the approved baseline; optionally move them to `docs/`. Record changes as new versions per `19`, not by editing the planning files | M0 (PO) |
-| E-10 | Driver approach | In-process `webContents.debugger` (CDP). **No remote debugging port** in any shipped build | M1 |
+| E-10 | Driver approach | In-process `webContents.debugger` (CDP). **No remote debugging port** in any shipped build. **→ M0: DM-04** | M1 |
+
+Comparability questions Q-B01, Q-B02, Q-B03 and Q-B10 now have options and recommended defaults in **DM-06** (§0.2).
 
 ## F. Assumptions this plan makes until told otherwise
 

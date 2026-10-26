@@ -42,10 +42,25 @@ As a result, **every requirement below is either `NOT IMPLEMENTED` or `BLOCKED`*
 | Security and privacy controls | 19 | 0 | 0 | 0 | 17 | 2 |
 | Data, IPC and contracts | 11 | 0 | 0 | 0 | 10 | 1 |
 | Insurer adapters | 9 | 0 | 0 | 0 | 1 | 8 |
-| Release and handover | 12 | 0 | 0 | 2 | 7 | 3 |
+| Release and handover | 12 | 1 | 0 | 2 | 6 | 3 |
 | Regression cases (TC-01 to TC-28, PRD cases 1–5) | 33 | 0 | 0 | 0 | 28 | 5 |
 
 The two `PARTIAL` items are documentation: the user guide (doc 11) and the install/UAT guide (doc 12) exist as drafts but have not been checked against a built application.
+
+*At audit time the "Release and handover" row read 0 verified / 7 not implemented. It changed in M0 when REL-08 was verified; see §1a.*
+
+## 1a. M0 update (26 October 2026)
+
+| Change | Detail | Evidence |
+|---|---|---|
+| REL-08 version control: NOT IMPLEMENTED → **VERIFIED** | Git repository in this folder only, branch `main`, baseline commit `d21976a`. `.gitignore` excludes env files, signing material, databases, sessions, evidence, exports, raw captures, logs and build output. `.gitattributes` marks PDFs binary | `git log`; `git check-ignore` against 16 sample paths; `git check-attr` |
+| Q-01 (existing SDK) | **Not found anywhere checked.** The project is treated as greenfield | OPEN_QUESTIONS §0.1 |
+| NFR-COMPAT | Remains BLOCKED. The macOS 12 floor in `01 §11` conflicts with every supported Electron line (≥ 44 needs macOS 13), per Electron's documentation. Awaiting DM-01. **No platform has been tested yet** | OPEN_QUESTIONS §0.1, DM-01 |
+| FR-05 to FR-09 | Status unchanged (NOT IMPLEMENTED). **Proposed** move from R1 to R2 under DM-05, awaiting PO approval | IMPLEMENTATION_PLAN §7 |
+| Decision register | DM-01 to DM-09 recorded as **provisional directions**. PO, client and security approvals are pending. **No requirement status changed as a result**, because a direction is not an implementation or a test result | OPEN_QUESTIONS §0.2 |
+| All other rows | Unchanged. **There are still no source files.** M0 produced only planning documents and repository configuration | — |
+
+M1 spike results (IMPLEMENTATION_PLAN §9) will be recorded here per platform. A spike result counts only for the platforms it actually ran on.
 
 ---
 
@@ -98,7 +113,7 @@ The two `PARTIAL` items are documentation: the user guide (doc 11) and the insta
 | NFR-PERF-2 | PDF in under 5 seconds | NOT IMPLEMENTED | Measure on the minimum-spec machine | M7 | Timed TC-16 |
 | NFR-REL | Per-insurer isolation, at most one retry, partial results preserved, no false success, transactional writes | NOT IMPLEMENTED | Orchestrator and storage | M4, M5 | TC-05, TC-09, TC-13, TC-14 |
 | NFR-USE | Standard flow learnable after a 30-minute walkthrough; plain-language errors; state not shown by colour alone | NOT IMPLEMENTED | User-facing copy from `07 §3` | M6 | UAT survey (G8) |
-| NFR-COMPAT | Windows 10/11 x64; macOS 12+ on Intel and Apple Silicon | BLOCKED | macOS 12 support in current Electron is **not verified** (Q-E01) | M1, M10 | TC-24, TC-25 |
+| NFR-COMPAT | Windows 10/11 x64; macOS 12+ on Intel and Apple Silicon | BLOCKED | macOS 12 support in current Electron is **not verified** (Q-E01). **M0: Electron's documentation states ≥ 44 needs macOS 13; awaiting DM-01** | M1, M10 | TC-24, TC-25 |
 | NFR-MAINT | One adapter per insurer; pure parsers; at least 3 sanitised fixtures and tests per adapter | NOT IMPLEMENTED | Adapter SDK template | M3, M8, M9 | Fixture tests in CI |
 | NFR-OFFLINE | History and PDF regeneration work offline | NOT IMPLEMENTED | Local fonts and assets; no network calls in the PDF path | M7 | Offline PDF regeneration test (`08 §4`) |
 | NFR-A11Y | Keyboard navigation, focus management, contrast, selectable PDF text | NOT IMPLEMENTED | | M6, M7 | Accessibility checklist (`07 §4`) |
@@ -174,7 +189,7 @@ No adapter may be marked release-ready without sanitised fixtures and a tested m
 | REL-05 | Windows code signing | BLOCKED | Certificate owner (Q-D05) | M10 |
 | REL-06 | Checksums, release notes, known limitations | NOT IMPLEMENTED | | M10 |
 | REL-07 | Rollback procedure and preservation of previous installers | NOT IMPLEMENTED | | M10 |
-| REL-08 | Version control and CI | NOT IMPLEMENTED | The folder is not a git repository | M0, M2 |
+| REL-08 | Version control and CI | **VERIFIED** (version control, M0) / NOT IMPLEMENTED (CI) | Audit: the folder was not a git repository. M0: baseline `d21976a` (§1a). CI comes in M2 | M0, M2 |
 | DOC-01 | User guide | PARTIAL | Draft in `11_USER_GUIDE.pdf`; validate against the built UI | M11 |
 | DOC-02 | Install, handover and UAT guide | PARTIAL | Draft in `12_INSTALLATION_HANDOVER_UAT.pdf` | M11 |
 | DOC-03 | Adapter READMEs (`04 §5`) | NOT IMPLEMENTED | One per adapter | M8, M9 |

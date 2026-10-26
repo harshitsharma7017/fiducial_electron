@@ -11,6 +11,8 @@
 
 `15 §2` sets feature freeze at **26 October 2026, 12:00** and client handover on **27 October 2026**. Both fall on or after this audit, and the repository has no implementation. **Neither date can be met.** A revised schedule must be agreed before work starts (OPEN_QUESTIONS Q-00). This plan gives the order, dependencies and exit criteria. It does not give calendar dates, because those depend on Q-00, on access to insurers and on the M1 spike results.
 
+> **M0 update (26 Oct 2026):** the release structure, a revised schedule estimate, the detailed M1 spike plan and the M0 status are in **§7 to §11** below. Sections 1–6 are the original audit plan and remain valid except where §7 changes the order.
+
 ## 2. Strategy: manual-first, then automation
 
 All eight insurer automations depend on external permission, accounts and portal feasibility (`14` R-02, R-10). Most of the product does not. The plan therefore has two tracks:
@@ -64,7 +66,7 @@ Every milestone also inherits the project Definition of Done (`15 §4`): reviewe
 
 ### M1 — Technical spikes (`15 §1` workstream 1)
 
-Spikes are throwaway or `spikes/` code. Each produces a short written result.
+Spikes are throwaway or `spikes/` code. Each produces a short written result. **→ M0: the detailed spike plan with pass criteria is in §9 and supersedes this table where they differ.**
 
 | Spike | Question answered | Evidence |
 |---|---|---|
@@ -119,6 +121,8 @@ Spikes are throwaway or `spikes/` code. Each produces a short written result.
 **Definition of done:** the tests pass on both OSes, a dummy database can be inspected and contains no secrets, and the deletion audit event contains no PII.
 
 ### M5 — Orchestrator, PaneManager and mock adapters
+
+> **→ M0:** if DM-05 is approved, M5 moves from the R1 path to the start of Track B (R2). See §7.
 
 **Deliverables**
 - PaneManager with per-insurer partitions, an origin allowlist from adapter metadata, view lifecycle and a "Forget session" action. Portal window UX as decided in Q-E04.
@@ -205,3 +209,99 @@ Rules: no real customer data or credentials in any fixture; no test may automate
 ## 6. Critical path
 
 M0, then M1 (S1, S3, S4), then M2, M3, M4/M5, M6, M7 and M10. In parallel, start requesting the external inputs **now**, because they have the longest lead times: insurer permission and accounts, signing identities, approved legal and branding text, PRD test cases, and clean test machines.
+
+---
+
+# Revision 1 — M0 outcome (26 October 2026)
+
+Labels: **Direction** means given by the project lead in the M0 instruction. **Recommendation** means awaiting approval. Decision IDs (DM-xx) are defined in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) §0.2.
+
+## 7. Release structure
+
+| Release | Content | Gate | Status |
+|---|---|---|---|
+| **R1 — Manual-first** | M0 → M1 → M2 → M3 → M4 → M6 → M7 → M10 → M11. Customer and member details; manual quote entry for all eight insurers, with each insurer's required fields as data where known; history; settings and first run; comparison under the approved DM-06 rule; branded PDF; encrypted local storage (DM-02) and retention; Windows and macOS packaging with release validation | DM-01, DM-02, DM-05, DM-06, DM-07, DM-08 approved; R1 inputs in OPEN_QUESTIONS §0.3 | **Recommended; pending PO approval** (DM-05). Provisional direction only |
+| **R2 — Automation foundation and first adapter** | M5 (orchestrator, PaneManager, driver, mock adapters, Connect board UI) and M8 (first live adapter) | DM-03 and DM-04 approved; **per insurer:** written authorisation (Q-D01), test account and OTP holder (Q-D02), plan to quote (Q-B16), validated sanitised fixtures | Direction: separately gated |
+| **R3 onward — Further adapters** | M9, one insurer at a time | The same per-insurer gate. Any insurer without approval stays manual | Direction: separately gated |
+
+**P0 items deferred from R1 to R2 (needs PO acceptance under `19` change control):** FR-05, FR-06, FR-07, FR-08, FR-09 and the automated parts of FR-10. **R1 acceptance:** every other P0 requirement is verified, every insurer completes end to end through manual entry (`01 §14` criterion 3), PDF regression passes (TC-15 to TC-18), and the clean-machine installs pass (TC-24, TC-25).
+
+## 8. Revised schedule (estimate)
+
+**Assumptions:**
+- One full-time developer.
+- **W1** is the week the M0 decisions are approved.
+- Test hardware (Q-D07) is available in W1.
+- R1 business inputs arrive by the dates in OPEN_QUESTIONS §0.3.
+- Signing identities are requested now.
+
+These are planning estimates, not commitments. Re-baseline after M1.
+
+| Milestone | Effort (dev-days) | Planned weeks | Exit gate |
+|---|---:|---|---|
+| M0 close-out | 0.5 | W1 | DM approvals recorded |
+| M1 Feasibility spikes (§9) | 5–6 | W1–W2 | Spike results recorded; E-01 to E-04 confirmed or revised |
+| M2 Scaffold and security baseline | 3–4 | W2–W3 | §4 M2 definition of done |
+| M3 Contracts and comparison engine | 3–4 | W3 | Contract frozen; DM-06 rule configured |
+| M4 Encrypted storage, settings, retention | 5–6 | W4 | TC-19, TC-20, TC-21; migration test |
+| M6 UI and manual entry (8 insurers) | 7–9 | W5–W6 | End-to-end manual flow |
+| M7 PDF report | 3–4 | W7 | TC-15 to TC-18 on both OSes |
+| M10 Packaging and release validation | 4–5 | W8 | TC-24 to TC-26; release checklist `15 §5` |
+| M11 Documentation and UAT | 2–3, plus the client's UAT window | W9–W10 | UAT record `12 §6` |
+| **Total R1** | **33–42**, plus ~15–20% contingency | **8–10 weeks** | |
+
+- **Example calendar, if W1 starts Monday 2 November 2026:** build complete around W8 (late December 2026). Allowing for year-end holidays, an **R1 UAT-ready build around mid-January 2027**. The handover date is set with the client after UAT. These dates are illustrative until Q-00/DM-09 are approved.
+- **Signing.** If identities are not ready by W8, UAT may use unsigned builds **only with written client acceptance**. A production release waits for signing (AR-14).
+- **R2 and later** cannot be dated until the per-insurer gates are met. Estimate M5 at 5–7 dev-days, and each adapter at 4–8 dev-days after access is granted, depending on portal complexity. HDFC ERGO (canvas) and the CAPTCHA insurers are at the high end or stay manual.
+
+## 9. M1 feasibility spike plan
+
+**Rules:**
+- Spike code lives under `spikes/` on branch `spike/m1-feasibility`. It is never merged into `src/`.
+- Results are recorded in `docs/evidence/M1/<spike>-<platform>.md`, using the evidence fields in `09 §5`: build/version, OS/version, expected, actual, pass/fail, tester, date and sanitised output.
+- **A spike passes only on the platforms it actually ran on. Nothing is "verified" from documentation alone.**
+- No live insurer portal, real customer data or real credentials are used.
+
+**Platforms:**
+
+| Code | Platform |
+|---|---|
+| **M-A** | macOS 15 arm64. Available locally (Apple M4, macOS 15.7.2) |
+| **M-13** | macOS 13 at the proposed floor. Needs a physical Mac or VM; whether this M4 host can run a macOS 13 VM is unverified |
+| **M-X** | macOS x64 on an Intel Mac. Rosetta on M-A is only a partial substitute |
+| **W-10 / W-11** | Windows 10 22H2 and Windows 11, x64. Needs real or virtualised x64 machines (Q-D07) |
+
+| Spike | Objective | Method | Platforms | Pass criteria | Time-box | If it fails |
+|---|---|---|---|---|---|---|
+| **S1** Electron and OS matrix (DM-01) | Electron 45.x runs on the proposed matrix | Minimal app with the §3.3 secure webPreferences, packaged unsigned with electron-builder (NSIS; DMG for arm64 and x64) | M-A, M-13, M-X, W-10, W-11 | Installs, launches, renders and quits cleanly on every platform; idle memory recorded; no security warnings in the console | 1 day plus hardware time | Retry on 44.9.x; record the regression; escalate DM-01 |
+| **S2** Portal session isolation and no debug port (DM-03, DM-04) | Isolation, permission and navigation policy, CDP driver and debug-port exposure | Two `persist:` partitions loading **local mock portal pages** on two local origins | M-A, W-11 | (1) A cookie set in partition A is not visible in B. (2) `window.require` and `process` are undefined in views. (3) Geolocation and notification requests are denied. (4) Navigation to an origin outside the allowlist is blocked. (5) `window.open` is denied. (6) `webContents.debugger` fills, clicks and reads a mock form. (7) A packaged build has **no listening TCP port**; check with `lsof -iTCP -sTCP:LISTEN` or `netstat -ano`. (8) Launch with `--remote-debugging-port=9222` and record whether a port opens before the startup guard exits (AR-16). (9) With the cookie-encryption fuse on, the `Cookies` database stores only `encrypted_value` | 1.5 days | Record it; revise §7.4/§7.5 before R2 (not on the R1 path) |
+| **S3** SQLite and native packaging (DM-02, DM-07) | Native driver works in packaged apps | `better-sqlite3-multiple-ciphers` (and plain `better-sqlite3` as a control): keyed open, WAL, foreign keys, migration, CRUD; `*.node` unpacked from asar | M-A, M-X, W-10/W-11; universal macOS build if chosen | CRUD works in the **packaged** app on every target. A wrong key gives a clean error. The file cannot be read without the key (`sqlite3` CLI reports "file is not a database"). The native module is code-signed inside the macOS app once S6 identities exist | 1 day | Build from source with `@electron/rebuild`. If the ciphers variant alone fails, re-open DM-02 (option A) |
+| **S4** ₹ rendering in PDF (DM-08) | `printToPDF` with the bundled font renders ₹ correctly and fast enough | Template with `₹1,23,456`, `₹0`, long plan names and 1/2/4/8 mock insurers; `javascript: false`; network blocked | M-A, W-11 (and M-13 if available) | pdfjs-dist text extraction contains U+20B9 and **no** U+25A0. Fonts are embedded. Text is selectable. 8-insurer PDF renders in under 5 s. A **negative control** (no bundled font) is detected by the test | 1 day | Try a different OFL font; check CSS `font-family` resolution; escalate if a platform renderer issue is found |
+| **S5** OS-backed credential storage (DM-02) | `safeStorage` is reliable for wrapping database and evidence keys | Round-trip encrypt and decrypt; restart persistence; behaviour across **unsigned, ad-hoc and Developer ID** signing on macOS (Keychain access is tied to code signature); Windows DPAPI under the same user and after a password change; simulated unavailability | M-A, W-11 (M-X if available) | Round trip works after restart on both OSes. The unavailable path shows the fail-closed screen with no plaintext written (TC-21). **Record exactly when a signing-identity change locks the key out**, because that drives AR-13 and the release process | 1 day | Re-open DM-02. If identity changes lock keys out, release signing must keep one stable identity |
+| **S6** Code signing and notarisation | Signed artefacts install cleanly | macOS: Developer ID signing with hardened runtime and entitlements, `notarytool` submission, staple, `codesign --verify --deep --strict`, `spctl -a -vvv`, quarantined first launch on a clean Mac. Windows: sign the exe and NSIS installer, `signtool verify /pa`, first launch on clean Windows with the SmartScreen result recorded | M-13 or M-X, plus W-11 (clean machines) | All verification commands pass. Gatekeeper opens the app without override. Windows signature is valid, and the SmartScreen outcome is recorded (not assumed) | 1–2 days **after identities exist** | **BLOCKED** until Q-D04 and Q-D05 are answered. Meanwhile document the exact unsigned-install warnings for a possible UAT exception |
+
+**M1 exit criteria:** S1, S3, S4 and S5 have passed (or have approved fallbacks) on at least M-A and one Windows x64 platform. Gaps in M-13 or M-X are listed as open release risks for M10. S2 is recorded. S6 is either recorded or explicitly blocked with its owner named. IMPLEMENTATION_STATUS and the risk register are updated.
+
+## 10. M0 status and definition of done
+
+| M0 item | Status | Evidence |
+|---|---|---|
+| Git baseline in this folder only; sibling repositories untouched | **Done** | Commit `d21976a`; the parent folder is not a repository; `../fiducial/` was not modified (read-only checks only) |
+| `.gitignore` excludes env files, signing material, databases, sessions, evidence, exports, raw captures, logs and build output | **Done** | `git check-ignore` tested against 16 sample paths |
+| `.gitattributes` protects the binary PDFs | **Done** | `git check-attr` reports `binary: set` |
+| Q-01 investigated | **Done** | OPEN_QUESTIONS §0.1 |
+| Architecture positions prepared | **Done (proposed)** | ARCHITECTURE_REVIEW §7 |
+| Revised scope and schedule | **Proposed** | §7, §8 |
+| Spike plan | **Done** | §9 |
+| DM-01 to DM-09 | **Provisional directions recorded (26 Oct 2026). PO, client and security approvals pending** | OPEN_QUESTIONS §0.2 decision register |
+| M0 planning documents committed | **Done** | Commit "docs: finalize M0 planning and decision register" |
+
+M0 is **finalised**. The formal approvals remain open and are tracked in the decision register. M1 may start under the provisional directions DM-01 and DM-07: the spikes *are* the compatibility tests those directions depend on. If a spike fails, or a pending approval goes the other way, the affected direction is revisited before M2.
+
+## 11. Next concrete step (after approval)
+
+1. Create branch `spike/m1-feasibility`.
+2. Scaffold a minimal Electron 45.x spike app under `spikes/m1/` (electron-vite and electron-builder, secure webPreferences only, no product features).
+3. Run **S1, S3, S4 and S5 on the local macOS arm64 machine first**, because it is available today. Record evidence.
+4. Repeat on Windows x64 and the Intel/macOS 13 targets as soon as Q-D07 provides access.
+5. In parallel, start the non-engineering lead-time items now: signing identities (Q-D04, Q-D05), named approvers (Q-D08) and the R1 business inputs (OPEN_QUESTIONS §0.3).

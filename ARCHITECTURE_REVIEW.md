@@ -8,6 +8,8 @@
 
 ## 1. Current architecture
 
+> **M0 update (26 Oct 2026):** the repository is now under git (baseline `d21976a`). A wider search found no existing SDK or codebase (OPEN_QUESTIONS §0.1, Q-01), so the project is treated as greenfield. M0 architecture positions are in **§7**.
+
 **None.** The repository contains no code, configuration or build tooling (see [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), section 1). Nothing is being replaced, so the design below is greenfield. It still follows `03_TECHNICAL_DESIGN` and uses the documents' terminology.
 
 The documents assume that several things already exist: a "frozen SDK and Zod schemas", an "existing approved driver/CDP approach", a "helper library" and a "smoke runner". **They do not exist in this workspace.** Unless they are found elsewhere (OPEN_QUESTIONS Q-01), this project must create them. The "do not create a competing contract" rule (`04 §1`, `16 §1`) then means *create exactly one contract* and treat it as frozen after the M3 review.
@@ -36,7 +38,7 @@ Trust levels (`03 §6`): the main process is privileged, the app renderer is unt
 
 ### 3.1 Toolchain **[Decision E-02]**
 
-- **Electron:** the latest stable line when M1 starts, pinned exactly. Choose it only after confirming its OS support against `01 §11` (see risk AR-01).
+- **Electron:** the latest stable line when M1 starts, pinned exactly. Choose it only after confirming its OS support against `01 §11` (see risk AR-01). **→ M0: Electron 45.x proposed, with macOS 13+ (§7.2, DM-01).**
 - **Build:** electron-vite for main, preload and renderer bundles. electron-builder for NSIS (Windows) and DMG (macOS) packages, as `03 §2` suggests.
 - **Language:** TypeScript strict mode, with React for the renderer.
 - **Validation:** Zod schemas in `src/shared/contracts`. The main process and renderer import the same schemas.
@@ -122,7 +124,7 @@ The documents give three different state lists (`02 §2`, `04 §3`, `07 §3`), a
 - **Single-instance lock**, which prevents two writers.
 - **Evidence screenshots** go in `userData/evidence/<quoteId>/` and are referenced by relative path. Delete and retention cover rows, evidence files and app-managed temporary PDFs. Exported PDFs saved outside the app are explicitly outside its control (`05 §6`).
 - **Corrupt or locked database:** never auto-delete. Open read-only if possible, show a recovery screen and keep the original file.
-- **Data at rest is not encrypted** by the current design: names, phone numbers and ages sit in plain SQLite. The documents list "unauthorized local access" as a threat (`06 §1`) but specify no control. Decide between relying on OS account protection plus full-disk encryption (documented and accepted) and encrypting the database. See Q-B17 and risk AR-06.
+- **Data at rest is not encrypted** by the current design: names, phone numbers and ages sit in plain SQLite. The documents list "unauthorized local access" as a threat (`06 §1`) but specify no control. Decide between relying on OS account protection plus full-disk encryption (documented and accepted) and encrypting the database. See Q-B17 and risk AR-06. **→ M0: database encryption recommended (§7.3, DM-02).**
 
 ### 3.9 SecretStore (`05 §4`, `06 §3`)
 
@@ -161,7 +163,7 @@ Existing RAID IDs (`14`) are cited where they apply. AR-xx are new architecture 
 
 | ID | Risk | Likelihood / impact | Mitigation |
 |---|---|---|---|
-| AR-01 | The macOS 12 floor (`01 §11`) may be unsupported by current Electron/Chromium; pinning an old Electron leaves security patches behind | Medium / High | Verify in M1. Prefer raising the OS floor to pinning an unsupported Electron (Q-E01) |
+| AR-01 | The macOS 12 floor (`01 §11`) may be unsupported by current Electron/Chromium; pinning an old Electron leaves security patches behind | Medium / High | Verify in M1. Prefer raising the OS floor to pinning an unsupported Electron (Q-E01). **→ M0: Electron's documentation states that Electron ≥ 44 needs macOS 13 (§7.2); not yet tested on hardware** |
 | AR-02 | Native module (better-sqlite3) ABI and packaging issues across Windows x64, macOS x64 and macOS arm64 | Medium / High | M1 spike builds and runs on all three targets. Keep the `node:sqlite` fallback |
 | AR-03 | Delivery date: the documented freeze (26 Oct 2026 12:00) and handover (27 Oct) fall on or after the audit date, and no code exists | Certain / Critical | Re-plan (Q-00). The manual-first release path shortens the critical path |
 | AR-04 | Live adapter work depends entirely on external permission and accounts (R-10) | High / High | Ship the manual-first baseline; gate each adapter separately |
@@ -179,3 +181,98 @@ Existing RAID IDs (`14`) are cited where they apply. AR-xx are new architecture 
 3. **Build the security baseline (section 3.3) and the IPC envelope in the first code milestone, not at the end.**
 4. **Freeze `src/shared/contracts` after the M3 review.** Afterwards, change it only through change control (`19`).
 5. **Run the M1 spikes on real Windows and macOS hardware early:** the native database module, the ₹ glyph in a PDF, `safeStorage`, and unsigned packaging.
+
+---
+
+## 7. M0 architecture positions (26 October 2026)
+
+Every item below is a **recommendation** unless it is labelled *Evidence*. At M0 finalisation, DM-01 to DM-09 were recorded as **provisional directions** from the project lead. **The PO, client and security approvals are all still pending**, and no technical test has been run. See the decision register in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) §0.2. *Evidence* here means documentary evidence: release notes, official docs or package contents. It is **not** a platform test; the M1 spikes provide those.
+
+### 7.1 Existing codebase (Q-01)
+
+*Evidence:* no Quote Fetcher code, SDK or schemas exist in the local home folder, in the 60 repositories of GitHub account `harshitsharma7017`, or in `../fiducial/`. **Position:** greenfield. M3 creates the single shared contract (§3.2 `src/shared/contracts`), and it is frozen after review.
+
+### 7.2 Electron and OS support matrix (DM-01)
+
+*Evidence:* npm registry; electron/electron at tag `v45.0.0`.
+
+| Electron line | Status on 26 Oct 2026 | macOS minimum | Windows |
+|---|---|---|---|
+| 45 (45.0.0, released 21 Oct 2026; Chromium 156, Node 24.22) | Supported, latest | 13 Ventura | 10+ (x64, arm64) |
+| 44 (44.9.3) | Supported | 13 Ventura | 10+ |
+| 43 (43.8.3) | Supported, oldest; likely out of support when 46 ships (about 16 Dec 2026, by cadence) | 12 Monterey | 10+ |
+
+**Proposed matrix:** Electron 45.x; Windows 10 22H2 and 11 on x64; macOS 13+ on x64 and arm64. Release artefacts:
+
+- Windows: NSIS installer, x64.
+- macOS: two DMGs (arm64 and x64), or one universal DMG, chosen by S3 and S6 (a universal build doubles the native-module packaging work).
+
+**Maintenance consequence:** Electron supports only the latest three majors, about 24 weeks per line. A 45.x release stays patched until roughly April 2027. Plan an Electron upgrade every one or two releases. Without auto-update (P1-04), clients must reinstall to get Chromium security fixes (AR-15).
+
+### 7.3 Customer data at rest (DM-02)
+
+**Recommended design (option B):**
+
+- **Database.** `better-sqlite3-multiple-ciphers` (API-compatible with better-sqlite3) opens `fqf.db` with a random 256-bit key. The key is generated with `crypto.randomBytes` on first run and stored only as `safeStorage.encryptString` ciphertext in `userData/keys`. It never goes to SQLite, logs or IPC.
+- **Evidence files.** AES-256-GCM using Node `crypto`, with a separate wrapped key, a per-file random nonce and an authentication tag.
+- **Fail closed.** If `safeStorage.isEncryptionAvailable()` is false or the key cannot be unwrapped, the app shows a blocking "secure storage unavailable" screen with support guidance. It never creates a plaintext database and never re-keys silently over existing data.
+- **Threats covered:** copied profile folders, backups, disk images, other OS accounts. **Not covered:** malware running as the same user, or an unlocked logged-in session. Both are residual risks to document and to present to the security reviewer for acceptance. **They have not been accepted yet.**
+- **Recovery:** losing the OS key store means losing local history. The user guide states this, and exported PDFs are unaffected.
+- **Option A fallback:** if DM-02 picks A, the plain `better-sqlite3` driver is used and the install guide makes full-disk encryption a prerequisite. The repository and service interfaces are the same either way, so only `storage/db.ts` and `files.ts` differ.
+
+### 7.4 Insurer session isolation and storage (DM-03; Track B)
+
+**Recommended design (option A):**
+
+- One `session.fromPartition('persist:insurer-<id>')` per insurer, created only by PaneManager.
+- Views are `WebContentsView`s with `sandbox: true`, `contextIsolation: true`, `nodeIntegration: false` and **no preload**.
+- `setPermissionRequestHandler` and `setPermissionCheckHandler` deny everything. `will-navigate`, `will-redirect` and `setWindowOpenHandler` enforce the adapter's `allowedOrigins`. `will-download` is cancelled.
+- No cookie copying between partitions; there is no API path for it.
+- `EnableCookieEncryption` fuse on (cookie values encrypted with the OS key).
+- "Sign out and forget" calls `session.clearStorageData()` and `clearCache()` for that partition. App reset clears all partitions.
+- Under DM-05 these sessions are **not part of R1**.
+
+### 7.5 Portal automation without a remote debugging port (DM-04)
+
+- The driver uses `webContents.debugger.attach()` and `sendCommand()` (CDP `DOM`, `Runtime`, `Input`) inside the main process. Nothing listens on a TCP port.
+- **Startup guard.** In packaged builds, the first lines of `main/index.ts` exit if `process.argv` contains `--remote-debugging-port`, `--remote-debugging-pipe`, `--inspect`, `--inspect-brk` or `--js-flags`. The guard runs before `app.whenReady()`. S2 measures whether Chromium opens the port before the guard can react; if it does, a launcher-level mitigation is needed (AR-16).
+- **Fuses:** `RunAsNode` off, `EnableNodeOptionsEnvironmentVariable` off, `EnableNodeCliInspectArguments` off, `OnlyLoadAppFromAsar` on, `EnableEmbeddedAsarIntegrityValidation` on.
+- **Development** builds may use DevTools for the app renderer, never a remote port.
+
+### 7.6 PDF generation with a correct ₹ (DM-08)
+
+- Bundle Noto Sans (OFL-1.1) under `resources/fonts/` and load it through `@font-face` from the app protocol. **No system-font fallback for currency text.**
+- The render window has `javascript: false`, no preload, and network requests blocked by a `webRequest` filter (offline-safe, NFR-OFFLINE).
+- `printToPDF` options: A4, `printBackground`, and a `footerTemplate` with page numbers.
+- **Acceptance (automated):**
+  1. A font unit test asserts that the bundled font's character map contains U+20B9.
+  2. A PDF test extracts text with pdfjs-dist and asserts that `₹` appears and U+25A0 `■` does not.
+  3. The test checks that fonts are embedded.
+- **Acceptance (manual):** visual check of 1, 2, 4 and 8-insurer PDFs on Windows and macOS (TC-15 to TC-17). This failure mode is real: the doc-pack PDFs print ₹ as ■.
+
+### 7.7 Comparability engine (supports any DM-06 outcome)
+
+Each insurer result stores the comparison inputs explicitly. Manual entry captures them too, so the manual form depends on DM-06:
+
+```
+sumInsuredPaise, coverType, memberSetKey (relationship+age band per member), tenureYears,
+premiumBasis: 'incl_gst' | 'excl_gst' | 'unknown', basePremiumPaise?, gstPaise?, totalPremiumPaise,
+addOns: 'none' | 'unknown' | string[], source: 'automated' | 'manual', evidenceRef?
+```
+
+`compare(results, rule)` is a pure function. `rule` is versioned configuration: basis, allowed tenure, add-on policy, whether manual results are eligible, and tie handling. It returns `{eligible[], excluded[{id, reason}], cheapestIds[]}`. The `reason` values drive the "why not ranked" text in the UI and PDF (TC-27). The rule version is stored with each generated PDF, so a regenerated PDF can be explained later.
+
+### 7.8 Effect of the manual-first R1 (DM-05)
+
+R1 needs no PaneManager, orchestrator, driver or adapters. Its runtime surface is the app renderer, IPC, storage, PDF and packaging. This removes untrusted remote content from R1 entirely, which is a security as well as a schedule benefit. The Track B components (§3.5, §3.6, §7.4, §7.5) are built in R2 on the same contracts.
+
+### 7.9 Risk register additions
+
+| ID | Risk | Likelihood / impact | Mitigation |
+|---|---|---|---|
+| AR-11 | N-API prebuilds of better-sqlite3 13 may not load in Electron 45 as packaged (signing, asar unpacking, arm64/x64 selection) | Low–Medium / High | Spike S3 on all three targets; `asarUnpack` for `*.node`; fall back to building from source with `@electron/rebuild` |
+| AR-12 | Electron 45.0 is a new `.0` major | Medium / Medium | Pin the latest 45.x patch at M2. Fall back to 44.9.x, which has the same macOS 13 floor |
+| AR-13 | Encrypted-database key loss (OS reinstall, keychain reset) makes history unrecoverable | Low / Medium | Documented. PDFs are exported outside the app. Recovery screen never deletes data. Optional backup if Q-B15 requires it |
+| AR-14 | Signing identities have long external lead times: Apple organisation enrolment needs a D-U-N-S number, and Windows certificates need organisation validation and an HSM or cloud signing service | High / High | Start Q-D04 and Q-D05 now. Agree in writing whether UAT may use unsigned builds |
+| AR-15 | Electron's ~24-week support window per line, with no auto-updater in R1 | High / Medium | Maintenance release cadence in the support plan. Treat P1-04 auto-update as a priority for R2 |
+| AR-16 | Chromium may start the DevTools server from a command-line switch before app code runs | Unknown / High (Track B only) | Measured in S2. If confirmed, document it, keep insurer sessions out of R1, and evaluate mitigations before R2 |
