@@ -2,7 +2,7 @@
 
 Desktop application for insurance advisors (Windows and macOS). Requirements are in the PDF pack (`00`–`19`); planning and status are in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Current milestone: M2 — scaffold and security baseline.** The app is an empty, secured shell. Quote entry, comparison, history, settings and the PDF report arrive in M3–M7. `spikes/m1/` holds the M1 feasibility spike: experimental code with its own toolchain, not part of this app.
+**Current milestone: M3 — contracts and quote comparison (draft; rules provisional).** The app is still an empty, secured shell. `src/shared/` now holds the domain contracts, money utilities, validators and the comparison engine, none of them wired to the UI or IPC yet; see [docs/evidence/M3/](docs/evidence/M3/README.md). Storage, history, the UI, insurer integration and the PDF report arrive in M4–M7. `spikes/m1/` holds the M1 feasibility spike: experimental code with its own toolchain, not part of this app.
 
 ## Stack
 

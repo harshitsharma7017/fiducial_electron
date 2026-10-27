@@ -1,0 +1,23 @@
+> fiducial-quote-fetcher@0.1.0 test:coverage
+> vitest run --coverage
+
+
+ RUN  v5.0.3 <repo>
+      Coverage enabled with v8
+
+
+ Test Files  13 passed (13)
+      Tests  328 passed (328)
+   Start at  11:31:55
+   Duration  7.38s (tests 78%, transform 10%, import 10%, worker 3%)
+
+ % Coverage report from v8
+No files with missing coverage.
+25 files fully covered.
+
+=============================== Coverage summary ===============================
+Statements   : 100% ( 445/445 )
+Branches     : 100% ( 322/322 )
+Functions    : 100% ( 82/82 )
+Lines        : 100% ( 383/383 )
+================================================================================

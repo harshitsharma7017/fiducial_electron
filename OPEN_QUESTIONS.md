@@ -182,6 +182,56 @@ Evidence: [docs/evidence/M1/](docs/evidence/M1/README.md). Tested on **macOS 15.
 | Workspace | The product is at the repository root (`src/`). `spikes/m1/` stays experimental; reviewed spike modules (launch guard, webPreferences, navigation policy, IPC sender check) were ported **with their tests** | ARCHITECTURE_REVIEW §3.2; spike README | Resolved as recommended |
 | M1 → M2 gate | M1 exit criteria are unmet (no Windows results); M2 proceeded on macOS with the Windows items recorded as unverified | Project-lead direction ("do not stop for unrelated M1 follow-ups") | Windows verification **open** (Q-M1-02, Q-D07) |
 
+### 0.6 M3 provisional assumptions and records (27 October 2026)
+
+M3 implements the business rules as **versioned configuration** (`src/shared/rules/`). Neither table is approved:
+- `PROVISIONAL_COMPARISON_RULE` (`dm06-provisional` 0.1.0, status `provisional`);
+- `PLACEHOLDER_QUOTE_INPUT_RULES` (`quote-input-placeholder` 0.1.0, status `placeholder`).
+
+Each row below **needs product-owner approval**. None of these risks is accepted. Changing a value needs no code change. Tests pin the current values, so a change shows up as a reviewed diff.
+
+**Comparability and ranking**
+
+| Decision | Provisional value in M3 | Basis | Needs |
+|---|---|---|---|
+| Premium basis compared | GST-inclusive total only. Exclusive or unknown basis is **not ranked**. The engine never assumes a GST rate | DM-06 default | Q-B02 (PO) |
+| Tenure | Only 1-year premiums are ranked. The quoted tenure must also equal the requested tenure | DM-06 default | Q-B02 (PO) |
+| Add-ons | Base plan only. Add-ons must be known **and** none | DM-06 default | Q-B02 (PO) |
+| Sum insured, cover type, members | Must exactly equal the request: sum insured to the paisa, members by relationship and exact age (order ignored). **Unknown never matches** | DM-06 default; 08 §3 | Q-B01, Q-B03 (PO) |
+| Co-pay, deductible, room rent | **Strictest option**: each must be known, and identical across the comparable set. Otherwise there is no highlight and the differences are listed. Conditional terms (such as age-based co-pay) must be recorded as unknown | DM-06 gives **no default** | Q-B01, Q-B02 (PO; product knowledge) |
+| Incomparable or ineligible valid results | **Suppress the highlight for the whole set**. Configurable to `exclude_and_rank_rest` | ARCH §3.7; TC-27 allows "suppressed **or** differences shown" | Q-B01 (PO) |
+| Manual results | Ranked, and labelled `source: manual` in the output | DM-06 default | Q-B10 (PO) |
+| Ties | Every tied result is highlighted, in a fixed order (insurer ID, then result ID) | DM-06 default | PO |
+| Minimum for a highlight | **Two** comparable results. A single quote is never highlighted as "lowest" | M3 proposal (not in DM-06) | PO |
+| Duplicates | Duplicate result IDs, and two completed results with the same insurer and plan label, are **all** excluded as ambiguous | M3 proposal | Q-B16 (PO) |
+| Validity exclusions and the highlight | Results excluded at validity do **not** suppress the highlight, even if their premium is lower. This covers duplicates, review flags such as `ambiguous_coverage`, unreadable or missing premiums, and non-completed runs. Only valid results that fail eligibility or comparability suppress it | ARCH §3.7 ("no ambiguity warnings" is a candidate condition) | Q-B01 (PO): confirm, or treat duplicates and `ambiguous_coverage` as suppressing |
+| Currency | INR only; other or missing currencies are not ranked | 04 §2 | — |
+| Highlight label | Fixed text: "Lowest premium among comparable quotes — not a recommendation". No "best", "winner" or "recommended" wording anywhere | DM-06; 08 §3 | Q-B08 (wording, Client) |
+
+**Quote input**
+
+| Decision | Placeholder value in M3 | Needs |
+|---|---|---|
+| Ages: self and spouse | 18–65 | Q-B04 (PO) |
+| Ages: son and daughter | 0–25 (age in whole years; infants' months are not modelled) | Q-B04 (PO) |
+| Ages: parents and parents-in-law | 18–80 | Q-B04 (PO) |
+| Relationships and counts | All eight contract relationships allowed. One each of self, spouse and each parent; up to four sons and four daughters. At most six members | Q-B04 (PO) |
+| Floater | 2–6 members. Single-member floater is rejected; there are no relationship-combination rules | Q-B05 (PO) |
+| Sum insured | Free entry from ₹1 lakh to ₹1 crore in steps of ₹50,000. A fixed list is also supported by configuration | Q-B03 (PO) |
+| Tenure that may be requested | 1, 2 or 3 years. Only 1-year premiums are ranked (above) | Q-B02 (PO) |
+| Pincode | Six digits, first digit 1–9; format check only, no serviceability | Q-B05 (PO) |
+| Customer fields | Name required. Phone (Indian mobile; landlines rejected), email and notes optional | FR-01; C-04 (PO) |
+| Member fields | Relationship and age only: no name, gender or date of birth. An adapter requiring a date of birth is blocked at pre-flight until DOB capture is approved | C-04, C-05 (PO, Sec) |
+
+**Records: conflicts between the M3 request and the documents, and how they were resolved**
+
+| Topic | Request said | Documents say | Resolution |
+|---|---|---|---|
+| "Winner selection" | Select a winner | 08 §3 and DM-06: cheapest comparable premium only, "not a recommendation" | Implemented as `cheapest`, with a fixed non-advisory label. There is no "winner", "best" or coverage ranking |
+| IPC | No new IPC channels | Plan §4 M3 lists "IPC request and response schemas" | Domain schemas only (for example `quoteDraftSchema` for a future `quote.create`). **No channel or handler registered** |
+| Contract freeze | Implement the contracts | Plan §4 M3: review, then freeze | Contracts are marked `draft`. **The freeze needs a human review** |
+| Main member versus dependants | Mentioned in the request | Not defined in the documents | Not modelled. Comparability requires the **exact** requested member set |
+
 ## A. Must be answered before any implementation
 
 | ID | Question | Why it matters | Owner | Blocks |

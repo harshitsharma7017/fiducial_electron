@@ -335,3 +335,26 @@ How M2 implemented §3. Verified on macOS 15 arm64 only.
 |---|---|---|---|
 | AR-21 | electron-vite 6.0.0 was 13 days old at adoption (5.x lacks Vite 8 support) | Low / Medium | Pinned; review patch releases before M10 |
 | AR-22 | CI and Windows runtime unverified: Windows-specific failures (paths, protocol, NSIS, fuses at runtime) could surface late | Medium / High | Obtain a remote and Windows hardware (Q-D07, Q-M1-02) before M4 |
+
+## 10. M3 implementation notes (27 October 2026)
+
+How M3 implemented §3.6, §3.7 and §7.7. All code is in `src/shared/` and is pure: no Electron, Node, I/O, clock, randomness or locale. Lint rules enforce this.
+
+| Topic | Implementation | Note |
+|---|---|---|
+| Layout | `src/shared/contracts/` (Zod schemas and types), `money.ts`, `rules/` (versioned rule tables), `validation/` (request rules and pre-flight), `comparison/` (normalise, validity, eligibility, comparability, selection, `compareQuotes`) | Contracts are `draft` until reviewed |
+| Money | Integer paise. The parser accepts plain digits or Indian grouping, `₹`/`Rs.`/`INR`, the `/-` suffix and at most two decimals. It rejects with a reason code: negatives, ranges, Western grouping, extra text, more decimals, and values beyond `MAX_SAFE_INTEGER`. The formatter does not use `Intl` | Property-tested round trip over the whole safe range |
+| Errors | `{ path, code }` only, as in the M2 dispatcher. No values, no unexpected key names, capped at 20 | Tested with synthetic sensitive values |
+| Normalisation | Adapter or manual input becomes `NormalizedResult`. Missing amounts are `null`; missing terms are `unknown`. Amount text that fails to parse is dropped and only its reason is kept | Nothing is defaulted to zero or copied from the request |
+| Pipeline | Validity (premium, currency, plan, review flags; consistency of premium parts depends on the GST basis), which also covers set-level duplicates. If valid: **eligibility** (rule gates: manual, premium basis, ranked tenure) and **comparability** (sum insured, which may be unknown or unreadable, cover type, member set and tenure against the request; required terms known). Then term differences across the comparable set, then selection | A valid result that fails eligibility or comparability suppresses the highlight under `suppress_highlight` |
+| Output | `{ contractsVersion, rule {id, version, status}, comparable[], excluded[{index, resultId, insurerId, findings}], differences[], cheapest, noHighlightReason }`. Exactly one of `cheapest` and `noHighlightReason` is non-null | Extends §7.7's `{eligible, excluded, cheapestIds}` with explicit reasons |
+| Determinism | Ordering is premium, then insurer ID, then result ID. Ties highlight all of them in that order. The output is identical for any input order (property-tested) and the input is never mutated | `compareText` replaces `localeCompare` (lint-enforced) |
+| Adapter SDK | Metadata schema (HTTPS-only `allowedOrigins`; `requiredFields` from a closed list) and `InsurerAdapter`/`AdapterRegistry` **types**. `parse` returns the same input shape as manual entry | No implementation until M5/M6 |
+
+### 10.1 Risk register additions
+
+| ID | Risk | Likelihood / impact | Mitigation |
+|---|---|---|---|
+| AR-23 | The strict provisional rule (unknown terms are never comparable) may mean **no highlight in practice** until adapters and the manual form capture co-pay, deductible, room rent and add-ons | High / Medium | PO decision on Q-B01/Q-B02. The policy is configuration (`ignore` per term), so relaxing it is a reviewed data change |
+| AR-24 | Contracts are draft; M4–M6 may build on them before the freeze | Medium / Medium | Hold the contract review before M4 storage schemas are written; bump `CONTRACTS_VERSION` on any change after the freeze |
+| AR-25 | Windows CI fails at lint, so the Windows type-check, tests and smoke have never run. **Root cause, confirmed by reproduction:** with `* text=auto` and no `eol`, a Windows checkout (`core.autocrlf=true`) writes CRLF, and Prettier (`endOfLine: lf`) flags all 50 checked files | High / Medium | A separate change, not part of M3: `* text=auto eol=lf`. It is verified on a simulated CRLF checkout (Prettier passes; no committed file changes on renormalisation; all PDFs byte-identical). Needs approval, then a real Windows CI run |

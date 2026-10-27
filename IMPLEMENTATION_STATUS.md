@@ -104,6 +104,42 @@ Branch `m2/scaffold-security-baseline` (from `e8a68b0`). Evidence: [docs/evidenc
 
 **No product feature requirement (FR-01 to FR-20) changed status:** M2 delivers infrastructure only.
 
+> **Correction (M3, 27 October 2026):** CI has since run once on GitHub (run 40454782355, commit `37879c5`). The **macOS job passed** every step. The **Windows job failed** at `npm run lint`: Prettier flagged all 50 files it checks. **Root cause, confirmed by reproduction:** the Windows checkout converts LF to CRLF (`core.autocrlf=true`; `.gitattributes` has `* text=auto` without `eol`), and Prettier requires `endOfLine: lf` (ARCHITECTURE_REVIEW AR-25). Type-check, tests and smoke were **skipped** on Windows. See §1d.
+
+## 1d. M3 update (27 October 2026): contracts and comparison engine
+
+Branch `m3/contracts-comparison`, created from `37879c5` with the work uncommitted. Evidence: [docs/evidence/M3/](docs/evidence/M3/README.md). Verified on **macOS 15.7.2 arm64 only**; M3 changes have **not run in CI or on Windows**.
+
+M3 is pure TypeScript under `src/shared/`. It has no Electron, Node, database, filesystem, network or portal code, and it registers **no IPC channel**. The app bundle is unchanged.
+
+**Contracts are DRAFT** (`CONTRACTS_STATUS = 'draft'`): the review that freezes them has not happened. **All business rules are provisional or placeholders and are not approved** (OPEN_QUESTIONS §0.6).
+
+| Item | New status | Evidence |
+|---|---|---|
+| DATA-03 Money as integer paise | **PARTIAL**: parse and format implemented and property-tested; storage is M4 | `src/shared/money.ts`; `test/money.test.ts` |
+| SDK-01 Adapter contract | **PARTIAL**: metadata schema, `InsurerAdapter`/registry **types**, result input and normalised result schemas, states. No adapter or registry implementation (M5/M6). Not frozen | `src/shared/contracts/adapter.ts`, `quote.ts`, `status.ts` |
+| IPC-03 Progress event | **PARTIAL**: schema only; nothing emits it yet (M5) | `progressEventSchema` |
+| FR-01 Customer | **PARTIAL**: schema (name required; phone, email and notes optional); no form or storage | `customerSchema`; `test/quote-validation.test.ts` |
+| FR-02 Members, age limits | **PARTIAL**: relationship and age only (no name, gender or DOB; C-04, C-05); age limits from a **placeholder** table (Q-B04) | `memberSchema`, `PLACEHOLDER_QUOTE_INPUT_RULES` |
+| FR-03 Sum insured, pincode, floater | **PARTIAL**: schema plus **placeholder** rules (Q-B03, Q-B05); pincode is a format check only | `quoteRequestSchema`, `validateQuoteRequest` |
+| FR-04 Insurer required fields | **PARTIAL**: pure pre-flight check per insurer; no adapters declare fields yet | `src/shared/validation/preflight.ts` |
+| FR-12 Cheapest comparable premium | **PARTIAL (rule not approved)**: engine implemented under the **provisional** DM-06 rule; Q-B01, Q-B02 and Q-B10 remain open | `src/shared/comparison/`; `test/comparison.test.ts` |
+| TC-01 to TC-04 | **Schema level passes**; UI-level tests remain for M6 | `test/quote-validation.test.ts` |
+| TC-09, TC-10, TC-27 | **Engine level passes** under the provisional rule | `test/comparison.test.ts` |
+| REL-08 CI | **PARTIAL**: ran once; macOS passed, Windows failed at lint (see correction above); the coverage gate was added for M3 | `.github/workflows/ci.yml` |
+
+**Test totals:** 328 tests in 13 files. `src/shared` has 100% statement, branch, function and line coverage, and CI enforces it for `money.ts`, `comparison/**` and `validation/**`. A mutation check (12 deliberately injected rule bugs) was caught by the tests every time.
+
+**Pre-commit review (27 October 2026):** two engine defects were found and fixed, with regression tests:
+1. **GST-exclusive totals.** The premium consistency check assumed total = base + GST for every basis. A GST-exclusive quote that showed its GST was therefore reported as `PREMIUM_INCONSISTENT` (validity), and so did not suppress the highlight. The check now depends on the basis, and the result is reported as `PREMIUM_BASIS_NOT_RANKED`.
+2. **Unreadable sum insured.** It was a validity exclusion, so it did not suppress the highlight, while a missing sum insured did. It is now the comparability finding `SUM_INSURED_UNPARSEABLE`, and it suppresses the highlight as ARCH §3.7 describes.
+
+No business rule changed. Validity exclusions (duplicates, review flags) still do not suppress the highlight; this is recorded for PO decision in OPEN_QUESTIONS §0.6.
+
+**Unchanged:**
+- **Q-M1-01 and DM-02 (vault) remain unapproved.** M3 neither uses nor requires storage.
+- **Windows runtime testing remains outstanding.**
+
 ---
 
 ## 2. P0 functional requirements (`01_PRD §9`)

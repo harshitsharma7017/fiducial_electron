@@ -368,3 +368,26 @@ Dependencies:
 - DM-06 comparability rules are still provisional: implement them as configuration with placeholders.
 - Q-B03, Q-B04 and Q-B05 (sum insured, age limits, floater rules) are unanswered: use placeholder rule tables.
 - No dependency on the vault (DM-02) until M4.
+
+## 17. M3 against its definition of done (§4 M3)
+
+| Definition-of-done item | Status |
+|---|---|
+| Contracts reviewed and frozen | **Not done.** Contracts are implemented and marked `draft` (`CONTRACTS_VERSION` 0.1.0). The freeze needs a human review |
+| 100% of comparison and money branches covered | **Done**: 100% statements, branches, functions and lines for all of `src/shared`, enforced in `test:coverage` and CI for `money.ts`, `comparison/**` and `validation/**` |
+| Placeholder rules clearly marked and listed under known limitations | **Done**: status fields `provisional` and `placeholder` in code; listed in OPEN_QUESTIONS §0.6 |
+| Tests TC-01 to TC-04 (schema), TC-09, TC-10, TC-27, money property tests | **Pass** (328 tests in 13 files; macOS only). The pre-commit review fixed two engine defects (IMPLEMENTATION_STATUS §1d) |
+| Deliverables | Contracts (customer, member, quote request and draft, insurer, plan, coverage terms, result input, normalised result, states, progress event, adapter metadata and types, comparison findings and result); money utilities; request validators and pre-flight; comparison engine with versioned rules |
+
+**M3 is implemented and verified on macOS, but not complete**:
+- the contract freeze (review) is open;
+- every business rule awaits PO approval (Q-B01–B05, Q-B10, Q-B16);
+- M3 has not run in CI;
+- Windows CI fails at lint, a pre-existing M2 issue (AR-25).
+
+## 18. Next steps
+
+1. **Contract review and freeze** (Tech, PO), before M4 storage schemas are written.
+2. **PO decisions** on OPEN_QUESTIONS §0.6, in particular Q-B01/Q-B02. Without them the strict default may never highlight (AR-23).
+3. **Windows CI fix**: a one-line `.gitattributes` change (`* text=auto eol=lf`), verified by reproduction (AR-25), proposed as a change separate from M3. Windows type-check, tests and smoke must then pass before any Windows claim.
+4. **M4 (storage) stays gated** on Q-M1-01 and DM-02, which remain **unapproved**.

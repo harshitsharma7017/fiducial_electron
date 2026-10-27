@@ -74,6 +74,61 @@ export default defineConfig([
     },
   },
 
+  // Shared contracts and the comparison engine (M3) run in every process and must stay pure:
+  // no Electron, Node, network, clock or randomness.
+  {
+    files: ['src/shared/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: 'electron', message: 'Shared code must not depend on Electron.' }],
+          patterns: [
+            {
+              group: [
+                'node:*',
+                'fs',
+                'fs/*',
+                'path',
+                'os',
+                'child_process',
+                'net',
+                'http',
+                'https',
+              ],
+              message: 'Shared code must not use Node.js modules.',
+            },
+            {
+              group: ['**/main/**', '**/preload/**', '**/renderer/**'],
+              message: 'Shared code must not import process-specific code.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        ...['process', 'require', 'fetch', 'XMLHttpRequest', 'WebSocket', 'localStorage'].map(
+          (name) => ({ name, message: 'Shared code must stay free of I/O and process state.' }),
+        ),
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[object.name='Math'][property.name='random']",
+          message: 'Shared code must be deterministic.',
+        },
+        {
+          selector: "NewExpression[callee.name='Date'], MemberExpression[object.name='Date']",
+          message: 'Shared code must not read the clock; pass times in.',
+        },
+        {
+          selector: "CallExpression[callee.property.name='localeCompare']",
+          message: 'Locale-dependent ordering is not deterministic; use compareText.',
+        },
+      ],
+    },
+  },
+
   // Scripts and the main-process logger sink write to the console on purpose.
   {
     files: ['scripts/**/*.mjs', 'src/main/logging/console-sink.ts'],

@@ -22,6 +22,25 @@ describe('security lint rules', () => {
     expect(await ruleIds(node, 'src/renderer/src/App.tsx')).toContain('no-restricted-imports');
   });
 
+  it('keeps shared code free of Electron, Node, I/O, the clock and randomness (M3)', async () => {
+    const file = 'src/shared/comparison/compare.ts';
+    expect(
+      await ruleIds(`import { app } from 'electron';\nexport const x = app;\n`, file),
+    ).toContain('no-restricted-imports');
+    expect(await ruleIds(`import fs from 'node:fs';\nexport const x = fs;\n`, file)).toContain(
+      'no-restricted-imports',
+    );
+    expect(await ruleIds(`export const x = fetch;\n`, file)).toContain('no-restricted-globals');
+    for (const code of [
+      'export const x = Date.now();\n',
+      'export const x = new Date();\n',
+      'export const x = Math.random();\n',
+      "export const x = 'a'.localeCompare('b');\n",
+    ]) {
+      expect(await ruleIds(code, file)).toContain('no-restricted-syntax');
+    }
+  });
+
   it('accepts the async safeStorage API', async () => {
     const code = `import { safeStorage } from 'electron';\nexport const x = safeStorage.encryptStringAsync('a');\n`;
     expect(await ruleIds(code, 'src/main/security/csp.ts')).not.toContain(

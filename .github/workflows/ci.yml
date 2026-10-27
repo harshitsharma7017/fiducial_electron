@@ -1,5 +1,8 @@
-# CI for the product app (M2). Actions are pinned to commit SHAs.
-# Not yet run: this repository has no remote (M2 definition of done item "CI green" is open).
+# CI for the product app (M2; M3 adds the coverage gate). Actions are pinned to commit SHAs.
+# First run (40454782355, commit 37879c5): macOS passed; Windows failed at `npm run lint`
+# (Prettier flagged all 50 files: CRLF checkout, reproduced; ARCHITECTURE_REVIEW AR-25) and
+# skipped the later steps.
+# "CI green" remains open; see IMPLEMENTATION_STATUS §1d.
 name: ci
 
 on:
@@ -29,5 +32,6 @@ jobs:
       - run: npm run secrets:scan
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      # Runs every test and enforces 100% coverage of money, comparison and validation (M3).
+      - run: npm run test:coverage
       - run: npm run test:smoke
