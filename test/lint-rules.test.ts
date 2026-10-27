@@ -9,7 +9,10 @@ async function ruleIds(code: string, filePath: string): Promise<string[]> {
   return (result?.messages ?? []).map((m) => m.ruleId ?? 'fatal');
 }
 
-describe('security lint rules', () => {
+// The config lints with type information (`projectService`), so the first file linted under each
+// tsconfig builds a TypeScript program. On the Windows CI runner that took 4.9–7.6 s, beyond the
+// 5 s default (run 40513427765).
+describe('security lint rules', { timeout: 30_000 }, () => {
   it('rejects the synchronous safeStorage API in app code (AR-17)', async () => {
     const code = `import { safeStorage } from 'electron';\nexport const x = safeStorage.encryptString('a');\n`;
     expect(await ruleIds(code, 'src/main/security/csp.ts')).toContain('no-restricted-properties');
