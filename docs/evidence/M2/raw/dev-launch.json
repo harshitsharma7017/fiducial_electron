@@ -1,0 +1,6 @@
+{
+  "command": "npm run dev (started, observed, then stopped by a harness)",
+  "result": { "start": true, "ready": true, "ipcOk": true, "ipcError": false, "blocked": 0, "cspViolationsInOutput": false, "devServer": "localhost:5173" },
+  "leftoverProcesses": "none",
+  "note": "Recorded on 27 Oct 2026 against the same source as the final verification run (only documentation changed afterwards)."
+}

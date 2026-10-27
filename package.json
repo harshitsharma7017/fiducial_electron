@@ -1,0 +1,64 @@
+{
+  "name": "fiducial-quote-fetcher",
+  "productName": "Fiducial Quote Fetcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fiducial Quote Fetcher desktop application. M2: scaffold and security baseline only.",
+  "license": "UNLICENSED",
+  "main": "./out/main/index.js",
+  "packageManager": "npm@11.6.2",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "node scripts/run-clean-env.mjs electron-vite dev",
+    "build": "node scripts/run-clean-env.mjs electron-vite build",
+    "build:mac": "npm run build && node scripts/run-clean-env.mjs electron-builder --mac --config electron-builder.yml && node scripts/check-package.mjs mac",
+    "build:win": "npm run build && node scripts/run-clean-env.mjs electron-builder --win --config electron-builder.yml && node scripts/check-package.mjs win",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "lint": "eslint . --max-warnings=0 && prettier --check .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:smoke": "npm run build && node scripts/smoke.mjs",
+    "secrets:scan": "secretlint --maskSecrets \"**/*\"",
+    "electron:install": "install-electron",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*": "secretlint --maskSecrets",
+    "*.{ts,tsx,mts,js,mjs,cjs}": [
+      "eslint --max-warnings=0",
+      "prettier --check"
+    ],
+    "*.{json,css,html,yml,yaml}": "prettier --check"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@electron/asar": "4.3.1",
+    "@electron/fuses": "2.1.3",
+    "@eslint/js": "10.0.1",
+    "@secretlint/secretlint-rule-preset-recommend": "13.0.7",
+    "@types/node": "24.19.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "electron": "45.0.0",
+    "electron-builder": "26.17.0",
+    "electron-vite": "6.0.0",
+    "eslint": "10.12.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.13.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
+    "prettier": "3.9.9",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "secretlint": "13.0.7",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.0",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}

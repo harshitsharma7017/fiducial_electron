@@ -308,3 +308,30 @@ Source: [docs/evidence/M1/](docs/evidence/M1/README.md). Platform: **macOS 15.7.
 | AR-18 | `safeStorage` ciphertext lacks integrity protection | Confirmed on macOS / Medium | AES-256-GCM with a `safeStorage`-wrapped data key for all non-database secrets. **Mitigation implemented and tested on macOS (Q-M1-01)**, with 7 internal-review defects fixed (including the keyring lost-update and non-exclusive initialisation). Windows and the independent security review are still pending; limitations L1–L11 are unresolved, not accepted |
 | AR-19 | Developer tooling environment variables (`ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS`) change runtime behaviour | High in development / Medium | Clean environments in scripts and CI; fuses in every packaged build |
 | AR-20 | Dev-only files shipped in the package | Medium / Low–Medium | Explicit packaging allowlist plus a CI check of `app.asar` contents |
+
+---
+
+## 9. M2 implementation notes (27 October 2026)
+
+How M2 implemented §3. Verified on macOS 15 arm64 only.
+
+| Topic | Implementation | Note |
+|---|---|---|
+| Layout | `src/main` (security, ipc, logging, windows, smoke), `src/preload`, `src/renderer` (React), `src/shared/ipc` | Matches §3.2 for the parts in M2 scope |
+| `app://` | Privileged standard and secure scheme; `protocol.handle` serves `out/renderer` only, with CSP, `nosniff` and COOP headers. The resolver rejects other hosts, encoded separators, NUL and backslashes, and confines results to the renderer folder | WHATWG URL parsing already normalises `%2e%2e` segments, so such requests map *inside* the root (a 404 at runtime); tested |
+| Origins | Compared as `scheme//host`, because WHATWG `URL.origin` is `"null"` for non-special schemes such as `app:` | Used by the navigation policy and the IPC sender check |
+| Development CSP | Applied only to the validated loopback dev-server origin in unpackaged builds. Allows the inline React refresh preamble and the HMR WebSocket | Never applies to `app://`; production CSP has no `unsafe-*` (tested) |
+| IPC | Contract-driven dispatcher (Electron-free, unit-tested) plus thin `ipcMain` wiring. Sender must be a registered window's top frame on the app origin. Responses are also schema-validated | New error code `FORBIDDEN_SENDER` (OPEN_QUESTIONS §0.5) |
+| Preload | Bundled to one CommonJS file (305 bytes) importing only channel names. No zod, no raw `ipcRenderer` | Sandbox-compatible |
+| Smoke mode | `--smoke-test` (a P1-05 subset): throwaway userData; checks the bridge, isolation, sandbox, CSP effect, TC-23, protocol confinement; prints booleans only | The launch guard is enforced in smoke runs too |
+| Launch guard | Enforced in packaged builds and smoke runs; plain `npm run dev` stays debuggable | The fuses remain the primary control (M1 S2) |
+| Single instance | `app.requestSingleInstanceLock()` (L6 / AR prerequisite for the vault) | Implemented; **not yet exercised by an automated test** |
+| Packaging | electron-builder `electronFuses` sets the DM-04 fuses; `check-package.mjs` allowlists asar contents (`package.json`, `out/`, `zod`) and verifies fuses | arm64 and x64 DMG and NSIS cross-built; all pass the check |
+| Renderer bundle | Not minified (electron-vite default), 568 kB | Consider minification in M10 |
+
+### 9.1 Risk register additions
+
+| ID | Risk | Likelihood / impact | Mitigation |
+|---|---|---|---|
+| AR-21 | electron-vite 6.0.0 was 13 days old at adoption (5.x lacks Vite 8 support) | Low / Medium | Pinned; review patch releases before M10 |
+| AR-22 | CI and Windows runtime unverified: Windows-specific failures (paths, protocol, NSIS, fuses at runtime) could surface late | Medium / High | Obtain a remote and Windows hardware (Q-D07, Q-M1-02) before M4 |

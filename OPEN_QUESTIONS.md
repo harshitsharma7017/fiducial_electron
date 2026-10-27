@@ -171,6 +171,17 @@ Evidence: [docs/evidence/M1/](docs/evidence/M1/README.md). Tested on **macOS 15.
 | Q-M1-03 | Can a person be present for supervised Keychain tests (identity change, second user, locked keychain)? These raise OS dialogs and were deliberately not run unattended | Key-loss behaviour (AR-13) must be documented for support | Tech | M4, M11 |
 | Q-M1-04 | Should the team's other repositories be told about the zod and vite advisories? This spike did not modify them | Same advisories apply wherever those pins are used | Tech | — |
 
+### 0.5 M2 decision records (27 October 2026)
+
+| ID | Decision / record | Basis | Status |
+|---|---|---|---|
+| DM-07 (remaining items) | **Build tool: electron-vite 6.0.0. Packager: electron-builder 26.17.0. UI: React 19.3.0** (with @vitejs/plugin-react 6.1.2) | **Decided by the project lead on 27 Oct 2026** at M2 kick-off, choosing the recommended option. Matches IMPLEMENTATION_PLAN §4 M2, ARCHITECTURE_REVIEW §3.1 and TDD 03 §2 | Decided (project lead). Playwright and the SQLite driver **remain undecided** (needed in M6 and M4) |
+| C-02 | Error codes implemented as the union of 04 §4 and 16 §5, **plus `FORBIDDEN_SENDER`** for IPC sender verification (`src/shared/ipc/errors.ts`) | Tech owner per C-02 / C-07 (names in 16 are illustrative) | Implemented; contract freeze is an M3 deliverable |
+| Secret scanning | **secretlint 13.0.7** (npm, pinned) instead of gitleaks, which is not installed and is not an npm package | Plan §4 M2 says "for example gitleaks" | Tech choice; revisit if the client mandates gitleaks |
+| M2 scope conflict | The M2 kick-off request listed functional areas A–G (shell, forms, quote entry, comparison, history, PDF, settings). The plan assigns them to M3–M7; **M2 was built as documented** (scaffold and security baseline) | IMPLEMENTATION_PLAN §4, §7 | Resolved as recommended; no scope invented |
+| Workspace | The product is at the repository root (`src/`). `spikes/m1/` stays experimental; reviewed spike modules (launch guard, webPreferences, navigation policy, IPC sender check) were ported **with their tests** | ARCHITECTURE_REVIEW §3.2; spike README | Resolved as recommended |
+| M1 → M2 gate | M1 exit criteria are unmet (no Windows results); M2 proceeded on macOS with the Windows items recorded as unverified | Project-lead direction ("do not stop for unrelated M1 follow-ups") | Windows verification **open** (Q-M1-02, Q-D07) |
+
 ## A. Must be answered before any implementation
 
 | ID | Question | Why it matters | Owner | Blocks |

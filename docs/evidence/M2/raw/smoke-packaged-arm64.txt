@@ -1,0 +1,77 @@
+{
+  "packaged": true,
+  "smoke": {
+    "passed": true,
+    "checks": [
+      {
+        "id": "ipc.round-trip",
+        "pass": true
+      },
+      {
+        "id": "bridge.shape",
+        "pass": true
+      },
+      {
+        "id": "renderer.no-node",
+        "pass": true
+      },
+      {
+        "id": "renderer.sandboxed",
+        "pass": true
+      },
+      {
+        "id": "csp.inline-script-blocked",
+        "pass": true
+      },
+      {
+        "id": "tc23.popup-blocked",
+        "pass": true
+      },
+      {
+        "id": "tc23.https-navigation-blocked",
+        "pass": true
+      },
+      {
+        "id": "tc23.file-navigation-blocked",
+        "pass": true
+      },
+      {
+        "id": "protocol.csp-header",
+        "pass": true
+      },
+      {
+        "id": "protocol.encoded-traversal",
+        "pass": true
+      },
+      {
+        "id": "protocol.encoded-dot-segments",
+        "pass": true
+      },
+      {
+        "id": "protocol.main-bundle-unreachable",
+        "pass": true
+      },
+      {
+        "id": "protocol.other-host",
+        "pass": true
+      }
+    ]
+  },
+  "guard": [
+    {
+      "id": "remote-debugging-port",
+      "exitCode": 78,
+      "refused": true
+    },
+    {
+      "id": "remote-debugging-pipe",
+      "exitCode": 78,
+      "refused": true
+    },
+    {
+      "id": "inspect",
+      "exitCode": 78,
+      "refused": true
+    }
+  ]
+}

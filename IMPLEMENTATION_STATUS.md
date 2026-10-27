@@ -81,6 +81,29 @@ Automated checks for the spike, run on 26 Oct 2026: `npm run typecheck` passed, 
 
 **Q-M1-01 / DM-02 security status:** technically tested on macOS 15 arm64 only. **Independent security review is outstanding; neither is approved.** Windows credential storage (DPAPI) and Windows file-system behaviour are untested. Crash/power-loss testing, fuzzing, supervised Keychain scenarios and code signing are outstanding. **No unresolved risk has been accepted.** The vault's integrity protection is separate from the OS layer: raw `safeStorage` still rejected only 21/48 tamperings (recorded finding). `npm audit` reported 0 vulnerabilities after zod and vite were raised to patched versions.
 
+## 1c. M2 update (27 October 2026): scaffold and security baseline
+
+Branch `m2/scaffold-security-baseline` (from `e8a68b0`). Evidence: [docs/evidence/M2/](docs/evidence/M2/README.md). **Verified on macOS 15.7.2 arm64 only** (development build and packaged arm64 app). Windows packages build from macOS but have **not been run on Windows**. CI has **not run** (no remote). The rows in §2–§9 below keep their audit-time values; this table records what changed.
+
+| Item | New status | Evidence |
+|---|---|---|
+| SEC-01 / SEC-02 Node integration off, context isolation, sandbox | **NEEDS VALIDATION** (Windows): verified on macOS | Unit `web-preferences.test.ts`; smoke `renderer.no-node`, `renderer.sandboxed` (dev and packaged) |
+| SEC-03 Allowlisted preload only | **NEEDS VALIDATION** (Windows): verified on macOS | Smoke `bridge.shape`; `contract.test.ts` (no raw `ipcRenderer`); preload bundle 305 bytes |
+| SEC-04 / TC-22 Main-process IPC validation and sender verification | **NEEDS VALIDATION** (Windows): verified on macOS | `ipc-dispatcher.test.ts` (untrusted senders, 7 invalid payload classes, unknown channel, response validation, no leakage); smoke `ipc.round-trip` |
+| SEC-05 / TC-23 Navigation and popup restrictions | **NEEDS VALIDATION** (Windows): verified on macOS | `navigation-policy.test.ts`; smoke `tc23.*` (dev and packaged) |
+| SEC-06 Restrictive CSP | **NEEDS VALIDATION** (Windows): verified on macOS | `csp.test.ts`; smoke `protocol.csp-header`, `csp.inline-script-blocked` |
+| LOG-01 Allowlist logging | **NEEDS VALIDATION** (log review on Windows): unit-verified | `logger.test.ts` (forbidden fields, free text, unknown events) |
+| SEC-11 No secrets in logs | **PARTIAL**: enforced by the allowlist logger; no secrets handled in M2 yet | `logger.test.ts` |
+| IPC-01 / IPC-02 Envelope and error codes | **PARTIAL**: implemented; contract freeze is M3 | `src/shared/ipc/` |
+| IPC-04 API surface | **PARTIAL**: only `app:get-info` (M2 scope) | `src/shared/ipc/contract.ts` |
+| REL-01 Scripts `lint`, `typecheck`, `test`, `build`, `build:win`, `build:mac` | **VERIFIED** on macOS (all run, exit 0) | `docs/evidence/M2/README.md` |
+| REL-02 Secret scan | **PARTIAL**: secretlint runs locally (168 files, 0 findings; detection proven on a planted token); pre-commit hook **not activated**; CI not run | Evidence README |
+| REL-03 Windows build | **PARTIAL**: unsigned NSIS installer cross-built on macOS; content and fuses verified; **never installed or run on Windows** | `check-package.mjs win` |
+| REL-08 CI | **PARTIAL**: workflow written (macOS and Windows, SHA-pinned actions); **not run** (no remote) | `.github/workflows/ci.yml` |
+| DM-04 fuses and launch guard | Fuses verified in macOS and Windows packages; guard refuses 3/3 debugging switches (dev and packaged macOS) | `check-package.mjs`; `scripts/smoke.mjs` |
+
+**No product feature requirement (FR-01 to FR-20) changed status:** M2 delivers infrastructure only.
+
 ---
 
 ## 2. P0 functional requirements (`01_PRD §9`)

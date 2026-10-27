@@ -1,0 +1,11 @@
+# Generated output and dependencies
+node_modules/
+out/
+release/
+package-lock.json
+# The M1 spike has its own toolchain and must not be reformatted from here
+spikes/
+# Planning documents and evidence are maintained as written; requirement PDFs are binary
+docs/
+*.md
+*.pdf

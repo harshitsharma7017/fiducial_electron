@@ -1,0 +1,33 @@
+# CI for the product app (M2). Actions are pinned to commit SHAs.
+# Not yet run: this repository has no remote (M2 definition of done item "CI green" is open).
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    # AR-19: every Electron launch goes through scripts/run-clean-env.mjs or scripts/smoke.mjs,
+    # which remove ELECTRON_RUN_AS_NODE and NODE_OPTIONS from the child environment.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx install-electron
+      - run: npm run secrets:scan
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:smoke

@@ -342,3 +342,29 @@ Evidence: [docs/evidence/M1/](docs/evidence/M1/README.md). Spike code: `spikes/m
 - **M4:** the SecretStore design moves from "`safeStorage` per secret" to "`safeStorage` wraps data keys; AES-256-GCM for secrets and evidence" (pending DM-02 review).
 - **M7:** keep ₹ and branding out of `printToPDF` header/footer templates; reuse the S4 regression approach (text + font + negative controls) for TC-15 to TC-17.
 - **M10:** fuses are a release gate, verified with `@electron/fuses read` and the debug-port probe on every platform.
+
+---
+
+# Revision 3 — M2 progress (27 October 2026)
+
+Branch `m2/scaffold-security-baseline` from the M1 commit `e8a68b0`. Toolchain per DM-07, decided by the project lead on 27 Oct 2026: electron-vite, electron-builder, React. Evidence: [docs/evidence/M2/](docs/evidence/M2/README.md).
+
+## 15. M2 against its definition of done (§4 M2)
+
+| Definition-of-done item | Status |
+|---|---|
+| Empty app launches from `npm run dev` | **macOS: yes** (renderer IPC round trip logged, no CSP violations). **Windows: not tested** |
+| CI green | **Not run**: the workflow exists, but the repository has no remote |
+| SEC-01 to SEC-06 and LOG-01 verified | **macOS: yes** (unit tests plus 13/13 in-app smoke checks in dev and the packaged arm64 app). **Windows: not tested** |
+| Deliverables | electron-vite + electron-builder + React scaffold; scripts; secure window factory; `app://` with CSP header; navigation, popup, permission, download and webview guards; IPC registry with Zod and sender verification and `AppResult`; typed preload; allowlist logger with correlation IDs; secretlint; Husky and lint-staged (hook not activated); CI workflow; §14 adjustments (sync-`safeStorage` lint ban, clean launch environment, packaged-content check) |
+
+**M2 is implemented and verified on macOS but not complete**: Windows launch, CI and Windows verification remain open, as does the unmet M1 Windows exit criterion.
+
+## 16. Next milestone
+
+**M3 — Contracts (SDK) and domain logic** (§4 M3): customer, member, quote and result schemas; money in paise with INR formatting; validators; the comparison engine behind a pluggable rule; contract freeze.
+
+Dependencies:
+- DM-06 comparability rules are still provisional: implement them as configuration with placeholders.
+- Q-B03, Q-B04 and Q-B05 (sum insured, age limits, floater rules) are unanswered: use placeholder rule tables.
+- No dependency on the vault (DM-02) until M4.

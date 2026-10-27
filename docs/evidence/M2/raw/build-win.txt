@@ -1,0 +1,51 @@
+
+> fiducial-quote-fetcher@0.1.0 build:win
+> npm run build && node scripts/run-clean-env.mjs electron-builder --win --config electron-builder.yml && node scripts/check-package.mjs win
+
+
+> fiducial-quote-fetcher@0.1.0 build
+> node scripts/run-clean-env.mjs electron-vite build
+
+vite v8.3.4 building ssr environment for production...
+transforming...
+✓ 21 modules transformed.
+rendering chunks...
+out/main/index.js  22.94 kB
+
+✓ built in 23ms
+vite v8.3.4 building ssr environment for production...
+transforming...
+✓ 3 modules transformed.
+rendering chunks...
+out/preload/index.js  0.30 kB
+
+✓ built in 7ms
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 15 modules transformed.
+rendering chunks...
+out/renderer/index.html                   0.40 kB
+out/renderer/assets/index-BcQrlCAS.css    0.89 kB
+out/renderer/assets/index-Czi8oIQS.js   567.61 kB
+
+✓ built in 78ms
+  • electron-builder  version=26.17.0 os=24.6.0
+  • loaded configuration  file=~/Desktop/spirezen/fiducial_electron/electron-builder.yml
+  • author is missed in the package.json  appPackageFile=~/Desktop/spirezen/fiducial_electron/package.json
+  • executing @electron/rebuild  electronVersion=45.0.0 arch=x64 buildFromSource=false workspaceRoot=~/Desktop/spirezen/fiducial_electron projectDir=./ appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=45.0.0 appOutDir=release/win-unpacked
+  • downloaded      label=electron progress=100%
+  • downloaded electron zip extracted successfully  output=~/Desktop/spirezen/fiducial_electron/release/win-unpacked
+  • searching for node modules  pm=npm searchDir=~/Desktop/spirezen/fiducial_electron
+  • updating asar integrity executable resource  executablePath=release/win-unpacked/Fiducial Quote Fetcher.exe
+  • executing @electron/fuses  electronPath=release/win-unpacked/Fiducial Quote Fetcher.exe
+  • default Electron icon is used  reason=application icon is not set
+  • no code signing certificate configured, signing is skipped  path=release/win-unpacked/Fiducial Quote Fetcher.exe
+  • building        target=nsis file=release/Fiducial Quote Fetcher Setup 0.1.0.exe archs=x64 oneClick=false perMachine=false
+  • no code signing certificate configured, signing is skipped  path=<tmp>
+  • no code signing certificate configured, signing is skipped  path=release/Fiducial Quote Fetcher Setup 0.1.0.__uninstaller.exe
+  • no code signing certificate configured, signing is skipped  path=release/Fiducial Quote Fetcher Setup 0.1.0.exe
+  • building block map  blockMapFile=release/Fiducial Quote Fetcher Setup 0.1.0.exe.blockmap
+{"label":"win-unpacked","entries":757,"unexpected":[],"fuseProblems":[]}
