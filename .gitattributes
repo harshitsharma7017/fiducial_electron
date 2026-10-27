@@ -1,7 +1,7 @@
 # Normalise text files; never apply line-ending conversion to binary assets.
 # The requirement PDFs are uncompressed and would otherwise be detected as text
 # and corrupted by CRLF conversion on Windows clones.
-* text=auto
+* text=auto eol=lf
 
 *.pdf binary
 *.png binary
