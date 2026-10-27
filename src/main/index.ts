@@ -39,7 +39,16 @@ function start(): void {
     // Smoke runs never touch the user's real profile.
     const scratch = mkdtempSync(join(tmpdir(), 'fqf-smoke-'));
     app.setPath('userData', scratch);
-    app.on('quit', () => rmSync(scratch, { recursive: true, force: true }));
+    app.on('quit', () => {
+      // On Windows the browser process still holds files in the profile at this point, so the
+      // delete can fail; a throw here blocks on an error dialog and the app never exits. A
+      // leftover scratch profile in the OS temp folder is acceptable.
+      try {
+        rmSync(scratch, { recursive: true, force: true });
+      } catch {
+        // Left in the OS temp folder.
+      }
+    });
   } else if (!app.requestSingleInstanceLock()) {
     logger.info('app.second-instance');
     app.quit();

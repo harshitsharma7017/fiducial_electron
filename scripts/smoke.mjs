@@ -41,20 +41,26 @@ function run(args, extraEnv = {}) {
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d));
     child.stderr.on('data', (d) => (stderr += d));
-    const timer = setTimeout(() => child.kill('SIGKILL'), 60_000);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGKILL');
+    }, 60_000);
     child.on('exit', (code, signal) => {
       clearTimeout(timer);
-      resolvePromise({ code, signal, stdout, stderr });
+      resolvePromise({ code, signal, timedOut, stdout, stderr });
     });
   });
 }
 
 const failures = [];
-const report = { packaged, smoke: null, guard: [] };
+const report = { packaged, smoke: null, smokeExit: null, guard: [] };
 
 const smoke = await run(['--smoke-test']);
 const line = smoke.stdout.split('\n').find((l) => l.startsWith('FQF_SMOKE_RESULT '));
 report.smoke = line ? JSON.parse(line.slice('FQF_SMOKE_RESULT '.length)) : null;
+// How the app process ended; `timedOut` means the harness killed it after 60 s.
+report.smokeExit = { code: smoke.code, signal: smoke.signal, timedOut: smoke.timedOut };
 if (smoke.code !== 0 || !report.smoke?.passed) failures.push('smoke');
 
 // Launch guard (DM-04): these must be refused with exit 78 before any window exists.
@@ -65,7 +71,7 @@ for (const [id, args, env] of [
 ]) {
   const r = await run(args, env);
   const refused = r.code === 78 && !r.stdout.includes('FQF_SMOKE_RESULT');
-  report.guard.push({ id, exitCode: r.code, refused });
+  report.guard.push({ id, exitCode: r.code, signal: r.signal, timedOut: r.timedOut, refused });
   if (!refused) failures.push(`guard.${id}`);
 }
 
