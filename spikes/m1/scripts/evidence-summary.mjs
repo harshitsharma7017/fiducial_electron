@@ -18,6 +18,7 @@ import {
 import { homedir, release, tmpdir, version } from 'node:os';
 import { join, relative } from 'node:path';
 import { SPIKE_ROOT } from './lib/launch.mjs';
+import { sanitiseException } from './lib/sanitise-exception.mjs';
 
 const EVIDENCE = join(SPIKE_ROOT, 'out/evidence');
 const RUNS = join(SPIKE_ROOT, 'out/runs');
@@ -167,7 +168,11 @@ for (const run of ['dev', 'packaged']) {
     for (const p of results[run][phase]?.facts?.nativeModules ?? []) {
       const path = expandHome(String(p));
       const arch = existsSync(path) ? binaryArch(path) : 'file not found';
-      out(`| ${run} ${phase} | \`${cell(sanitisePath(path))}\` | ${cell(arch)} |`);
+      // A path inside the spike workspace is shown relative to it, as before; any other path
+      // could name the user or machine, so it is redacted.
+      const shown = sanitisePath(path);
+      const safe = shown.startsWith('<spike>') ? shown : sanitiseException(path);
+      out(`| ${run} ${phase} | \`${cell(safe)}\` | ${cell(arch)} |`);
       nativeRows += 1;
     }
   }
@@ -227,6 +232,21 @@ for (const run of ['dev', 'packaged']) {
     );
   }
 }
+const runnerFailures = ['dev', 'packaged'].flatMap((run) =>
+  PHASES.flatMap((phase) =>
+    (results[run][phase]?.checks ?? [])
+      .filter((c) => c.id === 'runner' && !c.pass)
+      .map((c) => `${run} ${phase}: \`${cell(sanitiseException(c.actual))}\``),
+  ),
+);
+if (runnerFailures.length > 0) {
+  out();
+  out(
+    "**Runner exceptions** (the spike's own exception message only, sanitised, at most 300 " +
+      'characters; no stack traces):',
+  );
+  for (const f of runnerFailures) out(`- ${f}`);
+}
 out();
 out(
   '_Interpretation note:_ on Windows, a "foreign identity refused" result most likely reflects a ' +
@@ -276,7 +296,7 @@ if (!fsProbe) {
 } else if (fsProbe.skipped) {
   out(`Skipped: ${cell(fsProbe.reason)}.`);
 } else {
-  if (fsProbe.error) out(`**Probe error:** ${cell(fsProbe.error)}`);
+  if (fsProbe.error) out(`**Probe error:** \`${cell(sanitiseException(fsProbe.error))}\``);
   const v = fsProbe.volumes ?? {};
   out(
     `Volumes: workspace ${cell(v.spikeWorkspace?.drive)} ${cell(v.spikeWorkspace?.fileSystem)}; ` +
@@ -307,7 +327,7 @@ if (!fsProbe) {
   out('|---|---|---|---|---|');
   for (const r of fsProbe.renameOverOpenTarget ?? []) {
     out(
-      `| ${cell(r.heldBy)} | ${cell(r.fileShare)} | ${cell(r.renamed ?? r.error)} | ${cell(r.code)} | ${cell(r.targetAfter)} |`,
+      `| ${cell(r.heldBy)} | ${cell(r.fileShare)} | ${r.renamed != null || r.error == null ? cell(r.renamed ?? r.error) : `\`${cell(sanitiseException(r.error))}\``} | ${cell(r.code)} | ${cell(r.targetAfter)} |`,
     );
   }
   const h = fsProbe.hardLinks;
