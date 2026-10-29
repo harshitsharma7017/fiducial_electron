@@ -74,6 +74,28 @@ export default defineConfig([
     },
   },
 
+  // DEMO ONLY — temporary portal automation demo (src/demo/portal-automation/README.md): its
+  // screen runs in the renderer and follows the renderer's rules.
+  {
+    files: ['src/demo/portal-automation/renderer/**/*.{ts,tsx}'],
+    languageOptions: { globals: { ...globals.browser } },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: 'electron', message: 'The renderer must use the preload bridge.' }],
+          patterns: [
+            { group: ['node:*'], message: 'No Node.js modules in the renderer.' },
+            {
+              group: ['**/main/**', '**/preload/**', '**/page/**'],
+              message: 'The demo screen may import the demo’s shared code only.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Shared contracts and the comparison engine (M3) run in every process and must stay pure:
   // no Electron, Node, network, clock or randomness.
   {

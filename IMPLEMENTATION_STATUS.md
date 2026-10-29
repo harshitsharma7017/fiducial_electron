@@ -108,7 +108,9 @@ Branch `m2/scaffold-security-baseline` (from `e8a68b0`). Evidence: [docs/evidenc
 
 ## 1d. M3 update (27 October 2026): contracts and comparison engine
 
-Branch `m3/contracts-comparison`, created from `37879c5` with the work uncommitted. Evidence: [docs/evidence/M3/](docs/evidence/M3/README.md). Verified on **macOS 15.7.2 arm64 only**; M3 changes have **not run in CI or on Windows**.
+Branch `m3/contracts-comparison`, created from `37879c5`. The M3 engine and contracts are **committed locally** as `4f428495fafe9e0bbe49a364ccb35306dc0220c3` (not pushed). The development-only demo, the `.gitattributes` line-ending fix and these documentation updates are **uncommitted** working-tree changes on the same branch (see the end of this section). Evidence: [docs/evidence/M3/](docs/evidence/M3/README.md). Verified on **macOS 15.7.2 arm64 only**; M3 has **not run in CI or on Windows**.
+
+**Acceptance status: not accepted.** The contract review and freeze are outstanding, every business rule is provisional or a placeholder awaiting PO approval, and CI and Windows runs are outstanding.
 
 M3 is pure TypeScript under `src/shared/`. It has no Electron, Node, database, filesystem, network or portal code, and it registers **no IPC channel**. The app bundle is unchanged.
 
@@ -128,7 +130,7 @@ M3 is pure TypeScript under `src/shared/`. It has no Electron, Node, database, f
 | TC-09, TC-10, TC-27 | **Engine level passes** under the provisional rule | `test/comparison.test.ts` |
 | REL-08 CI | **PARTIAL**: ran once; macOS passed, Windows failed at lint (see correction above); the coverage gate was added for M3 | `.github/workflows/ci.yml` |
 
-**Test totals:** 328 tests in 13 files. `src/shared` has 100% statement, branch, function and line coverage, and CI enforces it for `money.ts`, `comparison/**` and `validation/**`. A mutation check (12 deliberately injected rule bugs) was caught by the tests every time.
+**Test totals:** the committed M3 suite is 328 tests in 13 files (re-run 27 Oct, unchanged). The current working tree adds 67 development-demo tests, for **395 tests in 14 files**. `src/shared` has 100% statement, branch, function and line coverage, and CI enforces it for `money.ts`, `comparison/**` and `validation/**`. A mutation check (12 deliberately injected rule bugs) was caught by the tests every time.
 
 **Pre-commit review (27 October 2026):** two engine defects were found and fixed, with regression tests:
 1. **GST-exclusive totals.** The premium consistency check assumed total = base + GST for every basis. A GST-exclusive quote that showed its GST was therefore reported as `PREMIUM_INCONSISTENT` (validity), and so did not suppress the highlight. The check now depends on the basis, and the result is reported as `PREMIUM_BASIS_NOT_RANKED`.
@@ -139,6 +141,10 @@ No business rule changed. Validity exclusions (duplicates, review flags) still d
 **Unchanged:**
 - **Q-M1-01 and DM-02 (vault) remain unapproved.** M3 neither uses nor requires storage.
 - **Windows runtime testing remains outstanding.**
+
+**Development-only Quote Comparison demo (27 October 2026, uncommitted).** `src/renderer/src/dev/` adds a "Quote Comparison" screen, opened from a development-tools card on the home screen. It runs the real `validateQuoteDraft` and `compareQuotes` on eight synthetic in-memory scenarios (Demo Insurer A–F) and shows the engine's own output: the request summary, comparable and excluded counts, the highlight or the no-highlight reason, a quote-by-attribute table, and findings grouped by quote and stage. `App.tsx` loads it only behind `import.meta.env.DEV`. It adds no IPC channel, storage, network call or dependency, and it **changes no requirement status**. It is not a product screen: FR-10, FR-12 and FR-14 UI work remains M6, and its wording is demo copy, not approved text. Tests: `test/comparison-demo.test.ts` (67). The production renderer bundle was checked and contains no demo code, data or styles. **Visual review:** rendered screenshots of all eight scenarios were inspected at 1440×900 and 1000×800, and three at 820×700, in a hidden Electron window on the dev server (stub bridge, no CSP) on macOS 15 arm64; not the real app window. Light theme only; Windows rendering not checked. **Fix (27 Oct, acceptance review):** sum insured, deductible and room-rent-cap amounts from a non-INR quote were shown with the rupee sign; every amount from an insurer result is now formatted in that result's own currency, with regression tests. The engine's `CURRENCY_UNSUPPORTED` behaviour is unchanged.
+
+**Windows line-ending fix (27 Oct 2026, uncommitted).** `.gitattributes` now reads `* text=auto eol=lf`, the exact one-line change from `fix/windows-ci-eol` (`cbe74e7`), applied to this branch's working tree. Binary rules are unchanged, and no tracked file has CRLF endings. It was validated only on a **simulated** Windows checkout on macOS (AR-25); a real Windows CI run is still required.
 
 ---
 

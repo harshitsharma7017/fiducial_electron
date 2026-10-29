@@ -9,6 +9,9 @@
     "src/main/**/*.ts",
     "src/preload/**/*.ts",
     "src/shared/**/*.ts",
+    "src/renderer/src/dev/demo-*.ts",
+    "src/renderer/src/dev/workflow/*.ts",
+    "src/demo/portal-automation/**/*.ts",
     "test/**/*.ts",
     "electron.vite.config.mts",
     "vitest.config.mts"

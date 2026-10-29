@@ -203,10 +203,10 @@ Each row below **needs product-owner approval**. None of these risks is accepted
 | Manual results | Ranked, and labelled `source: manual` in the output | DM-06 default | Q-B10 (PO) |
 | Ties | Every tied result is highlighted, in a fixed order (insurer ID, then result ID) | DM-06 default | PO |
 | Minimum for a highlight | **Two** comparable results. A single quote is never highlighted as "lowest" | M3 proposal (not in DM-06) | PO |
-| Duplicates | Duplicate result IDs, and two completed results with the same insurer and plan label, are **all** excluded as ambiguous | M3 proposal | Q-B16 (PO) |
+| Duplicates | Duplicate result IDs, and two completed results with the same insurer and plan label, are **all** excluded as ambiguous | M3 proposal | PO; **no question ID**. Related to, but not answered by, Q-B16, which asks which product or plan to quote *(cross-reference corrected 27 Oct 2026; previously "Q-B16 (PO)")* |
 | Validity exclusions and the highlight | Results excluded at validity do **not** suppress the highlight, even if their premium is lower. This covers duplicates, review flags such as `ambiguous_coverage`, unreadable or missing premiums, and non-completed runs. Only valid results that fail eligibility or comparability suppress it | ARCH §3.7 ("no ambiguity warnings" is a candidate condition) | Q-B01 (PO): confirm, or treat duplicates and `ambiguous_coverage` as suppressing |
 | Currency | INR only; other or missing currencies are not ranked | 04 §2 | — |
-| Highlight label | Fixed text: "Lowest premium among comparable quotes — not a recommendation". No "best", "winner" or "recommended" wording anywhere | DM-06; 08 §3 | Q-B08 (wording, Client) |
+| Highlight label | Fixed text: "Lowest premium among comparable quotes — not a recommendation". No "best", "winner" or "recommended" wording anywhere | DM-06; 08 §3 | Client, PO (DM-06 wording); **no question ID**. Q-B08 asks about disclaimer and consent wording, not this label *(cross-reference corrected 27 Oct 2026; previously "Q-B08 (wording, Client)")* |
 
 **Quote input**
 

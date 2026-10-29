@@ -1,0 +1,323 @@
+/* DEMO ONLY — TEMPORARY FEATURE (portal automation demo; see ../README.md). */
+
+.pd-launcher {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 672px;
+  margin: 0 auto 48px;
+  padding: 16px 24px;
+  border: 2px dashed var(--pd-demo);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+:root {
+  --pd-demo: #b4232a;
+  --pd-ok: #1f7a3d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pd-demo: #ff7b7b;
+    --pd-ok: #6fd18f;
+  }
+}
+
+.pd-badge {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--pd-demo);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pd-launcher-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.pd-muted {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.pd-page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.pd-header h1 {
+  margin: 4px 0 8px;
+}
+
+.pd-link {
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pd-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.pd-fieldset {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px 16px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.pd-fieldset legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.pd-field {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.pd-field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pd-field input,
+.pd-field select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.pd-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pd-error {
+  margin: 0;
+  color: var(--error);
+  font-size: 13px;
+}
+
+.pd-ok {
+  color: var(--pd-ok);
+}
+
+.pd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pd-button {
+  padding: 8px 16px;
+  border: 1px solid var(--pd-demo);
+  border-radius: 6px;
+  background: var(--pd-demo);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pd-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pd-secondary {
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.pd-summary {
+  margin-top: 32px;
+}
+
+.pd-status {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.pd-status p {
+  margin: 0;
+}
+
+.pd-table {
+  width: 100%;
+  margin-top: 16px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.pd-table caption {
+  margin-bottom: 6px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.pd-table th,
+.pd-table td {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+@media (max-width: 640px) {
+  .pd-launcher {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Full workflow: environment, progress, review and result. */
+.pd-env {
+  margin: 16px 0 24px;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.pd-env-test {
+  border-color: #b26b00;
+}
+
+.pd-env-fill {
+  border-style: dashed;
+}
+
+.pd-env-live {
+  border-width: 3px;
+  border-color: var(--pd-demo);
+}
+
+.pd-env p {
+  margin: 0;
+}
+
+.pd-env-mode {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 12px;
+}
+
+.pd-env-name {
+  margin-top: 4px;
+}
+
+.pd-env-note {
+  margin-top: 6px;
+  color: var(--error);
+}
+
+.pd-progress ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pd-step {
+  color: var(--muted);
+}
+
+.pd-step-active,
+.pd-step-done {
+  color: var(--fg);
+}
+
+.pd-step-done span {
+  color: var(--pd-ok);
+}
+
+.pd-step-failed,
+.pd-step-uncertain {
+  color: var(--error);
+}
+
+.pd-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.pd-review,
+.pd-result {
+  margin-top: 24px;
+  padding: 16px 20px;
+  border: 2px solid #b26b00;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.pd-review h2,
+.pd-result h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.pd-review th,
+.pd-result th {
+  width: 30%;
+  text-align: left;
+}
+
+.pd-warnings {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+}
+
+.pd-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.pd-result-ok {
+  border-color: var(--pd-ok);
+}
+
+.pd-result-warn {
+  border-color: #b26b00;
+}
+
+.pd-result-bad {
+  border-color: var(--error);
+}

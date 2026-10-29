@@ -2,7 +2,7 @@
 
 Desktop application for insurance advisors (Windows and macOS). Requirements are in the PDF pack (`00`–`19`); planning and status are in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Current milestone: M3 — contracts and quote comparison (draft; rules provisional).** The app is still an empty, secured shell. `src/shared/` now holds the domain contracts, money utilities, validators and the comparison engine, none of them wired to the UI or IPC yet; see [docs/evidence/M3/](docs/evidence/M3/README.md). Storage, history, the UI, insurer integration and the PDF report arrive in M4–M7. `spikes/m1/` holds the M1 feasibility spike: experimental code with its own toolchain, not part of this app.
+**Current milestone: M3 — contracts and quote comparison (not accepted: contracts draft, rules provisional).** The app is still an empty, secured shell. `src/shared/` holds the domain contracts, money utilities, validators and the comparison engine, committed locally as `4f42849` and not wired to IPC or any production screen; see [docs/evidence/M3/](docs/evidence/M3/README.md). An **uncommitted, development-only** Quote Comparison demo (`src/renderer/src/dev/`, opened from the home screen in `npm run dev` only) runs the engine on synthetic data; it is excluded from production builds. Storage, history, the UI, insurer integration and the PDF report arrive in M4–M7. `spikes/m1/` holds the M1 feasibility spike: experimental code with its own toolchain, not part of this app.
 
 ## Stack
 
@@ -47,4 +47,4 @@ Nothing in M2 stores customer data or secrets. The secret vault design (Q-M1-01 
 
 ## Platform status
 
-Verified on macOS 15 (Apple Silicon) only. Windows packages build from macOS but have **not** been run on Windows. CI (`.github/workflows/ci.yml`, macOS and Windows) has **not** run, because the repository has no remote. Builds are unsigned (S6 is blocked on signing identities).
+Verified on macOS 15 (Apple Silicon) only. Windows packages build from macOS but have **not** been run on Windows. CI (`.github/workflows/ci.yml`, macOS and Windows) has run once, on the M2 commit: macOS passed and Windows failed at lint (AR-25). The M3 commit has not been pushed, so CI has never run on it. Builds are unsigned (S6 is blocked on signing identities).

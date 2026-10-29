@@ -19,6 +19,7 @@ import {
 } from './security/launch-guard';
 import { hardenSession, installNavigationPolicy } from './security/navigation-policy';
 import { APP_ENTRY_URL, APP_ORIGIN, devServerOrigin } from './security/origins';
+import { registerPortalDemo } from '../demo/portal-automation/main/register';
 import { runSmokeChecks } from './smoke';
 import { createMainWindow } from './windows/main-window';
 
@@ -87,6 +88,11 @@ function start(): void {
     registerIpc(
       createDispatcher(createHandlers(), { isTrustedSender: senderPolicy.isTrusted, logger }),
     );
+    // DEMO ONLY — temporary portal automation demo; does nothing unless
+    // ENABLE_PORTAL_AUTOMATION_DEMO is set (src/demo/portal-automation/README.md).
+    if (!smoke) {
+      registerPortalDemo({ env: process.env, isTrustedSender: senderPolicy.isTrusted, logger });
+    }
     const win = createMainWindow({
       preloadPath: join(__dirname, '../preload/index.js'),
       entryUrl: devOrigin && devUrl ? devUrl : APP_ENTRY_URL,

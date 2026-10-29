@@ -4,17 +4,19 @@
 |---|---|
 | Milestone | M3 (IMPLEMENTATION_PLAN §4 M3; status in §17) |
 | Date | 27 October 2026 |
-| Branch | `m3/contracts-comparison` (created from `37879c5`), **uncommitted working tree** |
+| Branch | `m3/contracts-comparison` (created from `37879c5`). The M3 engine and contracts are **committed locally** as `4f428495fafe9e0bbe49a364ccb35306dc0220c3`; the commit has **not been pushed** |
+| Uncommitted on the branch | The development-only Quote Comparison demo (`src/renderer/src/dev/`, `test/comparison-demo.test.ts`, small changes to `src/renderer/src/App.tsx` and `tsconfig.node.json`), the `.gitattributes` line-ending fix (see Limitations) and documentation updates. None of it changes `src/shared/` or the committed tests |
+| Acceptance | **Not accepted.** Contracts are draft (review and freeze outstanding), every business rule is provisional or a placeholder, and the branch has not run in CI or on Windows |
 | New dev dependencies | fast-check 4.10.0 (property tests), @vitest/coverage-v8 5.0.3 (coverage gate). Both pinned exactly; no new runtime dependency |
 | Platform tested | **macOS 15.7.2, Apple M4 (arm64) only** |
-| Not tested | Windows; CI (M3 changes have not been pushed or run) |
+| Not tested | Windows; CI (the M3 commit has not been pushed, so CI has never run on it) |
 | Rules in force | `dm06-provisional` 0.1.0 (**provisional**) and `quote-input-placeholder` 0.1.0 (**placeholder**). Neither is approved; see OPEN_QUESTIONS §0.6 |
 
 ## Results
 
 | Check | Command | Result | Raw |
 |---|---|---|---|
-| Unit tests with coverage gate | `npm run test:coverage` | **328/328 in 13 files**; `src/shared` 100% statements, branches (322/322), functions and lines | `raw/unit-tests-coverage.txt` |
+| Unit tests with coverage gate | `npm run test:coverage` | **328/328 in 13 files** (the committed M3 suite; re-run on 27 Oct against an unchanged `src/shared` and test set, still 328/328); `src/shared` 100% statements, branches (322/322), functions and lines | `raw/unit-tests-coverage.txt` |
 | Type-check (node and web) | `npm run typecheck` | exit 0 | `raw/typecheck.txt` |
 | Lint (ESLint `--max-warnings=0`, Prettier `--check`) | `npm run lint` | exit 0 | `raw/lint.txt` |
 | Build and M2 smoke regression | `npm run test:smoke` | build exit 0; **13/13 checks; guard 3/3 refused** | `raw/smoke-dev.txt` |
@@ -22,6 +24,8 @@
 | Secret scan | `npm run secrets:scan` | exit 0, no findings | `raw/secrets-scan.txt` |
 
 The M2 packaging checks (`build:mac`, `build:win`) were **not re-run**. M3 adds no runtime code to the app bundle: no IPC channel imports the engine.
+
+**Current working tree (uncommitted, 27 Oct 2026):** `npm run test:coverage` passes **395/395 in 14 files**: the 328 committed M3 tests plus 67 tests for the development-only demo (`test/comparison-demo.test.ts`). The demo is loaded only behind `import.meta.env.DEV`; the production renderer bundle was checked and contains none of its code, synthetic data or styles. The raw files in `raw/` record the committed suite only.
 
 ## Pre-commit review (27 October 2026)
 
@@ -78,8 +82,8 @@ All fixtures are synthetic: placeholder insurer IDs (`insurer-a` and so on), inv
   - pincode serviceability.
 - **CI:** the M2 commit ran once. macOS passed. Windows failed at lint, so the Windows type-check, tests and smoke have never run.
   - **Root cause, reproduced locally:** a CRLF checkout under `* text=auto` with no `eol`; Prettier then flags all 50 checked files (AR-25).
-  - **Proposed separately:** `* text=auto eol=lf`.
-  - M3 has not run in CI.
+  - **Fix applied to the working tree, uncommitted:** `* text=auto eol=lf`, the one-line change from `fix/windows-ci-eol` (`cbe74e7`). It was validated only on a **simulated** Windows checkout on macOS, not on a Windows machine.
+  - M3 has not run in CI, so the fix is also unverified in CI.
 - **Windows runtime** is untested.
 - **Not checked:** a `completed` result that carries an `errorCode` is accepted as completed. The contradiction is not flagged.
 - **TC-01 "saved with stable ID"** is persistence (M4); M3 covers the schema level only.

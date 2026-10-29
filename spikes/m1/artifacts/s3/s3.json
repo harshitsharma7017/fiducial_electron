@@ -1,0 +1,105 @@
+{
+  "spike": "s3",
+  "phase": null,
+  "status": "pass",
+  "startedAt": "2026-10-27T04:27:18.622Z",
+  "environment": {
+    "electron": "45.0.0",
+    "chrome": "156.0.8078.48",
+    "node": "24.22.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "osVersion": "15.7.2",
+    "osRelease": "24.6.0",
+    "cpuModel": "Apple M4",
+    "runningUnderARM64Translation": false,
+    "isPackaged": false,
+    "appName": "fqf-spike-m1",
+    "appRoot": "~/Desktop/spirezen/fiducial_electron/spikes/m1",
+    "userData": "~/Library/Application Support/fqf-spike-m1"
+  },
+  "checks": [
+    {
+      "id": "s3.safe-storage",
+      "description": "OS-backed safeStorage available to wrap the key",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s3.cipher",
+      "description": "Cipher scheme reported by SQLite3MultipleCiphers",
+      "expected": "sqlcipher",
+      "actual": "sqlcipher",
+      "pass": true
+    },
+    {
+      "id": "s3.write-read",
+      "description": "Row written and read back in the same session",
+      "expected": "FQF-S3-MARKER-9537cb139d58308a",
+      "actual": "FQF-S3-MARKER-9537cb139d58308a",
+      "pass": true
+    },
+    {
+      "id": "s3.foreign-keys",
+      "description": "Foreign keys enforced",
+      "expected": true,
+      "actual": true,
+      "pass": true
+    },
+    {
+      "id": "s3.db-header-encrypted",
+      "description": "Database file has no plaintext SQLite header (while open)",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "id": "s3.db-marker-hidden",
+      "description": "Marker string not readable in database file bytes",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "id": "s3.wal-marker-hidden",
+      "description": "Marker string not readable in the WAL file (WAL mode)",
+      "expected": false,
+      "actual": false,
+      "pass": true
+    },
+    {
+      "id": "s3.key-not-on-disk",
+      "description": "Raw key (bytes, hex or base64) not found in any file",
+      "expected": [],
+      "actual": [],
+      "pass": true
+    },
+    {
+      "id": "s3.key-separate-dir",
+      "description": "Wrapped key stored outside the database directory",
+      "expected": "keys/ vs data/",
+      "actual": "keys/db.key.enc vs data/spike.db",
+      "pass": true
+    },
+    {
+      "id": "s3.native-module-loaded",
+      "description": "Native SQLite module loaded",
+      "expected": "one .node file",
+      "actual": [
+        "~/Desktop/spirezen/fiducial_electron/spikes/m1/node_modules/better-sqlite3-multiple-ciphers/prebuilds/darwin-arm64.node"
+      ],
+      "pass": true
+    }
+  ],
+  "facts": {
+    "marker": "FQF-S3-MARKER-9537cb139d58308a",
+    "walFileExistedWhileOpen": true,
+    "dbBytesAfterClose": 16384,
+    "nativeModules": [
+      "~/Desktop/spirezen/fiducial_electron/spikes/m1/node_modules/better-sqlite3-multiple-ciphers/prebuilds/darwin-arm64.node"
+    ],
+    "keyFile": "~/Library/Application Support/fqf-spike-m1/keys/db.key.enc",
+    "dbFile": "~/Library/Application Support/fqf-spike-m1/data/spike.db"
+  }
+}
