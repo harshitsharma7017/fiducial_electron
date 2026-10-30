@@ -1,5 +1,8 @@
 // DEMO ONLY — TEMPORARY FEATURE (portal automation demo): the network guard, the in-page agent's
 // source, and the feature being unavailable without its flag.
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Script } from 'node:vm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,6 +26,7 @@ import { SYNTHETIC_DEMO_PROPOSAL } from '../../src/demo/portal-automation/shared
 
 const PORTAL = 'https://fiducial.spirezen.tech';
 const logger = { log: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+const dataDir = () => join(mkdtempSync(join(tmpdir(), 'fqf-demo-safety-')), 'portal-automation');
 
 describe('the demo window’s network guard', () => {
   it('lets the portal be read and lets the user sign in and out', () => {
@@ -87,21 +91,27 @@ describe('without its flag', () => {
   });
 
   it('registers no IPC handler and exposes no bridge', () => {
-    expect(registerPortalDemo({ env: {}, isTrustedSender: () => true, logger })).toBe(false);
+    expect(
+      registerPortalDemo({ env: {}, isTrustedSender: () => true, logger, dataDir: dataDir() }),
+    ).toBe(false);
     exposePortalDemo({});
     exposePortalDemo({ ENABLE_PORTAL_AUTOMATION_DEMO: '0' });
     expect(electron.handle).not.toHaveBeenCalled();
     expect(electron.exposeInMainWorld).not.toHaveBeenCalled();
   });
 
-  it('with the flag, registers its four channels and its bridge only', () => {
+  it('with the flag, registers its six channels and its bridge only', () => {
     const env = { ENABLE_PORTAL_AUTOMATION_DEMO: '1' };
-    expect(registerPortalDemo({ env, isTrustedSender: () => true, logger })).toBe(true);
+    expect(
+      registerPortalDemo({ env, isTrustedSender: () => true, logger, dataDir: dataDir() }),
+    ).toBe(true);
     expect(electron.handle.mock.calls.map((call) => call[0] as string)).toEqual([
       'portal-demo:start',
       'portal-demo:report',
       'portal-demo:cancel',
       'portal-demo:confirm',
+      'portal-demo:reconcile',
+      'portal-demo:resolve',
     ]);
     exposePortalDemo(env);
     expect(electron.exposeInMainWorld).toHaveBeenCalledTimes(1);
@@ -114,6 +124,7 @@ describe('without its flag', () => {
       env: { ENABLE_PORTAL_AUTOMATION_DEMO: '1' },
       isTrustedSender: () => trusted,
       logger,
+      dataDir: dataDir(),
     });
     const start = electron.handle.mock.calls.find(
       ([channel]) => channel === 'portal-demo:start',

@@ -4,10 +4,22 @@
 import type {
   AgentCommand,
   AgentResult,
+  ClientMatch,
   ControlSnapshot,
   PageSnapshot,
   SessionInfo,
 } from '../../src/demo/portal-automation/shared/protocol';
+
+/** Ids as the portal's client master and user list hold them (24 hex digits). */
+export const CLIENT_ID = 'c0ffee'.repeat(4);
+export const OTHER_CLIENT_ID = 'decade'.repeat(4);
+export const ADMIN_ID = 'a11ce0'.repeat(4);
+export const MANAGER_ID = 'b0b0b0'.repeat(4);
+export const LOCATION_IDS: Record<string, string> = {
+  'Peenya cold store': '10ca71'.repeat(4),
+  'City office': '20ca72'.repeat(4),
+};
+export const TEST_GSTIN = '29ZZZZZ0003Z1ZJ';
 
 export function control(
   overrides: Partial<ControlSnapshot> & { primary: string },
@@ -86,10 +98,10 @@ export function formSnapshot(): PageSnapshot {
         primary: 'Assigned to',
         kind: 'select',
         name: 'ownerId',
-        value: 'u1',
+        value: ADMIN_ID,
         options: [
-          { text: 'Demo Admin', value: 'u1' },
-          { text: 'Demo Manager', value: 'u2' },
+          { text: 'Demo Admin', value: ADMIN_ID },
+          { text: 'Demo Manager', value: MANAGER_ID },
         ],
       }),
       control({ primary: 'Quotes needed by', kind: 'date', name: 'dueDate', value: '2026-11-05' }),
@@ -128,18 +140,29 @@ export class FakePortalPage {
   private form: PageSnapshot | null = null;
   /** Client names the portal's client search can find. */
   clients = new Set(['Deccan Cold Chain LLP']);
+  /** The client master as the portal's API lists it (find-clients). */
+  clientMaster: ClientMatch[] = [
+    { id: CLIENT_ID, name: 'Deccan Cold Chain LLP', gstin: TEST_GSTIN },
+  ];
+  /** The GSTIN the form's client card shows once the client is chosen (undefined: unreadable). */
+  formGstin: string | null | undefined = TEST_GSTIN;
   /** The chosen client's risk locations; the portal ticks them all when the client is chosen. */
   clientLocations = ['Peenya cold store', 'City office'];
   /** Values the form refuses to keep (read back differently). */
   rejects = new Set<string>();
   /** What the portal's session check answers. */
-  session: SessionInfo = { signedIn: true, name: 'Demo Admin', canCreateProperty: true };
+  session: SessionInfo = {
+    signedIn: true,
+    name: 'Demo Admin',
+    userId: ADMIN_ID,
+    canCreateProperty: true,
+  };
 
   constructor(states: PageSnapshot[]) {
     this.states = states;
   }
 
-  private current(): PageSnapshot {
+  protected current(): PageSnapshot {
     if (this.form) return this.form;
     const next = this.states.length > 1 ? this.states.shift()! : this.states[0]!;
     if (next.controls.some((item) => item.primary === 'Policy period from')) this.form = next;
@@ -209,15 +232,34 @@ export class FakePortalPage {
         if (!this.clients.has(command.name))
           return Promise.resolve({ ok: false, reason: 'no-match' });
         page.chosenClient = command.name;
+        page.chosenClientGstin = this.formGstin;
         page.riskLocations = this.clientLocations.map((name) => ({ name, checked: true }));
         return Promise.resolve({ ok: true });
       }
       case 'session':
         return Promise.resolve({ ok: true, session: { ...this.session } });
+      case 'find-clients':
+        return Promise.resolve({
+          ok: true,
+          clients: this.clientMaster.filter((client) => client.name === command.name),
+        });
+      case 'client-locations':
+        return Promise.resolve(
+          command.clientId === CLIENT_ID
+            ? {
+                ok: true,
+                locations: this.clientLocations.map((name) => ({
+                  id: LOCATION_IDS[name] ?? 'f'.repeat(24),
+                  name,
+                })),
+              }
+            : { ok: false, reason: 'not-found' },
+        );
       // Creation and read-back: the full-workflow page (full-workflow.test.ts) answers these.
       case 'create':
       case 'read-proposal':
       case 'recent-proposals':
+      case 'client-proposals':
         return Promise.resolve({ ok: false, reason: 'failed' });
     }
   }

@@ -2,174 +2,21 @@
 // portal. Sign-in, review, explicit confirmation, one creation request, the portal's answer, the
 // read-back, and the success, failure and uncertain outcomes.
 import { describe, expect, it } from 'vitest';
-import type { CreationOutcome } from '../../src/demo/portal-automation/main/network-guard';
 import { PortalDemoRunner } from '../../src/demo/portal-automation/main/runner';
 import { SYNTHETIC_DEMO_PROPOSAL } from '../../src/demo/portal-automation/shared/demo-data';
 import { decideMode } from '../../src/demo/portal-automation/shared/environment';
-import type {
-  AgentCommand,
-  AgentResult,
-  PageSnapshot,
-  ProposalReadback,
-} from '../../src/demo/portal-automation/shared/protocol';
-import { FakePortalPage, formSnapshot, signInSnapshot } from './fixtures';
-
-const ORIGIN = 'http://localhost:3100';
-const ID = 'a'.repeat(24);
-const T0 = Date.parse('2026-10-29T10:00:00Z');
-
-type Answer =
-  | 'created'
-  | 'refused'
-  | 'server-error'
-  | 'network-error'
-  | 'no-answer'
-  | 'no-request'
-  | 'created-no-navigation';
-
-function proposal(overrides: Partial<ProposalReadback> = {}): ProposalReadback {
-  return {
-    id: ID,
-    reference: 'FIB/PROP/2026/0001',
-    type: 'NEW',
-    stage: 'DRAFT',
-    clientName: SYNTHETIC_DEMO_PROPOSAL.insuredName,
-    ownerName: 'Demo Admin',
-    policyStart: SYNTHETIC_DEMO_PROPOSAL.policyStart,
-    policyEnd: SYNTHETIC_DEMO_PROPOSAL.policyEnd,
-    dueDate: SYNTHETIC_DEMO_PROPOSAL.quotesNeededBy,
-    createdAt: new Date(T0 + 1000).toISOString(),
-    ...overrides,
-  };
-}
-
-/** The scripted portal plus what the full workflow needs: the guard's permit and cookies. */
-class FullWorkflowPage extends FakePortalPage {
-  answer: Answer = 'created';
-  cookieNames = ['erp_session'];
-  readBack: ProposalReadback | null = proposal();
-  recent: ProposalReadback[] = [];
-  /** The portal's alert after a refused save. */
-  refusal = 'Choose a client';
-  armed = 0;
-  presses = 0;
-  private outcome: CreationOutcome = { state: 'not-armed' };
-  private navigatedTo: string | null = null;
-
-  armCreation(): boolean {
-    if (this.outcome.state === 'armed' || this.outcome.state === 'sent') return false;
-    this.armed += 1;
-    this.outcome = { state: 'armed' };
-    return true;
-  }
-
-  creationOutcome(): CreationOutcome {
-    return this.outcome;
-  }
-
-  sessionCookieNames(): Promise<string[]> {
-    return Promise.resolve([...this.cookieNames]);
-  }
-
-  override run(command: AgentCommand): Promise<AgentResult> {
-    if (command.op === 'snapshot' && this.navigatedTo !== null) {
-      this.commands.push(command);
-      return Promise.resolve({
-        ok: true,
-        snapshot: { ...formSnapshot(), path: this.navigatedTo, controls: [], submitButtons: [] },
-      });
-    }
-    if (command.op === 'create') {
-      this.commands.push(command);
-      this.presses += 1;
-      if (this.outcome.state !== 'armed') return Promise.resolve({ ok: true });
-      switch (this.answer) {
-        case 'created':
-          this.outcome = { state: 'completed', status: 201 };
-          this.navigatedTo = `/proposals/${ID}`;
-          break;
-        case 'created-no-navigation':
-          this.outcome = { state: 'completed', status: 201 };
-          break;
-        case 'refused':
-          this.outcome = { state: 'completed', status: 400 };
-          break;
-        case 'server-error':
-          this.outcome = { state: 'completed', status: 500 };
-          break;
-        case 'network-error':
-          this.outcome = { state: 'network-error' };
-          break;
-        case 'no-answer':
-          this.outcome = { state: 'sent' };
-          break;
-        case 'no-request':
-          this.outcome = { state: 'expired' };
-          break;
-      }
-      return Promise.resolve({ ok: true });
-    }
-    if (
-      command.op === 'snapshot' &&
-      this.answer === 'refused' &&
-      this.outcome.state === 'completed'
-    ) {
-      return super
-        .run(command)
-        .then((result) =>
-          result.ok && result.snapshot
-            ? { ok: true, snapshot: { ...result.snapshot, alerts: [this.refusal] } }
-            : result,
-        );
-    }
-    if (command.op === 'read-proposal') {
-      this.commands.push(command);
-      return Promise.resolve(
-        this.readBack && command.id === this.readBack.id
-          ? { ok: true, proposal: this.readBack }
-          : { ok: false, reason: 'not-found' },
-      );
-    }
-    if (command.op === 'recent-proposals') {
-      this.commands.push(command);
-      return Promise.resolve({ ok: true, proposals: this.recent });
-    }
-    return super.run(command);
-  }
-}
-
-function runnerFor(page: FakePortalPage, env = { PORTAL_AUTOMATION_FULL_WORKFLOW: '1' }) {
-  let clock = 0;
-  const messages: string[] = [];
-  let tokens = 0;
-  const runner = new PortalDemoRunner({
-    portalOrigin: ORIGIN,
-    mode: decideMode(env, ORIGIN),
-    openPage: () => page,
-    sleep: (ms) => {
-      clock += ms;
-      messages.push(runner.current().message);
-      return Promise.resolve();
-    },
-    now: () => clock,
-    wallClock: () => T0,
-    token: () => `review-${(tokens += 1)}`,
-    creationTimeoutMs: 5000,
-  });
-  return { runner, messages };
-}
-
-/** Lets the confirmed creation (which runs in the background) finish. */
-async function settle(runner: PortalDemoRunner): Promise<void> {
-  for (let i = 0; i < 1000 && runner.isRunning(); i += 1) await Promise.resolve();
-  for (let i = 0; i < 50; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-async function reviewed(page = new FullWorkflowPage([formSnapshot()])) {
-  const { runner, messages } = runnerFor(page);
-  await runner.start(SYNTHETIC_DEMO_PROPOSAL);
-  return { page, runner, messages };
-}
+import type { PageSnapshot } from '../../src/demo/portal-automation/shared/protocol';
+import { formSnapshot, signInSnapshot } from './fixtures';
+import {
+  FullWorkflowPage,
+  ID,
+  ORIGIN,
+  proposal,
+  reviewed,
+  runnerFor,
+  settle,
+  T0,
+} from './workflow-fixtures';
 
 describe('the full workflow: sign-in and session', () => {
   it('reports a failed sign-in with the portal’s own message, and keeps waiting', async () => {
@@ -349,7 +196,7 @@ describe('the full workflow: environment checks', () => {
 
   it('is not available in fill-only mode: no review, no confirmation, no creation', async () => {
     const page = new FullWorkflowPage([formSnapshot()]);
-    const { runner } = runnerFor(page, { PORTAL_AUTOMATION_FULL_WORKFLOW: '0' });
+    const { runner } = runnerFor(page, { env: { PORTAL_AUTOMATION_FULL_WORKFLOW: '0' } });
     await runner.start(SYNTHETIC_DEMO_PROPOSAL);
     expect(runner.current()).toMatchObject({ state: 'done', mode: 'fill-only', review: null });
     expect(runner.confirm('review-1').ok).toBe(false);
@@ -422,11 +269,12 @@ describe('the full workflow: creation outcomes', () => {
   it('an unclear answer is resolved when exactly one matching new proposal is found', async () => {
     const page = new FullWorkflowPage([formSnapshot()]);
     page.answer = 'created-no-navigation';
+    const { runner } = await reviewed(page);
+    // Appear in the portal after the submission (an older one, from an hour before, does not count).
     page.recent = [
       proposal(),
       proposal({ id: 'b'.repeat(24), createdAt: new Date(T0 - 60 * 60_000).toISOString() }),
     ];
-    const { runner } = await reviewed(page);
     runner.confirm('review-1');
     await settle(runner);
     expect(runner.current().state).toBe('created');
@@ -436,8 +284,8 @@ describe('the full workflow: creation outcomes', () => {
   it('stays uncertain when several matching proposals could be this attempt’s', async () => {
     const page = new FullWorkflowPage([formSnapshot()]);
     page.answer = 'network-error';
-    page.recent = [proposal(), proposal({ id: 'c'.repeat(24) })];
     const { runner } = await reviewed(page);
+    page.recent = [proposal(), proposal({ id: 'c'.repeat(24) })];
     runner.confirm('review-1');
     await settle(runner);
     expect(runner.current().state).toBe('uncertain');
@@ -454,14 +302,19 @@ describe('the full workflow: creation outcomes', () => {
     expect(runner.current().message).toMatch(/reads back differently \(policy end\)/);
   });
 
-  it('uncertain when the new proposal cannot be read back', async () => {
+  // Changed for reliable creation: the portal answered 201 with the new proposal's id, so it
+  // exists; reported as created with every field unverified (never as a full success).
+  it('created but unverified when the new proposal cannot be read back', async () => {
     const page = new FullWorkflowPage([formSnapshot()]);
     page.readBack = null;
     const { runner } = await reviewed(page);
     runner.confirm('review-1');
     await settle(runner);
-    expect(runner.current().state).toBe('uncertain');
-    expect(runner.current().message).toMatch(/reading it back failed/);
+    expect(runner.current().state).toBe('created-unverified');
+    expect(runner.current().message).toMatch(/reading it back failed.*do not create it again/);
+    expect(runner.current().verification?.every((check) => check.status === 'unverified')).toBe(
+      true,
+    );
   });
 });
 

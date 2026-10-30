@@ -14,16 +14,18 @@ const DevQuoteComparison = import.meta.env.DEV
     )
   : null;
 
-// DEMO ONLY — temporary portal automation demo (src/demo/portal-automation/README.md). Its
-// launcher is added under the home screen only when the preload exposed window.fqfPortalDemo,
-// which happens only with ENABLE_PORTAL_AUTOMATION_DEMO set.
-const PortalDemoGate = window.fqfPortalDemo
-  ? lazy(() =>
-      import('../../demo/portal-automation/renderer/PortalDemo').then((module) => ({
-        default: module.PortalDemoGate,
-      })),
-    )
-  : null;
+// DEMO ONLY — temporary portal automation demo (src/demo/portal-automation/README.md), in
+// development builds only, like the comparison demo above: production builds drop this import and
+// its chunk. Its launcher is added under the home screen only when the preload exposed
+// window.fqfPortalDemo, which happens only with ENABLE_PORTAL_AUTOMATION_DEMO set.
+const PortalDemoGate =
+  import.meta.env.DEV && window.fqfPortalDemo
+    ? lazy(() =>
+        import('../../demo/portal-automation/renderer/PortalDemo').then((module) => ({
+          default: module.PortalDemoGate,
+        })),
+      )
+    : null;
 
 type Status =
   | { state: 'loading' }

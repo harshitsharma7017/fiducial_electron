@@ -15,6 +15,8 @@ const api: FqfApi = {
 
 contextBridge.exposeInMainWorld('fqf', api);
 
-// DEMO ONLY — temporary portal automation demo: exposes window.fqfPortalDemo only when
-// ENABLE_PORTAL_AUTOMATION_DEMO is set (src/demo/portal-automation/README.md).
-exposePortalDemo(process.env);
+// DEMO ONLY — temporary portal automation demo (src/demo/portal-automation/README.md), in
+// development builds only: `import.meta.env.DEV` is `false` in production builds, so this call and
+// the demo's bridge code are left out of them. In development it exposes window.fqfPortalDemo only
+// when ENABLE_PORTAL_AUTOMATION_DEMO is set.
+if (import.meta.env.DEV) exposePortalDemo(process.env);

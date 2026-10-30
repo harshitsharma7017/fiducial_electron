@@ -2,20 +2,28 @@
 
 This feature lets the Quote Fetcher work the Fiducial portal's **New proposal** form
 (`/proposals/new`). It started as a temporary demo and is being taken towards a production
-proposal-creation integration. **It is not production-ready.** Creating a proposal has been
-verified only on a local copy of the portal. Live creation is set to **live verification**
-(2026-10-29, at the team's request): one confirmed proposal per app run, with test data only. It
-has not yet been run on the live portal.
+proposal-creation integration. **It is not production-ready.** Automated end-to-end checks of
+proposal creation run only against a local copy of the portal. **Live creation is off**
+(`LIVE_PROPOSAL_CREATION = 'off'`, 2026-10-30). It was set to live verification from 2026-10-29
+at the team's request; the team reported live creation working on 2026-10-30, before the
+reliable-creation changes, which have been verified on the local portal copy only.
 
-## Status (2026-10-29)
+**Development builds only.** The demo is not part of the Quote Fetcher product. Production builds
+(`npm run build`, `build:mac`, `build:win`) leave out all of its code: main, preload and renderer
+load it only when `import.meta.env.DEV` is true, and a packaged app never loads it. Its variables do
+nothing there. `scripts/smoke.mjs` and `scripts/check-package.mjs` fail if any of its code
+(`scripts/demo-markers.mjs`) reaches the build or the package, and `test/production-isolation.test.ts`
+guards the wiring (docs/ACTUAL_PRODUCT_STATUS_AUDIT.md §9). Run it with `npm run dev`.
+
+## Status (2026-10-30)
 
 | What                                       | Where                                                       | Result                                                                                                                                                                                                         |
 | ------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Automated tests                            | `test/portal-automation-demo/`, scripted portal             | Pass                                                                                                                                                                                                           |
-| End-to-end, local portal copy              | `tools/local-portal.mjs` + `tools/e2e/run.mjs`              | Pass: a proposal created, read back and checked against the portal's API                                                                                                                                       |
+| End-to-end, local portal copy | `tools/local-portal.mjs` + `tools/e2e/run.mjs` | Pass (2026-10-30, 37 checks): created once, every field verified by id, recorded in the attempt store and audit log; duplicate listed on a second run; tampered requests stopped |
 | Live portal, signed out (read-only)        | https://fiducial.spirezen.tech                              | The portal redirects signed-out users to `/login?next=…`, `auth/me` answers 401, and its published API description is **identical** to the portal source the local tests ran on (backend `73f9a0e`) |
-| Live portal, signed in (fill-only)         | —                                                           | **Not yet run**                                                                                                                                                                                                |
-| Live portal, proposal creation             | —                                                           | **Not done.** No live proposal has been created or verified                                                                                                                                                    |
+| Live portal, signed in (fill-only) | https://fiducial.spirezen.tech | Reported working by the team (manual, 2026-10-30), before reliable creation. **Not re-run since** |
+| Live portal, proposal creation | https://fiducial.spirezen.tech | Reported working by the team (manual, 2026-10-30), before reliable creation. **Not re-run since** |
 
 ## How it talks to the portal
 
@@ -50,14 +58,14 @@ confirmation and verification would stay.
 
 | Portal                                                       | Fill-only (default) | Full workflow (`PORTAL_AUTOMATION_FULL_WORKFLOW=1`)                                                    |
 | ------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------ |
-| Live portal, `https://fiducial.spirezen.tech`                | Yes                 | **Live verification:** one confirmed proposal per app run, test data only. See *Live verification*.    |
+| Live portal, `https://fiducial.spirezen.tech`                | Yes                 | **Off.** Runs fill-only and says why. See *Live verification* for the reviewed switch.                 |
 | Local portal copy (`http://localhost` / `http://127.0.0.1`)  | Yes                 | Yes: one creation per confirmed review                                                                 |
 | Any other address                                            | Yes                 | No                                                                                                     |
 
 Creation on the live portal is controlled by `LIVE_PROPOSAL_CREATION` in `shared/environment.ts`.
 It is a reviewed code constant, **never an environment variable**:
-- **`'off'`:** fill-only on the live portal.
-- **`'verification'`** (current): the live verification run. Synthetic data only, and one creation
+- **`'off'`** (current): fill-only on the live portal.
+- **`'verification'`:** the live verification run. Synthetic data only, and one creation
   attempt per app run.
 
 Both the constant and the full-workflow setting are needed. There is no "on" value for the live
@@ -127,9 +135,10 @@ signed-in form has **not** been inspected yet: that is step 2 of the live verifi
 
 | Outcome                  | When                                                                                                                                         |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Created and verified** | The portal answered 201, opened the new proposal, and it reads back as reviewed.                                                             |
-| **Not created**          | The portal refused it (4xx, with its message), the button sent no request, or a check before creation failed.                               |
-| **Result not certain**   | A 5xx, a failed connection, no answer within 30 seconds, a read-back that differs, or a read-back that failed. See *Error recovery*.        |
+| **Created and verified** | The portal answered 201, opened the new proposal, and every field reads back as approved (client id, type, dates, assignee, locations).      |
+| **Created, not fully verified** | The proposal exists, but the portal's record did not show some fields (or could not be read back): those are listed as not verified. |
+| **Not created**          | The portal refused it (4xx, with its message), the network guard stopped a request that differed from the review, the button sent no request, or a check before creation failed. |
+| **Result not certain**   | A 5xx, a failed connection, no answer within 30 seconds (and no single match found), or a read-back that differs. See *Error recovery*.     |
 
 ## Release readiness
 
@@ -155,18 +164,64 @@ every request.
 
 - **Not created:** the portal's message is shown. Fix the cause in the portal and run again.
 - **Result not certain:**
-  - **No automatic retry,** ever.
-  - **Look-up:** the integration reads the portal's 100 newest proposals (read-only). It accepts
-    exactly one that matches the review and was created since the confirmation, minus 2 minutes
-    for clock differences; that proposal is then read back and verified.
-  - **No single match:** the screen says to **check the Proposals list in the portal before
-    creating it again**. If the request did reach the portal, a second run would create a
-    duplicate.
-- **Duplicates within one review:**
+  - **No automatic retry,** ever, and nothing is resubmitted after a restart.
+  - **Look-up:** the integration reads the client's proposals (read-only, by client id). It
+    accepts exactly one that matches the approved request and was created since the submission,
+    minus 2 minutes for clock differences, and that no other attempt has claimed; that proposal is
+    then read back and verified.
+  - **No single match:** the attempt stays **unresolved** (see *Reliable creation*). No new
+    proposal can be created until the user resolves it.
+- **Duplicates:**
   - one confirmation per review (a token, accepted once);
-  - one network permit per confirmation, single use, valid for 15 seconds;
+  - one network permit per confirmation, single use, valid for 15 seconds, for exactly the
+    approved request;
+  - a possible duplicate (same client id, case type and policy period, in the portal or created
+    from this computer) is listed in the review and must be acknowledged;
+  - an unresolved attempt blocks every new creation;
   - no automatic retry.
   - On the live portal in verification, also one creation attempt per app run.
+
+### Reliable creation
+
+Every creation is a recorded **attempt** in `<userData>/portal-automation/attempts.json`
+(`main/attempt-store.ts`), written atomically (temporary file, flush, rename) before the step it
+guards goes on. States (`shared/attempt-state.ts`):
+
+```
+PREPARED → AWAITING_APPROVAL → APPROVED → SUBMITTING → VERIFYING → CREATED
+   (any of the first three → CANCELLED)     SUBMITTING → REFUSED | NOT_CREATED | UNCERTAIN
+                                            VERIFYING  → UNCERTAIN
+UNCERTAIN / RECONCILIATION_REQUIRED → VERIFYING (a match was found) | NOT_CREATED (the user decided)
+```
+
+- **SUBMITTING is on disk before the network guard is armed.** If the app stops from then on, the
+  next start marks the attempt **RECONCILIATION_REQUIRED**; earlier states become CANCELLED.
+- **Unresolved attempts** (SUBMITTING, VERIFYING, UNCERTAIN, RECONCILIATION_REQUIRED) are listed
+  under *Earlier creation attempts* and block every new creation. To resolve one:
+  - **Check the portal:** a read-only look-up. One match → it is read back and recorded as
+    CREATED. None or several → recorded with the time.
+  - **It created PRP-…:** after a look-up that found several, choose the one.
+  - **Mark as not created:** only after a look-up that ran and found no single match.
+- **Unreadable store:** it is kept aside (`attempts.json.unreadable-<time>`) and creation is
+  refused for that app run.
+- **Kept:** identifiers, the type, the dates, a SHA-256 fingerprint of the approved request,
+  states with times, HTTP status codes and the proposal reference, and the client's name (shown
+  on the screen only). **Never kept:** passwords, cookies, the signed-in user's details, contacts,
+  sums insured.
+
+**Audit log:** `<userData>/portal-automation/audit.jsonl` (`main/audit-log.ts`), one JSON line per
+event, flushed before the step goes on; at 5 MiB it moves to `audit.1.jsonl`. Allowlisted events
+(`attempt.created`, `review.completed`, `approval.granted`, `attempt.cancelled`,
+`submission.started|accepted|refused|not-sent`, `verification.completed`, `result.uncertain`,
+`recovery.restored|reconciled|resolved`, `store.unreadable`) and fields (attempt id, state, client
+and proposal ids, a 16-digit fingerprint prefix, HTTP status, proposal reference, reason codes,
+field names). No names, dates, payloads, cookies or portal messages. If the approval or the
+submission cannot be written to it, nothing is sent.
+
+**Not exactly-once.** The portal's API has no idempotency key, so the integration cannot
+guarantee that a request is processed once. It prevents a second submission from this computer
+and finds the outcome when it can; a proposal created by someone else, or a request processed
+after every look-up, can still exist.
 
 ### Secure configuration
 
@@ -175,7 +230,7 @@ every request.
 | `ENABLE_PORTAL_AUTOMATION_DEMO=1`               | environment               | Shows the feature at all. Without it, no IPC channel or bridge exists.          |
 | `PORTAL_AUTOMATION_FULL_WORKFLOW=1`             | environment               | Asks for the full workflow; granted only where the portal's profile allows it.  |
 | `PORTAL_AUTOMATION_DEMO_URL`                    | environment               | The portal address: https, or http on localhost / 127.0.0.1 only.              |
-| `LIVE_PROPOSAL_CREATION`                        | code, `shared/environment.ts` | `'verification'` (current) or `'off'`. A reviewed change.                  |
+| `LIVE_PROPOSAL_CREATION`                        | code, `shared/environment.ts` | `'off'` (current) or `'verification'`. A reviewed change.                  |
 
 No password, token or cookie is kept in source, settings, logs or files.
 
@@ -188,8 +243,9 @@ No password, token or cookie is kept in source, settings, logs or files.
 
 ### How to roll back a release
 
-The feature has no database, migration, stored state or new dependency. Rolling back means
-either:
+The feature has no database, migration or new dependency. Its only stored state is the attempt
+store and audit log in `<userData>/portal-automation/`; an older build ignores them, and they can
+be deleted once no attempt is unresolved. Rolling back means either:
 - releasing the previous build; or
 - releasing with `LIVE_PROPOSAL_CREATION = 'off'`.
 
@@ -210,10 +266,12 @@ portal's own users with `property.delete` can delete them there.
   reports nothing about its environment.
 - **UI automation:** a changed form is detected (the field is skipped, so no creation is offered),
   but the field map then needs updating.
-- **Uncertain outcomes:** they need a person to check, and the look-up reads only the 100 newest
-  proposals.
-- **Duplicates:** protection covers one review (and, in live verification, one app run). A new run
-  can create another proposal on purpose.
+- **Uncertain outcomes:** they need a person to resolve them, after a look-up. The look-ups read
+  the client's 500 newest proposals.
+- **Duplicates:** not exactly-once (no idempotency key in the portal's API). A new run can still
+  create another proposal on purpose, after the user acknowledges the listed duplicates.
+- **Client identity:** the client must be the only one in the client master with exactly the
+  insured's name; its GSTIN on the form must agree. The form's request is then checked by id.
 - **Naming:** the launcher card and the code markers still say "Demo".
 
 ## Live verification (before any live creation is enabled)
@@ -296,7 +354,11 @@ node src/demo/portal-automation/tools/check-live-contract.mjs    # live API cont
 
 The end-to-end check bundles the integration's real main-process code into
 `out/portal-demo-e2e/` (git-ignored) and drives it in Electron:
-- **Scenarios:** the full workflow, fill-only, and a user who may not create.
+- **Scenarios:** the full workflow (with the attempt store and audit log on disk), fill-only, a
+  user who may not create, a second run that must list the first proposal as a duplicate, and
+  requests the network guard must stop (another client id, a text/plain body, an extra field).
+- **Cold start:** the first run after starting the local copy can time out while `next dev`
+  compiles the sign-in route; run it again.
 - **Sign-in:** through the portal's own page.
 - **Confirmation:** it stands in for the confirmation click, calling the same `confirm(token)`
   the screen sends.
@@ -309,7 +371,10 @@ The contract check needs Node 23.6 or later. It may print a harmless module-type
   DELETE except sign-in and sign-out. The only exception is a **single-use permit**:
   - **When:** armed after your confirmation.
   - **What it allows:** exactly one `POST /api/proxy/proposals`, with the exact path, no query,
-    and the portal's own origin, within 15 seconds.
+    and the portal's own origin, within 15 seconds, whose JSON body carries exactly the approved
+    type, client id, risk location ids, assignee and dates and no other field, sent as
+    `application/json`. A request that differs is cancelled before it leaves and uses up the
+    permit; the fields that differed (names only) are recorded.
   - **Everything else stays blocked,** including a second creation and every change to an existing
     case. Blocked requests are counted on the result.
 - **Submit block:** form submission is blocked except on the sign-in page and the one submit a
@@ -322,8 +387,8 @@ The contract check needs Node 23.6 or later. It may print a harmless module-type
   - The window uses the app's locked-down web preferences, with no preload, no Node.js and a
     sandbox.
   - The agent runs in an isolated world.
-  - The integration's four IPC channels (`portal-demo:start|report|cancel|confirm`) answer only
-    the app's own trusted window and validate every payload.
+  - The integration's six IPC channels (`portal-demo:start|report|cancel|confirm|reconcile|resolve`)
+    answer only the app's own trusted window and validate every payload.
   - The app's `window.fqf` bridge, CSP, logger and comparison engine are unchanged.
 
 ## Files
@@ -332,23 +397,28 @@ The contract check needs Node 23.6 or later. It may print a harmless module-type
 src/demo/portal-automation/
   README.md            this file
   shared/              flag; environment profiles and mode decisions; portal API contract;
-                       synthetic data; field map; planning and checking (pure); IPC names
+                       synthetic data; field map; planning and checking (pure); IPC names;
+                       the approved request and its checks; the attempt state machine
   page/page-agent.ts   the in-page agent
   main/                portal window, network guard (with the creation permit), run
-                       orchestration, IPC registration
+                       orchestration, IPC registration, attempt store, audit log, atomic files
   preload/expose.ts    window.fqfPortalDemo, only with the flag
   renderer/            the screen and its styles
   tools/               local-portal.mjs, e2e/, check-live-contract.mjs
 test/portal-automation-demo/   tests, and live-openapi-proposals.json (a trimmed copy of the
-                               live portal's public API description, 2026-10-29)
+                               live portal's public API description, 2026-10-29; client and
+                               location reads added 2026-10-30)
 ```
 
 ## How to remove it
 
 1. Delete `src/demo/portal-automation/` (including `tools/`) and `test/portal-automation-demo/`.
-2. In `src/main/index.ts`, remove the `registerPortalDemo` import and its `if (!smoke) { … }`
-   block (marked "DEMO ONLY").
-3. In `src/preload/index.ts`, remove the `exposePortalDemo` import and call (marked "DEMO ONLY").
+2. In `src/main/index.ts`, remove the `if (import.meta.env.DEV && !app.isPackaged) { … }` block
+   that imports `registerPortalDemo` (marked "DEMO ONLY").
+3. In `src/preload/index.ts`, remove the `exposePortalDemo` import and its development-only call
+   (marked "DEMO ONLY"). Delete `test/production-isolation.test.ts`; keep `scripts/demo-markers.mjs`
+   and the demo checks in `scripts/smoke.mjs`, `scripts/check-package.mjs` and `src/main/smoke.ts`,
+   which still pass and stop the demo from coming back unnoticed.
 4. In `src/renderer/src/App.tsx`, remove the `PortalDemoGate` constant (marked "DEMO ONLY"). Then
    replace `homeScreen` with `home`, and delete the `homeScreen` constant.
 5. In `tsconfig.node.json`, remove `"src/demo/portal-automation/**/*.ts"`. In `tsconfig.web.json`,

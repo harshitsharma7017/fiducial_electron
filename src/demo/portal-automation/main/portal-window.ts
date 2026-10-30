@@ -2,12 +2,15 @@
 // The window the portal opens in: the app's locked-down web preferences, no preload (the portal
 // gets no bridge), a session of its own kept in memory only (sign-in is forgotten on quit), no
 // permissions or downloads, navigation limited to the portal's origin and writes blocked by the
-// network guard. The agent runs in an isolated world, apart from the portal's own scripts.
+// network guard (which lets one approved creation request through only in the full workflow, and
+// only if it matches the review). The agent runs in an isolated world, apart from the portal's own
+// scripts.
 import { BrowserWindow, session } from 'electron';
 import type { Logger } from '../../../main/logging/logger';
 import { allowOrigins, hardenSession } from '../../../main/security/navigation-policy';
 import { LOCKED_DOWN } from '../../../main/security/web-preferences';
 import { portalPageAgent } from '../page/page-agent';
+import type { CreationPayload } from '../shared/creation-payload';
 import { describeEnvironment, type WorkflowMode } from '../shared/environment';
 import type { AgentCommand, AgentResult } from '../shared/protocol';
 import { installNetworkGuard, type NetworkGuard } from './network-guard';
@@ -76,7 +79,8 @@ export function openPortalPage(
     // The creation permit and the environment check are offered to the full workflow only.
     ...(mode === 'full'
       ? {
-          armCreation: () => installed.armCreation(),
+          armCreation: (approved: CreationPayload) => installed.armCreation(approved),
+          revokeCreation: () => installed.revokeCreation(),
           creationOutcome: () => installed.creationOutcome(),
           sessionCookieNames: async () =>
             (await ses.cookies.get({ url: portalOrigin })).map((cookie) => cookie.name),

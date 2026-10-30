@@ -4,8 +4,8 @@
 //
 // Fill-only is the default everywhere. The full workflow (which creates a proposal) needs its own
 // setting AND a portal whose profile allows creation. Creation on the live portal is a reviewed
-// code change to LIVE_PROPOSAL_CREATION, never an environment variable. It is set to
-// 'verification': one confirmed proposal per app run, with test data only.
+// code change to LIVE_PROPOSAL_CREATION, never an environment variable. It is 'off': no setting
+// creates a proposal on the live portal. The whole demo exists only in development builds.
 
 /** Turns on the full workflow (proposal creation), where the portal's profile allows it. */
 export const FULL_WORKFLOW_VARIABLE = 'PORTAL_AUTOMATION_FULL_WORKFLOW';
@@ -30,10 +30,10 @@ export type CreationPolicy = 'off' | 'verification' | 'on';
  * Proposal creation on the live portal. A reviewed release setting, changed only in code:
  * 'verification' for the approved live verification run, 'off' otherwise. 'on' is not offered
  * for the live portal until that verification has passed and been reviewed.
- * Set to 'verification' on 2026-10-29 at the team's request, to create proposals on the live
- * portal with the approved test client.
+ * 'verification' from 2026-10-29 at the team's request; back to 'off' on 2026-10-30 (release-risk
+ * fix, docs/ACTUAL_PRODUCT_STATUS_AUDIT.md §9).
  */
-export const LIVE_PROPOSAL_CREATION: Exclude<CreationPolicy, 'on'> = 'verification';
+export const LIVE_PROPOSAL_CREATION: Exclude<CreationPolicy, 'on'> = 'off';
 
 export type EnvironmentKind = 'production' | 'test' | 'unrecognised';
 export type WorkflowMode = 'fill-only' | 'full';

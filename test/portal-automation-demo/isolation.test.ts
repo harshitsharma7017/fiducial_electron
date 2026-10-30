@@ -19,7 +19,12 @@ const fake = vi.hoisted(() => {
     loadURL: vi.fn(() => Promise.resolve()),
   };
   const ses = {
-    webRequest: { onBeforeRequest: vi.fn(), onCompleted: vi.fn(), onErrorOccurred: vi.fn() },
+    webRequest: {
+      onBeforeRequest: vi.fn(),
+      onBeforeSendHeaders: vi.fn(),
+      onCompleted: vi.fn(),
+      onErrorOccurred: vi.fn(),
+    },
     cookies: { get: vi.fn(() => Promise.resolve([{ name: 'erp_session', value: 'secret' }])) },
   };
   return {

@@ -13,6 +13,7 @@
     "src/renderer/src/dev/workflow/*.ts",
     "src/demo/portal-automation/**/*.ts",
     "test/**/*.ts",
+    "scripts/**/*.d.mts",
     "electron.vite.config.mts",
     "vitest.config.mts"
   ]

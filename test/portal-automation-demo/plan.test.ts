@@ -8,7 +8,7 @@ import {
   planFill,
   verifyStep,
 } from '../../src/demo/portal-automation/shared/plan';
-import { control, formSnapshot } from './fixtures';
+import { control, formSnapshot, MANAGER_ID } from './fixtures';
 
 const data = { ...SYNTHETIC_DEMO_PROPOSAL, assignedTo: 'Demo Manager' };
 const skippedKeys = (plan: ReturnType<typeof planFill>) => plan.skipped.map((item) => item.key);
@@ -190,7 +190,7 @@ describe('verifyStep', () => {
       if (item.name === 'policyStart') return { ...item, value: '2026-12-01' };
       if (item.name === 'policyEnd') return { ...item, value: '2027-11-30' };
       if (item.name === 'dueDate') return { ...item, value: '2026-11-20' };
-      if (item.name === 'ownerId') return { ...item, value: 'u2' };
+      if (item.name === 'ownerId') return { ...item, value: MANAGER_ID };
       return item;
     });
     expect(plan.steps.map((step) => verifyStep(step, after))).toEqual([

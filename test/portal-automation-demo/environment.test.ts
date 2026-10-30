@@ -2,6 +2,7 @@
 // and the network guard's single-use creation permit.
 import { describe, expect, it } from 'vitest';
 import { PERMIT_TTL_MS, RequestPolicy } from '../../src/demo/portal-automation/main/network-guard';
+import type { CreationPayload } from '../../src/demo/portal-automation/shared/creation-payload';
 import {
   decideMode,
   describeEnvironment,
@@ -31,11 +32,25 @@ describe('the workflow mode', () => {
     expect(decideMode(FULL, 'http://127.0.0.1:3100').mode).toBe('full');
   });
 
-  it('creates on the live portal only in live verification, and only with the flag', () => {
-    expect(LIVE_PROPOSAL_CREATION).toBe('verification');
-    expect(decideMode({}, portalOrigin({})).mode).toBe('fill-only');
-    // Without a URL the demo opens the live portal: the full workflow is allowed there.
-    expect(decideMode(FULL, portalOrigin(FULL))).toMatchObject({
+  it('ships with live creation off: no environment variable creates on the live portal', () => {
+    expect(LIVE_PROPOSAL_CREATION).toBe('off');
+    // Every demo variable set, with and without the live URL named: fill-only on the live portal.
+    for (const env of [
+      { ...FULL, ENABLE_PORTAL_AUTOMATION_DEMO: '1' },
+      { ...FULL, ENABLE_PORTAL_AUTOMATION_DEMO: 'true', PORTAL_AUTOMATION_DEMO_URL: LIVE },
+      { ...FULL, LIVE_PROPOSAL_CREATION: 'verification', PORTAL_AUTOMATION_DEMO_URL: LIVE },
+    ]) {
+      const decision = decideMode(env, portalOrigin(env));
+      expect(decision).toMatchObject({
+        mode: 'fill-only',
+        environment: { kind: 'production', creation: 'off' },
+      });
+    }
+  });
+
+  it('in the reviewed live verification (a code change), creates only with the flag', () => {
+    expect(decideMode({}, portalOrigin({}), 'verification').mode).toBe('fill-only');
+    expect(decideMode(FULL, portalOrigin(FULL), 'verification')).toMatchObject({
       mode: 'full',
       environment: { kind: 'production', creation: 'verification' },
     });
@@ -134,6 +149,16 @@ describe('the proposal-creation request', () => {
 
 describe('the creation permit', () => {
   const create = `${LOCAL}/api/proxy/proposals`;
+  const approved: CreationPayload = {
+    type: 'NEW',
+    clientId: 'c'.repeat(24),
+    locationIds: ['1'.repeat(24)],
+    ownerId: 'e'.repeat(24),
+    policyStart: '2026-12-01',
+    policyEnd: '2027-11-30',
+    dueDate: '2026-11-20',
+  };
+  const body = [{ bytes: Buffer.from(JSON.stringify(approved)) }];
 
   function policy() {
     let clock = 0;
@@ -150,17 +175,17 @@ describe('the creation permit', () => {
 
   it('lets exactly one creation request through once armed, then blocks a duplicate', () => {
     const { guard } = policy();
-    expect(guard.armCreation()).toBe(true);
-    expect(guard.evaluate('POST', create)).toEqual({ allow: true, creation: true });
-    expect(guard.evaluate('POST', create)).toEqual({ allow: false, creation: false });
-    expect(guard.armCreation()).toBe(false); // not again while the first is pending
+    expect(guard.armCreation(approved)).toBe(true);
+    expect(guard.evaluate('POST', create, body)).toEqual({ allow: true, creation: true });
+    expect(guard.evaluate('POST', create, body)).toEqual({ allow: false, creation: false });
+    expect(guard.armCreation(approved)).toBe(false); // not again while the first is pending
     guard.completed(201);
     expect(guard.creationOutcome()).toEqual({ state: 'completed', status: 201 });
   });
 
   it('keeps every unrelated write blocked while armed, without using the permit', () => {
     const { guard } = policy();
-    guard.armCreation();
+    guard.armCreation(approved);
     for (const [method, url] of [
       ['POST', `${LOCAL}/api/proxy/clients`],
       ['PUT', `${LOCAL}/api/proxy/proposals/abc/data-sheet`],
@@ -173,12 +198,12 @@ describe('the creation permit', () => {
     expect(guard.creationOutcome()).toEqual({ state: 'armed' });
     // Reads and sign-in still pass, and the permit is still there for the real request.
     expect(guard.evaluate('GET', `${LOCAL}/api/proxy/auth/me`).allow).toBe(true);
-    expect(guard.evaluate('POST', create)).toEqual({ allow: true, creation: true });
+    expect(guard.evaluate('POST', create, body)).toEqual({ allow: true, creation: true });
   });
 
   it('expires unused, after which creation is blocked again', () => {
     const { guard, advance } = policy();
-    guard.armCreation();
+    guard.armCreation(approved);
     advance(PERMIT_TTL_MS + 1);
     expect(guard.creationOutcome()).toEqual({ state: 'expired' });
     expect(guard.evaluate('POST', create).allow).toBe(false);
@@ -186,8 +211,8 @@ describe('the creation permit', () => {
 
   it('records a network failure of the permitted request', () => {
     const { guard } = policy();
-    guard.armCreation();
-    guard.evaluate('POST', create);
+    guard.armCreation(approved);
+    guard.evaluate('POST', create, body);
     guard.failed();
     expect(guard.creationOutcome()).toEqual({ state: 'network-error' });
   });

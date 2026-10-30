@@ -1,11 +1,13 @@
 // Packaged-content and fuse check (AR-20, DM-04). Fails if app.asar contains anything outside the
-// allowlist (source, tests, configs, dev-only modules) or if a required fuse is not set.
+// allowlist (source, tests, configs, dev-only modules), if any built file contains code of the
+// temporary portal demo (scripts/demo-markers.mjs), or if a required fuse is not set.
 // Usage: node scripts/check-package.mjs mac|win
 import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { listPackage } from '@electron/asar';
+import { extractFile, listPackage, statFile } from '@electron/asar';
 import { FuseState, FuseV1Options, getCurrentFuseWire } from '@electron/fuses';
+import { demoMarkersIn } from './demo-markers.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const target = process.argv[2];
@@ -39,8 +41,14 @@ function locate() {
   process.exit(64);
 }
 
-// Runtime production dependencies only (package.json "dependencies").
-const ALLOWED = [/^\/package\.json$/, /^\/out(\/|$)/, /^\/node_modules(\/zod(\/.*)?)?$/];
+// The app's own build (out/main, out/preload and out/renderer, never other folders in out/) and
+// runtime production dependencies only (package.json "dependencies").
+const ALLOWED = [
+  /^\/package\.json$/,
+  /^\/out$/,
+  /^\/out\/(main|preload|renderer)(\/|$)/,
+  /^\/node_modules(\/zod(\/.*)?)?$/,
+];
 const FORBIDDEN_IN_OUT = /\.(map|ts|tsx)$/;
 const REQUIRED_FUSES = {
   [FuseV1Options.RunAsNode]: false,
@@ -62,11 +70,18 @@ for (const { label, asar, binary } of locate()) {
   const unexpected = entries.filter(
     (e) => !ALLOWED.some((re) => re.test(e)) || (e.startsWith('/out/') && FORBIDDEN_IN_OUT.test(e)),
   );
+  const demo = entries
+    .filter((e) => e.startsWith('/out/') && 'size' in statFile(asar, e.slice(1)))
+    .map((e) => ({
+      file: e,
+      markers: demoMarkersIn(extractFile(asar, e.slice(1)).toString('latin1')),
+    }))
+    .filter((found) => found.markers.length > 0);
   const wire = await getCurrentFuseWire(binary);
   const fuseProblems = Object.entries(REQUIRED_FUSES)
     .filter(([option, enabled]) => (wire[option] === FuseState.ENABLE) !== enabled)
     .map(([option]) => FuseV1Options[option]);
-  console.log(JSON.stringify({ label, entries: entries.length, unexpected, fuseProblems }));
-  if (unexpected.length > 0 || fuseProblems.length > 0) failed = true;
+  console.log(JSON.stringify({ label, entries: entries.length, unexpected, demo, fuseProblems }));
+  if (unexpected.length > 0 || demo.length > 0 || fuseProblems.length > 0) failed = true;
 }
 process.exit(failed ? 1 : 0);

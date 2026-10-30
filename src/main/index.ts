@@ -19,7 +19,6 @@ import {
 } from './security/launch-guard';
 import { hardenSession, installNavigationPolicy } from './security/navigation-policy';
 import { APP_ENTRY_URL, APP_ORIGIN, devServerOrigin } from './security/origins';
-import { registerPortalDemo } from '../demo/portal-automation/main/register';
 import { runSmokeChecks } from './smoke';
 import { createMainWindow } from './windows/main-window';
 
@@ -88,10 +87,22 @@ function start(): void {
     registerIpc(
       createDispatcher(createHandlers(), { isTrustedSender: senderPolicy.isTrusted, logger }),
     );
-    // DEMO ONLY — temporary portal automation demo; does nothing unless
-    // ENABLE_PORTAL_AUTOMATION_DEMO is set (src/demo/portal-automation/README.md).
-    if (!smoke) {
-      registerPortalDemo({ env: process.env, isTrustedSender: senderPolicy.isTrusted, logger });
+    // DEMO ONLY — temporary portal automation demo (src/demo/portal-automation/README.md), in
+    // development builds only. `import.meta.env.DEV` is `false` in production builds, so this
+    // branch and the demo's code are left out of them; a packaged app never loads it either. In
+    // development it still does nothing unless ENABLE_PORTAL_AUTOMATION_DEMO is set.
+    if (import.meta.env.DEV && !app.isPackaged) {
+      try {
+        const { registerPortalDemo } = await import('../demo/portal-automation/main/register');
+        registerPortalDemo({
+          env: process.env,
+          isTrustedSender: senderPolicy.isTrusted,
+          logger,
+          dataDir: join(app.getPath('userData'), 'portal-automation'),
+        });
+      } catch {
+        // Development only: the app runs without the demo.
+      }
     }
     const win = createMainWindow({
       preloadPath: join(__dirname, '../preload/index.js'),

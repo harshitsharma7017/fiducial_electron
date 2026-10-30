@@ -1,11 +1,13 @@
 // Smoke harness (M2): launches the built app with --smoke-test and checks the in-app results,
-// then verifies from outside that the launch guard refuses debugging switches.
+// then verifies from outside that the launch guard refuses debugging switches. It also checks that
+// the build holds no portal-demo code and that the demo's variables activate nothing in it.
 // Usage: node scripts/smoke.mjs [--packaged]   (run `npm run build` or `npm run build:mac` first)
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { demoMarkersIn } from './demo-markers.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packaged = process.argv.includes('--packaged');
@@ -54,9 +56,30 @@ function run(args, extraEnv = {}) {
 }
 
 const failures = [];
-const report = { packaged, smoke: null, smokeExit: null, guard: [] };
+const report = { packaged, demoInBuild: null, smoke: null, smokeExit: null, guard: [] };
 
-const smoke = await run(['--smoke-test']);
+// The production build (out/main, out/preload, out/renderer: what the app runs and what is
+// packaged) must not contain the temporary portal demo. app.asar is checked by check-package.mjs.
+if (!packaged) {
+  const files = ['main', 'preload', 'renderer']
+    .flatMap((dir) => readdirSync(join(root, 'out', dir), { recursive: true, withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath, entry.name));
+  report.demoInBuild = files
+    .map((file) => ({
+      file: file.slice(root.length + 1),
+      markers: demoMarkersIn(readFileSync(file, 'latin1')),
+    }))
+    .filter((found) => found.markers.length > 0);
+  if (report.demoInBuild.length > 0) failures.push('demo-in-build');
+}
+
+// With the demo's variables set, the production app must still have no demo IPC handler and no
+// demo bridge (checked in the app: demo.no-ipc-handlers, demo.no-bridge).
+const smoke = await run(['--smoke-test'], {
+  ENABLE_PORTAL_AUTOMATION_DEMO: '1',
+  PORTAL_AUTOMATION_FULL_WORKFLOW: '1',
+});
 const line = smoke.stdout.split('\n').find((l) => l.startsWith('FQF_SMOKE_RESULT '));
 report.smoke = line ? JSON.parse(line.slice('FQF_SMOKE_RESULT '.length)) : null;
 // How the app process ended; `timedOut` means the harness killed it after 60 s.

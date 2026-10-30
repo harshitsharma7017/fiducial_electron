@@ -9,7 +9,8 @@
 // It presses a submit button only for the full workflow's `create` command, which the main
 // process sends once, after the user confirmed, where creation is allowed: it then lets
 // exactly one submit through and presses the one button whose text is exactly the reviewed action.
-// Its reads of the portal's API are same-origin GET requests (who is signed in, a proposal).
+// Its reads of the portal's API are same-origin GET requests (who is signed in, a proposal, the
+// clients named exactly as the insured, a client's risk locations and proposals).
 import type { AgentCommand, AgentResult } from '../shared/protocol';
 
 export async function portalPageAgent(command: AgentCommand): Promise<AgentResult> {
@@ -60,6 +61,17 @@ export async function portalPageAgent(command: AgentCommand): Promise<AgentResul
     return name ? normalise(name.textContent) : null;
   };
 
+  // The chosen client's card: its name, then "<GSTIN or No GSTIN> · city, state · Occupancy …".
+  const chosenClientGstin = (): string | null | undefined => {
+    const change = [...document.querySelectorAll('button')].find(
+      (button) => normalise(button.textContent) === 'Change client',
+    );
+    const detail = change?.parentElement?.querySelectorAll('span')[1];
+    const first = normalise(detail?.textContent).split('·')[0]?.trim() ?? '';
+    if (first === 'No GSTIN') return null;
+    return /^[0-9A-Z]{15}$/.test(first) ? first : undefined;
+  };
+
   const clientButtons = (): { name: string; button: HTMLButtonElement }[] =>
     [...document.querySelectorAll('ul[aria-label="Clients"] button')].flatMap((button) => {
       const name = button.querySelector('span');
@@ -92,6 +104,7 @@ export async function portalPageAgent(command: AgentCommand): Promise<AgentResul
       .map((button) => normalise(button.textContent || (button as HTMLInputElement).value))
       .filter((text) => text !== ''),
     chosenClient: chosenClient(),
+    chosenClientGstin: chosenClientGstin(),
     clientChoices: clientButtons().map((choice) => choice.name),
     alerts: [...document.querySelectorAll('[role="alert"]')]
       .map((element) => normalise(element.textContent))
@@ -129,13 +142,22 @@ export async function portalPageAgent(command: AgentCommand): Promise<AgentResul
     value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   const readback = (value: unknown) => {
     const proposal = record(value);
+    const client = record(proposal['client']);
+    const owner = record(proposal['owner']);
+    const locations = proposal['locations'];
     return {
       id: text(proposal['id']),
       reference: text(proposal['reference']),
       type: text(proposal['type']),
       stage: text(proposal['stage']),
-      clientName: text(record(proposal['client'])['name']),
-      ownerName: text(record(proposal['owner'])['name']),
+      clientName: text(client['name']),
+      clientId: text(client['id']),
+      clientGstin: typeof client['gstin'] === 'string' ? client['gstin'] : null,
+      ownerName: text(owner['name']),
+      ownerId: text(owner['id']),
+      locationIds: Array.isArray(locations)
+        ? locations.map((item) => text(record(item)['locationId']))
+        : null,
       policyStart: typeof proposal['policyStart'] === 'string' ? proposal['policyStart'] : null,
       policyEnd: typeof proposal['policyEnd'] === 'string' ? proposal['policyEnd'] : null,
       dueDate: text(proposal['dueDate']),
@@ -302,6 +324,7 @@ export async function portalPageAgent(command: AgentCommand): Promise<AgentResul
         session: {
           signedIn: true,
           name: text(user['name']) || null,
+          userId: text(user['id']) || null,
           // Creating needs property.create; reading the new proposal back needs property.view.
           canCreateProperty:
             permissions.includes('property.create') && permissions.includes('property.view'),
@@ -337,6 +360,75 @@ export async function portalPageAgent(command: AgentCommand): Promise<AgentResul
       if (status !== 200) return { ok: false, reason: 'failed' };
       const items = record(body)['items'];
       return { ok: true, proposals: Array.isArray(items) ? items.map(readback) : [] };
+    }
+
+    // The three reads below page through the portal's list with its cursor, at most `pages` pages
+    // of 100; a list that does not end within them is reported as failed, never as complete.
+    case 'find-clients': {
+      const wanted = normalise(command.name);
+      if (wanted === '') return { ok: false, reason: 'no-match' };
+      const clients: { id: string; name: string; gstin: string | null }[] = [];
+      let cursor = '';
+      for (let page = 0; page < 10; page += 1) {
+        const query = new URLSearchParams({ q: wanted.slice(0, 100), limit: '100' });
+        if (cursor) query.set('cursor', cursor);
+        const { status, body } = await getJson(`/api/proxy/clients?${query.toString()}`);
+        if (status !== 200) return { ok: false, reason: 'failed' };
+        const items = record(body)['items'];
+        for (const item of Array.isArray(items) ? items : []) {
+          const client = record(item);
+          if (normalise(text(client['name'])) !== wanted) continue;
+          clients.push({
+            id: text(client['id']),
+            name: normalise(text(client['name'])),
+            gstin: typeof client['gstin'] === 'string' ? client['gstin'] : null,
+          });
+        }
+        cursor = text(record(body)['nextCursor']);
+        if (!cursor) return { ok: true, clients };
+      }
+      return { ok: false, reason: 'failed' };
+    }
+
+    case 'client-locations': {
+      if (!/^[0-9a-f]{24}$/i.test(command.clientId)) return { ok: false, reason: 'not-found' };
+      const locations: { id: string; name: string }[] = [];
+      let cursor = '';
+      for (let page = 0; page < 20; page += 1) {
+        const query = new URLSearchParams({ limit: '100' });
+        if (cursor) query.set('cursor', cursor);
+        const { status, body } = await getJson(
+          `/api/proxy/clients/${command.clientId}/locations?${query.toString()}`,
+        );
+        if (status !== 200) return { ok: false, reason: 'failed' };
+        const items = record(body)['items'];
+        for (const item of Array.isArray(items) ? items : []) {
+          locations.push({
+            id: text(record(item)['id']),
+            name: normalise(text(record(item)['name'])),
+          });
+        }
+        cursor = text(record(body)['nextCursor']);
+        if (!cursor) return { ok: true, locations };
+      }
+      return { ok: false, reason: 'failed' };
+    }
+
+    case 'client-proposals': {
+      if (!/^[0-9a-f]{24}$/i.test(command.clientId)) return { ok: false, reason: 'not-found' };
+      const proposals: ReturnType<typeof readback>[] = [];
+      let cursor = '';
+      for (let page = 0; page < 5; page += 1) {
+        const query = new URLSearchParams({ clientId: command.clientId, limit: '100' });
+        if (cursor) query.set('cursor', cursor);
+        const { status, body } = await getJson(`/api/proxy/proposals?${query.toString()}`);
+        if (status !== 200) return { ok: false, reason: 'failed' };
+        const items = record(body)['items'];
+        proposals.push(...(Array.isArray(items) ? items.map(readback) : []));
+        cursor = text(record(body)['nextCursor']);
+        if (!cursor) return { ok: true, proposals };
+      }
+      return { ok: false, reason: 'failed' };
     }
   }
 }

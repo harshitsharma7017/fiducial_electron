@@ -2,10 +2,12 @@
 // End-to-end check against the LOCAL portal copy (in-memory database, synthetic data), started by
 // run.mjs. Drives the demo's real main-process code in Electron. It signs in through the portal's
 // own sign-in page with the local synthetic accounts, and stands in for the user's confirmation
-// click by calling runner.confirm(token), which is what the demo screen sends over IPC. Three
-// scenarios: the full workflow, fill-only, and a user who may not create. Never prints passwords.
+// click by calling runner.confirm(token), which is what the demo screen sends over IPC. Five
+// scenarios: the full workflow (with the attempt store and audit log on disk), fill-only, a user
+// who may not create, a second run that must warn of the duplicate, and requests the network guard
+// must stop because they differ from the approved one. Never prints passwords.
 const { app, BrowserWindow, session } = require('electron');
-const { readFileSync } = require('node:fs');
+const { mkdtempSync, readFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const demo = require(process.env.FQF_E2E_BUNDLE);
@@ -14,6 +16,9 @@ const local = JSON.parse(
   readFileSync(join(tmpdir(), 'fqf-portal-demo', 'local-portal.json'), 'utf8'),
 );
 const ORIGIN = local.web;
+// The creation-attempt store and audit log of this run, in a throwaway folder.
+const DATA_DIR = join(mkdtempSync(join(tmpdir(), 'fqf-e2e-records-')), 'portal-automation');
+const records = demo.openRecords(DATA_DIR);
 const logger = { log() {}, info() {}, warn() {}, error() {} };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const results = [];
@@ -105,6 +110,8 @@ async function fullWorkflow() {
   const runner = new demo.PortalDemoRunner({
     portalOrigin: ORIGIN,
     mode: decision,
+    store: records.store,
+    audit: records.audit,
     openPage: () => demo.openPortalPage(ORIGIN, logger, decision.mode),
   });
   const before = (await proposalsInPortal()).length;
@@ -189,6 +196,27 @@ async function fullWorkflow() {
   console.log(`   final: ${final.state} — ${final.message}`);
   console.log('   progress:', final.progress.map((s) => `${s.label}:${s.status}`).join(', '));
   check('the proposal is created and verified', final.state === 'created');
+  check(
+    'every field is verified by id (client, type, dates, assignee, risk locations)',
+    (final.verification ?? []).length === 7 &&
+      final.verification.every((item) => item.status === 'verified'),
+    (final.verification ?? []).map((item) => `${item.field}:${item.status}`).join(', '),
+  );
+  const stored = records.store.list();
+  check(
+    'the attempt is recorded as CREATED with the proposal id',
+    stored.length === 1 &&
+      stored[0].state === 'CREATED' &&
+      stored[0].result.proposalId === final.proposal?.id,
+    stored.map((attempt) => attempt.state).join(','),
+  );
+  const events = demo.readAuditLog(join(DATA_DIR, 'audit.jsonl')).map((record) => record.event);
+  check(
+    'the audit log has each step',
+    events.join(',') ===
+      'attempt.created,review.completed,approval.granted,submission.started,submission.accepted,verification.completed',
+    events.join(','),
+  );
 
   // Independent check through the API, outside Electron.
   const after = await proposalsInPortal();
@@ -273,12 +301,94 @@ async function noPermission(count) {
   check('nothing is created', (await proposalsInPortal()).length === count);
 }
 
+async function duplicateWarning(count) {
+  console.log(
+    '\n== Scenario 4: a second run for the same client and period warns of the duplicate ==',
+  );
+  await session.fromPartition('portal-automation-demo').clearStorageData({ storages: ['cookies'] });
+  const env = {
+    ENABLE_PORTAL_AUTOMATION_DEMO: '1',
+    PORTAL_AUTOMATION_FULL_WORKFLOW: '1',
+    PORTAL_AUTOMATION_DEMO_URL: ORIGIN,
+  };
+  const decision = demo.decideMode(env, demo.portalOrigin(env));
+  const runner = new demo.PortalDemoRunner({
+    portalOrigin: ORIGIN,
+    mode: decision,
+    store: records.store,
+    audit: records.audit,
+    openPage: () => demo.openPortalPage(ORIGIN, logger, decision.mode),
+  });
+  void runner.start(demo.SYNTHETIC_DEMO_PROPOSAL);
+  await signIn(local.admin);
+  const report = await settle(runner, ['awaiting-confirmation', 'failed', 'done'], 60_000);
+  const duplicates = report.review?.duplicates ?? [];
+  check(
+    'the review lists the proposal created in scenario 1 as a possible duplicate',
+    report.state === 'awaiting-confirmation' && duplicates.length === 1,
+    duplicates.map((item) => `${item.reference} (${item.source})`).join(', ') || report.message,
+  );
+  check(
+    'confirming without acknowledging the duplicate is refused',
+    report.review ? runner.confirm(report.review.token, false).ok === false : false,
+  );
+  runner.cancel();
+  check('nothing more is created', (await proposalsInPortal()).length === count);
+}
+
+async function mismatchedRequests(count) {
+  console.log(
+    '\n== Scenario 5: the network guard stops requests that differ from the approved one ==',
+  );
+  // The same window and guard as the runs above; the user is still signed in from scenario 4.
+  const page = demo.openPortalPage(ORIGIN, logger, 'full');
+  const win = portalWindow();
+  const stored = records.store.list().find((attempt) => attempt.state === 'CREATED');
+  const approved = { ...stored.payload, policyStart: '2030-01-01', policyEnd: '2030-12-31' };
+  const send = (body, contentType = 'application/json') =>
+    win.webContents.executeJavaScript(
+      `fetch('/api/proxy/proposals', { method: 'POST', headers: { 'Content-Type': ${JSON.stringify(contentType)} }, body: ${JSON.stringify(body)} })
+         .then(r => 'sent ' + r.status, () => 'blocked')`,
+    );
+  const cases = [
+    [
+      'another client id',
+      JSON.stringify({ ...approved, clientId: 'f'.repeat(24) }),
+      'application/json',
+      'body-mismatch',
+    ],
+    ['a text/plain body', JSON.stringify(approved), 'text/plain', 'content-type'],
+    [
+      'an extra field',
+      JSON.stringify({ ...approved, existingPolicy: null }),
+      'application/json',
+      'body-mismatch',
+    ],
+  ];
+  for (const [name, body, contentType, reason] of cases) {
+    check(
+      `armed for the approved request: ${name} is stopped`,
+      page.armCreation(approved) === true,
+    );
+    const result = await send(body, contentType);
+    const outcome = page.creationOutcome();
+    check(
+      `  …blocked before it left (${reason})`,
+      result === 'blocked' && outcome.state === 'rejected' && outcome.reason === reason,
+      `${result}; ${JSON.stringify(outcome)}`,
+    );
+  }
+  check('nothing was created by those requests', (await proposalsInPortal()).length === count);
+}
+
 app.whenReady().then(async () => {
   try {
     const count = await fullWorkflow();
     if (count !== null) {
       await fillOnly(count);
       await noPermission(count);
+      await duplicateWarning(count);
+      await mismatchedRequests(count);
     }
   } catch (error) {
     check('harness ran to completion', false, String(error.message));

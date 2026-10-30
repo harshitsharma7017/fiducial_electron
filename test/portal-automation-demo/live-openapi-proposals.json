@@ -4,7 +4,7 @@
     "title": "Fiducial API",
     "version": "0.1.0",
     "description": "Foundation API: authentication, users, IIB occupancy and pincode masters, clients with their risk locations, the insurer master, proposals from Data Sheet to placement and the audit log. Money and rates are decimal strings; rates are per mille. Each route needs one permission; src/shared/permissions.ts maps roles to permissions.",
-    "x-source": "Trimmed from https://fiducial.spirezen.tech/api/openapi.json (public) on 2026-10-29: the four operations the integration relies on; schemas not read by the integration are emptied."
+    "x-source": "Trimmed from https://fiducial.spirezen.tech/api/openapi.json (public) on 2026-10-29, extended on 2026-10-30: the operations the integration relies on; schemas not read by the integration are emptied."
   },
   "paths": {
     "/api/v1/proposals": {
@@ -134,14 +134,38 @@
                             },
                             "required": ["id", "name", "gstin", "city", "state"]
                           },
-                          "owner": {},
+                          "owner": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-fA-F0-9]{24}$"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["id", "name"]
+                          },
                           "dueDate": {},
                           "policyStart": {},
                           "policyEnd": {},
                           "existingPolicy": {},
                           "existingPolicyLookup": {},
                           "existing": {},
-                          "locations": {},
+                          "locations": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "locationId": {
+                                  "type": "string",
+                                  "pattern": "^[a-fA-F0-9]{24}$"
+                                }
+                              },
+                              "required": ["locationId"]
+                            }
+                          },
                           "fire": {},
                           "product": {},
                           "addonLists": {},
@@ -300,14 +324,38 @@
                       },
                       "required": ["id", "name", "gstin", "city", "state"]
                     },
-                    "owner": {},
+                    "owner": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-fA-F0-9]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["id", "name"]
+                    },
                     "dueDate": {},
                     "policyStart": {},
                     "policyEnd": {},
                     "existingPolicy": {},
                     "existingPolicyLookup": {},
                     "existing": {},
-                    "locations": {},
+                    "locations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "locationId": {
+                            "type": "string",
+                            "pattern": "^[a-fA-F0-9]{24}$"
+                          }
+                        },
+                        "required": ["locationId"]
+                      }
+                    },
                     "fire": {},
                     "product": {},
                     "addonLists": {},
@@ -421,14 +469,38 @@
                       },
                       "required": ["id", "name", "gstin", "city", "state"]
                     },
-                    "owner": {},
+                    "owner": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-fA-F0-9]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["id", "name"]
+                    },
                     "dueDate": {},
                     "policyStart": {},
                     "policyEnd": {},
                     "existingPolicy": {},
                     "existingPolicyLookup": {},
                     "existing": {},
-                    "locations": {},
+                    "locations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "locationId": {
+                            "type": "string",
+                            "pattern": "^[a-fA-F0-9]{24}$"
+                          }
+                        },
+                        "required": ["locationId"]
+                      }
+                    },
                     "fire": {},
                     "product": {},
                     "addonLists": {},
@@ -494,7 +566,10 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "id": {},
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-fA-F0-9]{24}$"
+                    },
                     "email": {},
                     "name": {},
                     "roles": {},
@@ -506,6 +581,180 @@
                     "updatedAt": {},
                     "permissions": {}
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/clients": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-fA-F0-9]{24}$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "gstin": {
+                            "type": ["string", "null"]
+                          },
+                          "address": {},
+                          "contacts": {},
+                          "natureOfBusiness": {},
+                          "occupancy": {},
+                          "locationCount": {},
+                          "createdAt": {},
+                          "updatedAt": {}
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "gstin",
+                          "address",
+                          "contacts",
+                          "natureOfBusiness",
+                          "occupancy",
+                          "locationCount",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": ["string", "null"]
+                    }
+                  },
+                  "required": ["items", "nextCursor"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/clients/{id}/locations": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-fA-F0-9]{24}$"
+                          },
+                          "clientId": {},
+                          "name": {
+                            "type": "string"
+                          },
+                          "address": {},
+                          "district": {},
+                          "eqZone": {},
+                          "occupancy": {},
+                          "createdAt": {},
+                          "updatedAt": {}
+                        },
+                        "required": [
+                          "id",
+                          "clientId",
+                          "name",
+                          "address",
+                          "district",
+                          "eqZone",
+                          "occupancy",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": ["string", "null"]
+                    }
+                  },
+                  "required": ["items", "nextCursor"]
                 }
               }
             }

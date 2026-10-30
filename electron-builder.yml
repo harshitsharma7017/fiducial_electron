@@ -5,9 +5,13 @@ productName: Fiducial Quote Fetcher
 directories:
   output: release
   buildResources: build-resources
-# Only the compiled app and its manifest; production node_modules are added by electron-builder.
+# Only the compiled app (main, preload, renderer) and its manifest; production node_modules are
+# added by electron-builder. Nothing else under out/ is packaged, such as out/portal-demo-e2e/ (the
+# temporary portal demo's test bundle, docs/ACTUAL_PRODUCT_STATUS_AUDIT.md §9).
 files:
-  - out/**
+  - out/main/**
+  - out/preload/**
+  - out/renderer/**
   - package.json
 asar: true
 # DM-04 / M1 S2: the launch guard alone cannot stop Node's inspector; these fuses are mandatory.

@@ -1,7 +1,7 @@
 // Smoke self-test (P1-05 subset; M2 verification of SEC-01..06, TC-22 surface, TC-23).
 // Started with --smoke-test. Checks run against the real window, preload, IPC dispatcher and
 // app:// protocol. Results are booleans and short codes only; no page content is reported.
-import { app, BrowserWindow, net } from 'electron';
+import { app, BrowserWindow, ipcMain, net } from 'electron';
 import { API_SHAPE } from '../shared/ipc/api';
 import { PRODUCTION_CSP } from './security/csp';
 import { APP_ORIGIN, originOf } from './security/origins';
@@ -86,6 +86,27 @@ export async function runSmokeChecks(win: BrowserWindow): Promise<SmokeCheck[]> 
   ] as const) {
     add(id, (await net.fetch(url)).status === 404);
   }
+
+  // The temporary portal demo is not in production builds. scripts/smoke.mjs sets its variables:
+  // still no demo IPC handler (registering a channel that has one throws) and no bridge but fqf.
+  const demoHandlers = ['start', 'report', 'cancel', 'confirm', 'reconcile', 'resolve'].filter(
+    (name) => {
+      const channel = `portal-demo:${name}`;
+      try {
+        ipcMain.handle(channel, () => undefined);
+        ipcMain.removeHandler(channel);
+        return false;
+      } catch {
+        return true;
+      }
+    },
+  );
+  add('demo.no-ipc-handlers', demoHandlers.length === 0);
+  const bridges = await inPage<string[]>(
+    win,
+    'Object.getOwnPropertyNames(window).filter((key) => /^fqf/i.test(key))',
+  );
+  add('demo.no-bridge', JSON.stringify(bridges) === '["fqf"]');
 
   return checks;
 }
