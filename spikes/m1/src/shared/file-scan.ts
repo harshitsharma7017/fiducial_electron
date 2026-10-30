@@ -3,13 +3,15 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-export function listFiles(root: string): string[] {
+/** Every file under `root`, except under the `exclude` folders (exact folder paths). */
+export function listFiles(root: string, exclude: readonly string[] = []): string[] {
   const out: string[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.isFile()) out.push(full);
+      if (entry.isDirectory()) {
+        if (!exclude.includes(full)) walk(full);
+      } else if (entry.isFile()) out.push(full);
     }
   };
   if (statSync(root, { throwIfNoEntry: false })?.isDirectory()) walk(root);
@@ -36,11 +38,22 @@ export interface NeedleScan {
   unreadable: { file: string; code: string }[];
 }
 
-/** Like filesContaining, but reports files it cannot read instead of stopping at the first. */
-export function scanFiles(roots: readonly string[], needles: readonly Buffer[]): NeedleScan {
+/**
+ * Like filesContaining, but reports files it cannot read instead of stopping at the first. Folders
+ * in `exclude` are not walked; the caller must cover them some other way.
+ */
+export function scanFiles(
+  roots: readonly string[],
+  needles: readonly Buffer[],
+  exclude: readonly string[] = [],
+): NeedleScan {
   const scan: NeedleScan = { hits: [], unreadable: [] };
+  const seen = new Set<string>();
   for (const root of roots) {
-    for (const file of listFiles(root)) {
+    for (const file of listFiles(root, exclude)) {
+      // Roots may nest (user-data lies inside the output folder): read each file once.
+      if (seen.has(file)) continue;
+      seen.add(file);
       let bytes: Buffer;
       try {
         bytes = readFileSync(file);

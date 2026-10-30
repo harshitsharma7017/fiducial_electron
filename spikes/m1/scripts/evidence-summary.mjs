@@ -167,7 +167,13 @@ for (const run of ['dev', 'packaged']) {
   for (const phase of ['s3-create', 's3-reopen']) {
     for (const p of results[run][phase]?.facts?.nativeModules ?? []) {
       const path = expandHome(String(p));
-      const arch = existsSync(path) ? binaryArch(path) : 'file not found';
+      // A packaged app reports the module inside app.asar; Electron loads the real file from
+      // app.asar.unpacked, which is the one to read.
+      const unpacked = path.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+      const onDisk = existsSync(path) ? path : unpacked;
+      const arch = existsSync(onDisk)
+        ? `${binaryArch(onDisk)}${onDisk === path ? '' : ' (read from app.asar.unpacked)'}`
+        : 'file not found';
       // A path inside the spike workspace is shown relative to it, as before; any other path
       // could name the user or machine, so it is redacted.
       const shown = sanitisePath(path);
@@ -247,12 +253,102 @@ if (runnerFailures.length > 0) {
   );
   for (const f of runnerFailures) out(`- ${f}`);
 }
+/**
+ * A scan path for publication: shown only if it is relative to the run folder and made of plain
+ * segments (letters, digits, space, dot, underscore, hyphen); anything else becomes <path>. Long
+ * random-looking segments (hashed cache folder names, which could resemble key material) become
+ * <id>.
+ */
+function safeRelativePath(file) {
+  const parts = String(file).split('/');
+  const plain = (seg) => /^[A-Za-z0-9 ._-]{1,64}$/.test(seg) && seg !== '..' && seg !== '.';
+  if (/^[A-Za-z]:|^[/\\~]|\\/.test(String(file)) || !parts.every(plain)) return '<path>';
+  return parts
+    .map((seg) =>
+      seg.length >= 20 && /^[A-Za-z0-9_-]+$/.test(seg) && /\d/.test(seg) ? '<id>' : seg,
+    )
+    .join('/');
+}
+
+// Plaintext-scan problems (src/main/plaintext-scan.ts): only the structured entries the scan
+// writes (kind, error code, relative path, scan phase). Any other check value, free text included,
+// is never published. Never file contents or secrets.
+const scanProblems = ['dev', 'packaged'].flatMap((run) =>
+  PHASES.flatMap((phase) =>
+    (results[run][phase]?.checks ?? [])
+      .filter((c) => !c.pass && Array.isArray(c.actual))
+      .flatMap((c) =>
+        c.actual
+          .filter(
+            (p) =>
+              p &&
+              typeof p === 'object' &&
+              (p.kind === 'match' || p.kind === 'unreadable') &&
+              typeof p.file === 'string',
+          )
+          .map(
+            (p) =>
+              `${run} ${phase} \`${c.id}\`: ${
+                p.kind === 'match'
+                  ? '**plaintext match**'
+                  : `unreadable (${cell(
+                      String(p.code)
+                        .replace(/[^A-Z0-9_]/g, '')
+                        .slice(0, 20),
+                    )})`
+              } in \`${cell(safeRelativePath(p.file))}\` (scan: ${cell(
+                String(p.scan)
+                  .replace(/[^a-z0-9 ()-]/gi, '')
+                  .slice(0, 40),
+              )})`,
+          ),
+      ),
+  ),
+);
+if (scanProblems.length > 0) {
+  out();
+  out('**Plaintext-scan problems** (relative paths and error codes only):');
+  for (const f of scanProblems) out(`- ${f}`);
+}
 out();
 out(
   '_Interpretation note:_ on Windows, a "foreign identity refused" result most likely reflects a ' +
     'different per-profile encryption key, not app binding: DPAPI does not bind keys to an app, ' +
     'and any process running as the same user can use it (vault limitation L3).',
 );
+out();
+
+// --- Post-exit scans ---------------------------------------------------------------------------
+out('## Post-exit plaintext scans (every file of the run, after the app exited)');
+out();
+out('| Run | Status | Files | Digests (phases) | Matches | Unreadable |');
+out('|---|---|---|---|---|---|');
+const postExitDetails = [];
+for (const run of ['dev', 'packaged']) {
+  const s = readJson(join(SPIKE_ROOT, 'out/runs', run, 'post-exit-scan.json'));
+  if (!s) {
+    out(`| ${run} | not run / no result | — | — | — | — |`);
+    continue;
+  }
+  out(
+    `| ${run} | **${cell(s.status)}** | ${s.filesScanned} | ${s.digests} (${cell((s.phasesWithDigests ?? []).join(', '))}) | ${s.matches.length} | ${s.unreadable.length} |`,
+  );
+  if (s.reason) postExitDetails.push(`${run}: ${cell(s.reason)}`);
+  for (const m of s.matches) {
+    postExitDetails.push(
+      `${run}: **plaintext match** in \`${cell(safeRelativePath(m.file))}\` (needle from ${cell(m.phase)}, ${m.needleBytes} bytes)`,
+    );
+  }
+  for (const u of s.unreadable) {
+    postExitDetails.push(
+      `${run}: unreadable (${cell(u.code)}) \`${cell(safeRelativePath(u.file))}\``,
+    );
+  }
+}
+if (postExitDetails.length > 0) {
+  out();
+  for (const d of postExitDetails) out(`- ${d}`);
+}
 out();
 
 // --- Tamper experiments -----------------------------------------------------------------------

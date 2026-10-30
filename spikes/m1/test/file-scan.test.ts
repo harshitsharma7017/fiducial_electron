@@ -2,12 +2,13 @@
 // S3 and S5 phase with EBUSY: the scan read Chromium's profile files while Chromium held them open
 // without read sharing. scanFiles reports such files instead of stopping, and the spike treats an
 // unreadable file in its own folders as a failure, never as clean.
-import { spawn, type ChildProcess } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { filesContaining, scanFiles } from '../src/shared/file-scan';
+import { holdLocked, stopAndWait } from './fixtures/processes';
 
 const root = mkdtempSync(join(tmpdir(), 'fqf-scan-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -29,6 +30,22 @@ describe('scanFiles', () => {
     const scan = scanFiles([dir], NEEDLE);
     expect(scan.unreadable).toEqual([]);
     expect(scan.hits.map((f) => f.slice(dir.length + 1)).sort()).toEqual([
+      'leak.txt',
+      'locked.bin',
+    ]);
+  });
+
+  it('skips only the excluded folders, and reads a file under nested roots once', () => {
+    const dir = folder('nested');
+    const inner = join(dir, 'inner');
+    const session = join(dir, 'session');
+    mkdirSync(inner);
+    mkdirSync(session);
+    writeFileSync(join(inner, 'a.txt'), 'SECRET-NEEDLE');
+    writeFileSync(join(session, 'chromium.db'), 'SECRET-NEEDLE');
+    const scan = scanFiles([dir, inner], NEEDLE, [session]);
+    expect(scan.hits.map((f) => f.slice(dir.length + 1)).sort()).toEqual([
+      join('inner', 'a.txt'),
       'leak.txt',
       'locked.bin',
     ]);
@@ -56,34 +73,37 @@ describe('scanFiles', () => {
     async () => {
       const dir = folder('windows');
       const locked = join(dir, 'locked.bin');
-      // Holds the file open with FileShare.None, as Chromium does with some profile files.
-      const holder: ChildProcess = spawn(
-        'powershell',
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          "$f = [System.IO.File]::Open($env:FQF_LOCKED, 'Open', 'Read', 'None'); " +
-            "Write-Output 'locked'; Start-Sleep -Seconds 60; $f.Close()",
-        ],
-        { env: { ...process.env, FQF_LOCKED: locked }, stdio: ['ignore', 'pipe', 'inherit'] },
-      );
+      const holder = await holdLocked(locked);
+      let stopped: boolean | undefined;
       try {
-        await new Promise<void>((resolve, reject) => {
-          holder.stdout?.on('data', (d: Buffer) => {
-            if (d.toString().includes('locked')) resolve();
-          });
-          holder.on('exit', () => reject(new Error('the lock holder exited early')));
-        });
         // Negative control: the strict scan fails exactly as the evidence run did.
         expect(() => filesContaining([dir], NEEDLE)).toThrow(/EBUSY/);
         const scan = scanFiles([dir], NEEDLE);
         expect(scan.unreadable).toEqual([{ file: locked, code: 'EBUSY' }]);
         expect(scan.hits).toEqual([join(dir, 'leak.txt')]);
       } finally {
-        holder.kill();
+        // Runs even when an assertion failed: the holder must be gone before cleanup deletes the
+        // folder (the run of 30 Oct 2026 failed with EPERM when it was not).
+        stopped = await stopAndWait(holder);
       }
+      expect(stopped).toBe(true);
+      // The lock ends with the process: the file is readable again, and the scan finds it.
+      expect(readFileSync(locked).length).toBeGreaterThan(0);
+      expect(scanFiles([dir], NEEDLE).unreadable).toEqual([]);
     },
     90_000,
   );
+});
+
+describe('stopAndWait (the lock tests depend on it)', () => {
+  it('returns only after the child process has exited', async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+      stdio: 'ignore',
+    });
+    await new Promise((resolve) => child.once('spawn', resolve));
+    expect(await stopAndWait(child)).toBe(true);
+    expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+    // Already gone: returns at once.
+    expect(await stopAndWait(child)).toBe(true);
+  });
 });

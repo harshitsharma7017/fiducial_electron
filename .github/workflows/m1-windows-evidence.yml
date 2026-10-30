@@ -59,6 +59,11 @@ jobs:
       - id: s5_dev_read
         continue-on-error: true
         run: node scripts/run-spike.mjs --spike=s5 --phase=read
+      # Reads every file of the development run once no app is left, including Chromium's
+      # session files (locked while the app runs), against the recorded needle digests.
+      - id: post_exit_scan_dev
+        continue-on-error: true
+        run: node scripts/scan-after-exit.mjs --run=dev
       - id: fs_probe
         continue-on-error: true
         run: node scripts/windows-fs-probe.mjs
@@ -85,6 +90,9 @@ jobs:
       - id: s5_packaged_vault_foreign
         continue-on-error: true
         run: node scripts/run-spike.mjs --packaged --spike=s5 --phase=vault-foreign "--foreign=$PWD/out/runs/dev/user-data/secrets"
+      - id: post_exit_scan_packaged
+        continue-on-error: true
+        run: node scripts/scan-after-exit.mjs --run=packaged
 
       - name: Sanitised summary
         if: always()

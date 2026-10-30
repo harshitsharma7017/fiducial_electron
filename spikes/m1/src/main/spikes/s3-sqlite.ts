@@ -128,7 +128,7 @@ async function create(ctx: SpikeContext): Promise<SpikeOutcome> {
     ),
     check(
       's3.key-not-on-disk',
-      'Raw key (bytes, hex or base64) not found in any file',
+      'Raw key (bytes, hex or base64) not found in any file (the session folder of the running Chromium: post-exit scan)',
       [],
       keyHits,
       keyHits.length === 0,
@@ -160,7 +160,7 @@ async function create(ctx: SpikeContext): Promise<SpikeOutcome> {
       nativeModules: native,
       keyFile: sanitisePath(loc.keyFile),
       dbFile: sanitisePath(loc.dbPath),
-      sessionFilesNotScanned: keyScan.sessionFilesNotScanned,
+      deferredToPostExit: keyScan.deferredToPostExit,
     },
   };
 }

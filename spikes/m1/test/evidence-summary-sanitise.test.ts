@@ -424,3 +424,90 @@ describe('evidence summary with synthetic results (integration)', () => {
     ]);
   });
 });
+
+describe('evidence summary: plaintext-scan diagnostics (integration)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'fqf-summary-scan-'));
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  it('publishes structured scan problems (kind, code, relative path, scan) and nothing else', () => {
+    mkdirSync(join(root, 'scripts', 'lib'), { recursive: true });
+    for (const file of [
+      'scripts/evidence-summary.mjs',
+      'scripts/lib/launch.mjs',
+      'scripts/lib/sanitise-exception.mjs',
+    ]) {
+      cpSync(join(SPIKE_ROOT, file), join(root, file));
+    }
+    const runDir = (run: string) => join(root, 'out', 'runs', run);
+    mkdirSync(runDir('dev'), { recursive: true });
+    mkdirSync(runDir('packaged'), { recursive: true });
+    const secret = randomBytes(32).toString('base64url');
+    writeFileSync(
+      join(runDir('dev'), 's5-write.json'),
+      JSON.stringify({
+        status: 'fail',
+        checks: [
+          {
+            id: 's5.no-plaintext-files',
+            pass: false,
+            actual: [
+              {
+                kind: 'unreadable',
+                file: 'user-data-session/GPUPersistentCache/cache.db',
+                code: 'EBUSY',
+                scan: 's5-write (in-app)',
+              },
+              { kind: 'match', file: 'logs/s5-write.log', code: null, scan: 's5-write (in-app)' },
+              {
+                kind: 'unreadable',
+                file: 'C:\\Users\\Zyxa Q Qorvath\\Kelmor\\Cookies',
+                code: 'EPERM',
+                scan: 's5-write (in-app)',
+              },
+              'DEMO-SENTINEL-FREE-TEXT',
+              { kind: 'other', file: 'DEMO-SENTINEL-OBJECT', value: secret },
+            ],
+          },
+          { id: 's5.round-trip', pass: true, actual: [`DEMO-SENTINEL-PASSED ${secret}`] },
+        ],
+      }),
+    );
+    writeFileSync(
+      join(runDir('dev'), 'post-exit-scan.json'),
+      JSON.stringify({
+        run: 'dev',
+        status: 'fail',
+        reason: '1 match(es), 1 unreadable file(s)',
+        phasesWithDigests: ['s5-write'],
+        digests: 3,
+        filesScanned: 42,
+        matches: [{ file: 'user-data-session/Preferences', phase: 's5-write', needleBytes: 32 }],
+        unreadable: [{ file: 'user-data-session/LOCK', code: 'EBUSY' }],
+      }),
+    );
+
+    const env = { ...process.env };
+    delete env.GITHUB_STEP_SUMMARY;
+    delete env.STEP_OUTCOMES;
+    execFileSync(process.execPath, [join(root, 'scripts', 'evidence-summary.mjs')], {
+      env,
+      stdio: 'pipe',
+      timeout: 60_000,
+    });
+    const summary = readFileSync(join(root, 'out', 'evidence', 'summary.md'), 'utf8');
+
+    const lines = summary.split('\n').filter((l) => /^- (dev|packaged) s\d-/.test(l));
+    expect(lines).toEqual([
+      '- dev s5-write `s5.no-plaintext-files`: unreadable (EBUSY) in `user-data-session/GPUPersistentCache/cache.db` (scan: s5-write (in-app))',
+      '- dev s5-write `s5.no-plaintext-files`: **plaintext match** in `logs/s5-write.log` (scan: s5-write (in-app))',
+      '- dev s5-write `s5.no-plaintext-files`: unreadable (EPERM) in `<path>` (scan: s5-write (in-app))',
+    ]);
+    expect(summary).toContain('| dev | **fail** | 42 | 3 (s5-write) | 1 | 1 |');
+    expect(summary).toContain('| packaged | not run / no result | — | — | — | — |');
+    expect(summary).toContain(
+      '- dev: **plaintext match** in `user-data-session/Preferences` (needle from s5-write, 32 bytes)',
+    );
+    expect(summary).toContain('- dev: unreadable (EBUSY) `user-data-session/LOCK`');
+    expectNone(summary, ['DEMO-SENTINEL', secret, 'Zyxa', 'Qorvath', 'Kelmor', 'Cookies']);
+  });
+});

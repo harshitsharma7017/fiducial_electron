@@ -104,7 +104,7 @@ async function write(ctx: SpikeContext): Promise<SpikeOutcome> {
     ),
     check(
       's5.no-plaintext-files',
-      'Secret not found in any file under userData or the output folder',
+      'Secret not found in any file under userData or the output folder (the session folder of the running Chromium: post-exit scan)',
       [],
       hits,
       hits.length === 0,
@@ -117,7 +117,7 @@ async function write(ctx: SpikeContext): Promise<SpikeOutcome> {
     facts: {
       vault: vault.facts,
       fingerprint: fingerprint(secret),
-      sessionFilesNotScanned: scan.sessionFilesNotScanned,
+      deferredToPostExit: scan.deferredToPostExit,
       ciphertextBytes: sealed.data.length,
       ciphertextPrefix: sealed.data.subarray(0, 3).toString('latin1'),
       shouldReEncrypt: opened.ok ? opened.data.shouldReEncrypt : null,
@@ -174,7 +174,7 @@ async function read(ctx: SpikeContext): Promise<SpikeOutcome> {
     ),
     check(
       's5.no-plaintext-anywhere',
-      'Secret absent from userData, results and captured logs',
+      'Secret absent from userData, results and captured logs (the session folder of the running Chromium: post-exit scan)',
       [],
       hits,
       hits.length === 0,
@@ -189,7 +189,7 @@ async function read(ctx: SpikeContext): Promise<SpikeOutcome> {
     facts: {
       appName: app.getName(),
       shouldReEncrypt: opened.ok ? opened.data.shouldReEncrypt : null,
-      sessionFilesNotScanned: scan?.sessionFilesNotScanned ?? null,
+      deferredToPostExit: scan?.deferredToPostExit ?? null,
       rawSafeStorageTamper: tamper ? { ...tamper } : null,
       vault: vault.facts,
     },

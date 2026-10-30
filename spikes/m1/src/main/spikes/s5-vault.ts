@@ -61,7 +61,7 @@ export async function vaultWrite(ctx: SpikeContext): Promise<SpikeOutcome> {
       ),
       check(
         's5v.no-plaintext',
-        'No secret plaintext in any file (userData, results, logs)',
+        'No secret plaintext in any file (userData, results, logs) (the session folder of the running Chromium: post-exit scan)',
         [],
         plaintextHits,
         plaintextHits.length === 0,
@@ -346,7 +346,7 @@ export async function vaultRead(ctx: SpikeContext): Promise<SpikeOutcome> {
   checks.push(
     check(
       's5v.no-plaintext-anywhere',
-      'No secret plaintext in userData, results or logs',
+      'No secret plaintext in userData, results or logs (the session folder of the running Chromium: post-exit scan)',
       [],
       hits,
       hits.length === 0,
