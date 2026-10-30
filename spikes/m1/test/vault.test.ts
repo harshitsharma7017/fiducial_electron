@@ -26,6 +26,7 @@ import {
   type MockInstance,
 } from 'vitest';
 import type { SecretBackend } from '../src/shared/secret-store';
+import type * as AtomicWrite from '../src/shared/vault/atomic-write';
 import { listFiles } from '../src/shared/file-scan';
 import { openEnvelope, parseEnvelope } from '../src/shared/vault/envelope';
 import type { VaultErrorCode } from '../src/shared/vault/errors';
@@ -36,6 +37,21 @@ import {
   RESET_CONFIRMATION,
   SecretVault,
 } from '../src/shared/vault/vault';
+
+// Fault injection for the vault's writes that works on every OS: while `faults.writes` is set,
+// atomicWrite throws as a failing disk would. (Directory permissions are POSIX-only: on Windows a
+// read-only directory still accepts new files, so they cannot make a write fail there.)
+const faults = vi.hoisted(() => ({ writes: false }));
+vi.mock('../src/shared/vault/atomic-write', async (importOriginal) => {
+  const actual = await importOriginal<typeof AtomicWrite>();
+  return {
+    ...actual,
+    atomicWrite: (target: string, data: Buffer | string) => {
+      if (faults.writes) throw Object.assign(new Error('injected write failure'), { code: 'EIO' });
+      actual.atomicWrite(target, data);
+    },
+  };
+});
 
 const root = mkdtempSync(join(tmpdir(), 'fqf-vault-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -571,8 +587,26 @@ describe('review findings (regression tests)', () => {
     expect(await (await openOk(restored)).get('t')).toEqual({ ok: true, data: 'first' });
   });
 
-  it.skipIf(process.getuid?.() === 0)(
-    'R7: a failed rotation leaves the live vault unchanged',
+  it('R7: a failed rotation leaves the live vault unchanged (injected write failure, every OS)', async () => {
+    const dir = freshDir();
+    const v = await openOk(dir);
+    await v.put('t', SECRET);
+    const before = { active: v.activeKeyId, ids: v.keyIds(), files: snapshot(dir) };
+    faults.writes = true;
+    try {
+      const r = await v.rotateKey();
+      expect(r.ok ? 'OK' : r.error.code).toBe('STORAGE_ERROR');
+    } finally {
+      faults.writes = false;
+    }
+    expect({ active: v.activeKeyId, ids: v.keyIds(), files: snapshot(dir) }).toEqual(before);
+    expect(await v.get('t')).toEqual({ ok: true, data: SECRET });
+    // Control: the same rotation succeeds once writes work again.
+    expect((await v.rotateKey()).ok).toBe(true);
+  });
+
+  it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')(
+    'R7: a failed rotation leaves the live vault unchanged (read-only directory, POSIX)',
     async () => {
       const dir = freshDir();
       const v = await openOk(dir);

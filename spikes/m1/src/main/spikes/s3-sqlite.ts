@@ -4,7 +4,6 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { app, safeStorage } from 'electron';
-import { filesContaining } from '../../shared/file-scan';
 import { check, type Check } from '../../shared/result';
 import {
   cipherName,
@@ -17,8 +16,10 @@ import {
   tryOpen,
 } from '../../shared/sqlite-core';
 import { tamperTrials } from '../../shared/tamper';
+import { plaintextScan } from '../plaintext-scan';
 import type { SpikeContext, SpikeOutcome } from '../spike-context';
 import { sanitisePath } from '../util';
+import { durabilityCreate, durabilityReopen } from './s3-durability';
 
 function locations() {
   const userData = app.getPath('userData');
@@ -81,9 +82,11 @@ async function create(ctx: SpikeContext): Promise<SpikeOutcome> {
   const readBack = readMarker(db);
   db.close();
   const afterClose = inspectFile(loc.dbPath, marker);
+  const durable = durabilityCreate(loc.dataDir, loc.keysDir, key);
 
   const keyNeedles = [key, Buffer.from(key.toString('hex')), Buffer.from(key.toString('base64'))];
-  const keyHits = filesContaining([loc.userData, ctx.outDir], keyNeedles).map(sanitisePath);
+  const keyScan = plaintextScan(ctx, keyNeedles);
+  const keyHits = keyScan.problems;
   const native = loadedNativeModules();
 
   checks.push(
@@ -144,17 +147,20 @@ async function create(ctx: SpikeContext): Promise<SpikeOutcome> {
       native,
       native.length === 1,
     ),
+    ...durable.checks,
   );
 
   return {
     checks,
     facts: {
+      ...durable.facts,
       marker,
       walFileExistedWhileOpen: whileOpen.wal.exists,
       dbBytesAfterClose: afterClose.size,
       nativeModules: native,
       keyFile: sanitisePath(loc.keyFile),
       dbFile: sanitisePath(loc.dbPath),
+      sessionFilesNotScanned: keyScan.sessionFilesNotScanned,
     },
   };
 }
@@ -163,8 +169,15 @@ async function reopen(ctx: SpikeContext): Promise<SpikeOutcome> {
   const checks: Check[] = [];
   const loc = locations();
   const created = JSON.parse(readFileSync(join(ctx.outDir, 's3-create.json'), 'utf8')) as {
-    facts: { marker: string };
+    status: string;
+    facts: { marker?: unknown };
   };
+  // A failed create phase records no marker; say so instead of failing on a later insert.
+  if (typeof created.facts.marker !== 'string') {
+    throw new Error(
+      `the create phase recorded no marker (its status: ${created.status}); run it successfully first`,
+    );
+  }
   const marker = created.facts.marker;
 
   const wrapped = readFileSync(loc.keyFile);
@@ -174,6 +187,7 @@ async function reopen(ctx: SpikeContext): Promise<SpikeOutcome> {
   const integrity = db.pragma('integrity_check', { simple: true });
   const fk = foreignKeysEnforced(db);
   db.close();
+  const durable = durabilityReopen(loc.dataDir, loc.keysDir, key, join(loc.userData, 'trials'));
 
   const wrongKey = tryOpen(loc.dbPath, randomBytes(32));
   const noKey = tryOpen(loc.dbPath, null);
@@ -237,6 +251,7 @@ async function reopen(ctx: SpikeContext): Promise<SpikeOutcome> {
       { header: control.plainSqliteHeader, marker: control.markerFound },
       control.plainSqliteHeader && control.markerFound,
     ),
+    ...durable.checks,
   );
 
   return {

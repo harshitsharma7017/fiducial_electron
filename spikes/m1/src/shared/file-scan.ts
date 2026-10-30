@@ -28,6 +28,33 @@ export function filesContaining(roots: readonly string[], needles: readonly Buff
   return hits;
 }
 
+export interface NeedleScan {
+  /** Files that contain a needle. */
+  hits: string[];
+  /** Files that could not be read, with the error code (for example EBUSY: on Windows, another
+   * process holds the file open without read sharing). Never treated as clean. */
+  unreadable: { file: string; code: string }[];
+}
+
+/** Like filesContaining, but reports files it cannot read instead of stopping at the first. */
+export function scanFiles(roots: readonly string[], needles: readonly Buffer[]): NeedleScan {
+  const scan: NeedleScan = { hits: [], unreadable: [] };
+  for (const root of roots) {
+    for (const file of listFiles(root)) {
+      let bytes: Buffer;
+      try {
+        bytes = readFileSync(file);
+      } catch (err) {
+        const code = (err as { code?: unknown }).code;
+        scan.unreadable.push({ file, code: typeof code === 'string' ? code : 'UNKNOWN' });
+        continue;
+      }
+      if (needles.some((n) => n.length > 0 && bytes.includes(n))) scan.hits.push(file);
+    }
+  }
+  return scan;
+}
+
 /** SHA-256 of every file under `root`, keyed by path relative to `root`. */
 export function snapshotFiles(root: string): Record<string, string> {
   return Object.fromEntries(

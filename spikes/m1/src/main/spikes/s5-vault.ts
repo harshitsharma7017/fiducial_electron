@@ -5,12 +5,12 @@ import { createHash, randomBytes } from 'node:crypto';
 import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, safeStorage } from 'electron';
-import { filesContaining, snapshotFiles } from '../../shared/file-scan';
+import { snapshotFiles } from '../../shared/file-scan';
 import { check, type Check } from '../../shared/result';
 import type { VaultErrorCode } from '../../shared/vault/errors';
 import { ENVELOPE_SUFFIX, KEYRING_FILE, SecretVault } from '../../shared/vault/vault';
+import { plaintextScan } from '../plaintext-scan';
 import type { SpikeContext, SpikeOutcome } from '../spike-context';
-import { sanitisePath } from '../util';
 
 const NAMES = ['portal.mock-a', 'portal.mock-b', 'unicode'] as const;
 
@@ -46,10 +46,10 @@ export async function vaultWrite(ctx: SpikeContext): Promise<SpikeOutcome> {
   };
   const results = await Promise.all(NAMES.map((n) => vault.put(n, values[n]!)));
   vault.close();
-  const plaintextHits = filesContaining(
-    [app.getPath('userData'), ctx.outDir],
+  const plaintextHits = plaintextScan(
+    ctx,
     Object.values(values).map((v) => Buffer.from(v, 'utf8')),
-  ).map(sanitisePath);
+  ).problems;
   return {
     checks: [
       check(
@@ -339,10 +339,10 @@ export async function vaultRead(ctx: SpikeContext): Promise<SpikeOutcome> {
   );
 
   // 9. Secrets never appear in files, results or this run's captured logs.
-  const hits = filesContaining(
-    [app.getPath('userData'), ctx.outDir],
+  const hits = plaintextScan(
+    ctx,
     [...values.values()].map((v) => Buffer.from(v, 'utf8')),
-  ).map(sanitisePath);
+  ).problems;
   checks.push(
     check(
       's5v.no-plaintext-anywhere',

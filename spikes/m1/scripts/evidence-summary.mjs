@@ -283,6 +283,10 @@ if (!tamper) {
   if ((tamper.findings ?? []).length > 0) {
     out('**Findings (not acceptable behaviour; need a design decision):**');
     for (const f of tamper.findings) out(`- ${cell(f)}`);
+    out();
+    out(
+      'These are raw SQLite behaviours. The durable commit layer (`src/shared/durable-db.ts`: a checkpoint per commit and an authenticated commit ledger) is measured by the `s3.durable-*` checks above and by `test/durable-db.test.ts`, including process-kill crash tests.',
+    );
   }
 }
 out();
@@ -348,7 +352,7 @@ for (const item of [
   'Real OS-level "secure storage unavailable" was **not** produced. Fail-closed behaviour is covered only by unit tests with a mocked backend (`test/secret-store.test.ts`, `test/vault.test.ts`) and by the pre-ready probe.',
   'Not a clean Windows 10 22H2 / 11 client machine; runner account and Server image (Q-D07).',
   'No Windows user-password reset, profile loss, second user or roaming-profile scenario (DPAPI key loss, L5).',
-  'No crash or power-loss test (L7); no fuzzing (L11).',
+  'Process-kill crash tests run in `test/durable-db.test.ts`; no power-loss test (L7); no fuzzing (L11).',
   'S1, S2 (session isolation, debug-port check) and S4 Electron runs are not part of this workflow; `debug-port-check.mjs` is macOS-only.',
   'Packaged build is unsigned (S6 blocked).',
 ]) {
