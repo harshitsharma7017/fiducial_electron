@@ -172,12 +172,46 @@ export function InsurerPortals(): React.JSX.Element | null {
                       {portal.loginSaved ? 'Change sign-in' : 'Save sign-in'}
                     </button>
                   )}
+                  {portal.blockedOrigins.length > 0 && (
+                    <p className="insurer-note error">
+                      The portal tried to open {portal.blockedOrigins.join(', ')}, which is not on
+                      its allowed list, so it was blocked. Tell support if a page did not open.
+                    </p>
+                  )}
+                  {portal.recording?.active && (
+                    <p className="insurer-note" role="status">
+                      Recording the form structure ({portal.recording.pages} pages,{' '}
+                      {portal.recording.events} steps). Use a dummy client, and stop once the
+                      premium shows: before any proposal or payment. Typed values are never
+                      recorded.
+                    </p>
+                  )}
+                  {portal.recording && !portal.recording.active && portal.recording.file && (
+                    <p className="insurer-note">
+                      Recording saved: <code>{portal.recording.file}</code>
+                    </p>
+                  )}
                   {portal.sessionEndsAt && (
                     <button
                       type="button"
                       onClick={() => void run(() => window.fqf.insurers.signOut(portal.id))}
                     >
                       Sign out
+                    </button>
+                  )}
+                  {portal.windowOpen && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void run(() =>
+                          window.fqf.insurers.record(
+                            portal.id,
+                            portal.recording?.active ? 'stop' : 'start',
+                          ),
+                        )
+                      }
+                    >
+                      {portal.recording?.active ? 'Stop recording' : 'Record form'}
                     </button>
                   )}
                   {portal.loginSaved && (

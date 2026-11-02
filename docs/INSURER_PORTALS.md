@@ -3,6 +3,50 @@
 Status, 2 November 2026: **built and tested against local copies of the sign-in pages; not yet
 verified with a real sign-in.** Off by default.
 
+## Scope decisions (2 November 2026)
+
+- **Quotes only.**
+  - **What it automates:** getting premiums, from premium calculators, and from E-Proposal forms
+    only up to the point where the premium shows.
+  - **What it never does:** submit a proposal, create a customer, save a draft or start a payment.
+  - **Later:** proposal submission would be a separate phase, after senior approval.
+- **Product lines:** health, motor and travel.
+  - **Health** uses the saved client data (members, ages, sum insured).
+  - **Motor** needs vehicle details, and **travel** needs trip details (destination, dates,
+    traveller ages). Their client records are designed once each insurer's recorded forms show which
+    fields are required.
+- **Per insurer:** every product is recorded once with dummy data (form recorder), then automated
+  and tested. United India first.
+
+## United India: health quote (calculator)
+
+Automated exactly as recorded on 2 November 2026, and nothing more (`src/main/quotes/`).
+From the signed-in home page the app:
+1. Opens the **Health Policy Premium Calculator** (a pop-up in the same session).
+2. Chooses **Base** and **Floater**, the client's **sum insured** and the **pincode**.
+3. Fills the **proposer**: date of birth (picked on the calendar), gender, marital status, and
+   good health **No**, then **Ok**.
+4. Adds the **spouse**, if any: date of birth, gender, relation, marital status, good health
+   **No**, then **Ok** and **Save**.
+5. Adds the **children**, if any, in **Add Children**. For each child it works in a new row, pressing
+   **Add Child** only when there is no empty row: date of birth, gender, **Son** or **Daughter**,
+   marital status **Unmarried**, and good health **No**, then **Ok**. Then **Save**.
+6. Presses **Get Quote**, then **stops at "User Details"**. The advisor checks the email and mobile
+   and presses **Check Premium**; the app never presses it.
+
+**Refused before anything is touched, with the reason:**
+- parents, individual cover, or Super Topup;
+- a sum insured United India does not offer;
+- a member's missing date of birth or gender, or the proposer's missing marital status;
+- no good-health confirmation from the advisor, which is given for each quote and never stored.
+
+United India's own ERRORS pop-up stops the run, and its message is shown.
+
+**Verified:** against a local copy of the calculator built from the recordings (same ids,
+calendar, pop-ups, and the child rows' shared radio name): the full flow for a couple with three
+children, and a stop on United India's error message. **Not yet run on
+the live portal.**
+
 ## What it does
 
 The advisor saves each insurer's user ID and password once. When they open that insurer's portal

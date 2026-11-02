@@ -45,6 +45,18 @@ export const insurerPortalViewSchema = z
     sessionEndsAt: z.iso.datetime().nullable(),
     /** Why the last session ended, if it ended while the app was running. */
     lastSessionEnd: z.enum(['expired', 'signed-out']).nullable(),
+    /** Origins the portal tried to open that are not on its allowed list (at most 5). */
+    blockedOrigins: z.array(z.string().max(200)).max(5),
+    /** The form recorder: running, or where the last recording was saved (null if never used). */
+    recording: z
+      .object({
+        active: z.boolean(),
+        pages: z.int().min(0),
+        events: z.int().min(0),
+        file: z.string().max(1024).nullable(),
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
 
@@ -104,6 +116,17 @@ export const saveClientRequestSchema = z
 
 export type SaveClientRequest = z.input<typeof saveClientRequestSchema>;
 
+export const quoteRunResultSchema = z
+  .object({
+    outcome: z.enum(['ready', 'refused', 'failed']),
+    step: z.string().max(120).nullable(),
+    message: z.string().max(1200),
+    problems: z.array(z.string().max(400)).max(20),
+  })
+  .strict();
+
+export type QuoteRunResultView = z.infer<typeof quoteRunResultSchema>;
+
 export const ipcContract = {
   [IPC_CHANNELS.appGetInfo]: {
     request: z.object({}).strict(),
@@ -129,6 +152,10 @@ export const ipcContract = {
     request: insurerOnly,
     response: z.object({ signedOut: z.boolean() }).strict(),
   },
+  [IPC_CHANNELS.insurersRecord]: {
+    request: z.object({ id: insurerIdSchema, action: z.enum(['start', 'stop']) }).strict(),
+    response: z.object({ recording: z.boolean(), file: z.string().max(1024).nullable() }).strict(),
+  },
   [IPC_CHANNELS.clientsList]: {
     request: z.object({}).strict(),
     response: clientListSchema,
@@ -140,6 +167,17 @@ export const ipcContract = {
   [IPC_CHANNELS.clientsSave]: {
     request: saveClientRequestSchema,
     response: z.object({ id: entityIdSchema }).strict(),
+  },
+  [IPC_CHANNELS.quotesRun]: {
+    request: z
+      .object({
+        clientId: entityIdSchema,
+        insurerId: insurerIdSchema,
+        /** The advisor confirms, for this quote, every member's good health declaration. */
+        goodHealthConfirmed: z.boolean(),
+      })
+      .strict(),
+    response: quoteRunResultSchema,
   },
   [IPC_CHANNELS.clientsDelete]: {
     request: clientOnly,

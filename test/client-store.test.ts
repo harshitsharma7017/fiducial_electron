@@ -3,6 +3,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -26,6 +27,7 @@ import {
   openClientStore,
   type ClientStore,
 } from '../src/main/storage/client-store';
+import { openDurable } from '../src/main/storage/durable-db';
 import { cipherName, openEncrypted } from '../src/main/storage/encrypted-db';
 import { quoteRequestFor, type ClientInputRaw } from '../src/shared/contracts/client';
 
@@ -128,6 +130,11 @@ function allBytes(dir: string): Buffer {
       .map((e) => readFileSync(join(e.parentPath, e.name))),
   );
 }
+
+/** Quote runs are not exercised here (see quotes.test.ts). */
+const unusedQuotes = {
+  run: () => Promise.reject(new Error('not used')),
+};
 
 describe('the client store', () => {
   it('saves a client and reads it back, normalised', async () => {
@@ -355,12 +362,19 @@ describe('the client service and IPC channels', () => {
       },
       windows: {
         open: () => Promise.resolve(),
-        state: () => ({ open: false, lastFill: null, sessionEndsAt: null, lastSessionEnd: null }),
+        state: () => ({
+          open: false,
+          lastFill: null,
+          sessionEndsAt: null,
+          lastSessionEnd: null,
+          blockedOrigins: [],
+        }),
         signOut: () => Promise.resolve(false),
+        windowsOf: () => [],
       },
       logger,
     });
-    const dispatch = createDispatcher(createHandlers({ insurers, clients }), {
+    const dispatch = createDispatcher(createHandlers({ insurers, clients, quotes: unusedQuotes }), {
       isTrustedSender: (s) => s.webContentsId === 1,
       logger,
     });
@@ -431,6 +445,15 @@ describe('the client service and IPC channels', () => {
     expect(attempts).toBe(2);
   });
 
+  it('refuses a date of birth in the future', async () => {
+    const { call, clients } = setup(true);
+    const result = await call('clients:save', {
+      client: { ...CLIENT, members: [{ relationship: 'self', age: 1, dateOfBirth: '2999-01-01' }] },
+    });
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } });
+    clients.close();
+  });
+
   it('logs what happened, never client data', async () => {
     const { call, records, clients } = setup(true);
     const saved = await call('clients:save', { client: CLIENT });
@@ -444,5 +467,100 @@ describe('the client service and IPC channels', () => {
       expect(text).not.toContain(value);
     }
     clients.close();
+  });
+});
+
+describe('date of birth, gender and marital status (schema version 2)', () => {
+  it('saves and reads them back', async () => {
+    const store = await open(place());
+    const saved = store.save(null, {
+      ...CLIENT,
+      proposerMaritalStatus: 'married',
+      members: [
+        { relationship: 'self', age: 41, dateOfBirth: '1985-03-14', gender: 'male' },
+        { relationship: 'spouse', age: 38, dateOfBirth: '1988-07-02', gender: 'female' },
+        { relationship: 'son', age: 9 },
+      ],
+    } as never);
+    expect(store.get(saved.id)?.client).toMatchObject({
+      proposerMaritalStatus: 'married',
+      members: [
+        { relationship: 'self', age: 41, dateOfBirth: '1985-03-14', gender: 'male' },
+        { relationship: 'spouse', age: 38, dateOfBirth: '1988-07-02', gender: 'female' },
+        { relationship: 'son', age: 9 },
+      ],
+    });
+    // The comparison request still carries relationship and age only.
+    expect(quoteRequestFor(saved.client)?.members[0]).toEqual({ relationship: 'self', age: 41 });
+    store.close();
+  });
+
+  it('rejects impossible dates, future dates and unknown values', async () => {
+    const store = await open(place());
+    for (const member of [
+      { relationship: 'self', age: 41, dateOfBirth: '1985-02-30' },
+      { relationship: 'self', age: 41, dateOfBirth: '1899-12-31' },
+      { relationship: 'self', age: 41, dateOfBirth: '14/03/1985' },
+      { relationship: 'self', age: 41, gender: 'other' },
+    ]) {
+      expect(() => store.save(null, { ...CLIENT, members: [member] } as never)).toThrow();
+    }
+    expect(() =>
+      store.save(null, { ...CLIENT, proposerMaritalStatus: 'single' } as never),
+    ).toThrow();
+    store.close();
+  });
+
+  it('upgrades a version 1 database in place, keeping its clients', async () => {
+    const p = place();
+    // A version 1 database, as the app created it before 2 November 2026.
+    const opener = createVaultOpener(p.vaultDir, backend);
+    const vault = await opener();
+    const key = randomBytes(32);
+    await vault.put('database-key', key.toString('hex'));
+    mkdirSync(join(p.dir, 'data'), { recursive: true });
+    mkdirSync(join(p.dir, 'ledger'), { recursive: true });
+    const db = openEncrypted(p.dbPath, key);
+    const opened = openDurable(db, { ledgerPath: p.ledgerPath, key });
+    if (!opened.ok) throw opened.error;
+    opened.store.commit((d) => {
+      d.exec(`
+        CREATE TABLE client (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, email TEXT,
+          notes TEXT, pincode TEXT NOT NULL, cover_type TEXT, sum_insured_paise INTEGER,
+          tenure_years INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+        CREATE TABLE client_member (client_id TEXT NOT NULL REFERENCES client(id) ON DELETE CASCADE,
+          position INTEGER NOT NULL, relationship TEXT NOT NULL, age INTEGER NOT NULL,
+          PRIMARY KEY (client_id, position));
+        INSERT INTO client VALUES ('old-1', 'Synthetic Old Client', NULL, NULL, NULL, '560001',
+          NULL, NULL, NULL, '2026-10-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z');
+        INSERT INTO client_member VALUES ('old-1', 0, 'self', 50);
+      `);
+      d.pragma('user_version = 1');
+    });
+    db.close();
+
+    const store = await openClientStore({
+      dbPath: p.dbPath,
+      ledgerPath: p.ledgerPath,
+      openVault: opener,
+    });
+    expect(store.get('old-1')?.client).toEqual({
+      customer: { name: 'Synthetic Old Client' },
+      pincode: '560001',
+      members: [{ relationship: 'self', age: 50 }],
+    });
+    store.save('old-1', {
+      customer: { name: 'Synthetic Old Client' },
+      pincode: '560001',
+      proposerMaritalStatus: 'widowed',
+      members: [{ relationship: 'self', age: 50, dateOfBirth: '1976-01-20', gender: 'female' }],
+    } as never);
+    expect(store.get('old-1')?.client.members[0]).toEqual({
+      relationship: 'self',
+      age: 50,
+      dateOfBirth: '1976-01-20',
+      gender: 'female',
+    });
+    store.close();
   });
 });

@@ -2,7 +2,17 @@
 // M1 spike: no popups, no navigation or redirects outside origins registered for that
 // webContents, no <webview>, no permissions, no downloads. Blocked attempts are logged by
 // scheme only, never by full URL.
-import { app, type Session, type WebContents } from 'electron';
+//
+// A session may carry its own policy (insurer portals, setSessionPolicy): its navigation rule
+// applies to every webContents of that session without a rule of its own (such as a pop-up), and
+// it may allow pop-ups it approves, which then open in the same session. Anything it blocks is
+// reported to its onBlocked callback (the portal shows the blocked origin to the advisor).
+import {
+  app,
+  type BrowserWindowConstructorOptions,
+  type Session,
+  type WebContents,
+} from 'electron';
 import type { Logger } from '../logging/logger';
 import { originOf, schemeOf } from './origins';
 
@@ -15,7 +25,15 @@ export function isNavigationAllowed(allowedOrigins: ReadonlySet<string>, url: st
 /** Decides whether a frame of one webContents may navigate (or be redirected) to `url`. */
 export type NavigationRule = (url: string, isMainFrame: boolean) => boolean;
 
+export interface SessionPolicy {
+  navigate: NavigationRule;
+  /** Whether a pop-up to `url` may open (in this session, with the options returned). */
+  popup(url: string): BrowserWindowConstructorOptions | null;
+  onBlocked?(kind: 'navigation' | 'redirect' | 'popup', url: string): void;
+}
+
 const rulesByContents = new Map<number, NavigationRule>();
+const sessionPolicies = new WeakMap<Session, SessionPolicy>();
 const hardenedSessions = new WeakSet<Session>();
 const DENY_ALL: NavigationRule = () => false;
 
@@ -33,23 +51,34 @@ export function setNavigationRule(contents: WebContents, rule: NavigationRule): 
   rulesByContents.set(contents.id, rule);
 }
 
+/** Sets the policy for every webContents of `ses` (see the header). Still default-deny. */
+export function setSessionPolicy(ses: Session, policy: SessionPolicy): void {
+  sessionPolicies.set(ses, policy);
+}
+
 export function installNavigationPolicy(logger: Logger): void {
   app.on('web-contents-created', (_event, contents) => {
     const id = contents.id;
-    const rule = (): NavigationRule => rulesByContents.get(id) ?? DENY_ALL;
+    const policy = (): SessionPolicy | undefined => sessionPolicies.get(contents.session);
+    const rule = (): NavigationRule => rulesByContents.get(id) ?? policy()?.navigate ?? DENY_ALL;
     contents.setWindowOpenHandler(({ url }) => {
+      const options = policy()?.popup(url) ?? null;
+      if (options) return { action: 'allow', overrideBrowserWindowOptions: options };
+      policy()?.onBlocked?.('popup', url);
       logger.warn('security.popup-blocked', { targetScheme: schemeOf(url) });
       return { action: 'deny' };
     });
     contents.on('will-frame-navigate', (event) => {
       if (!rule()(event.url, event.isMainFrame)) {
         event.preventDefault();
+        if (event.isMainFrame) policy()?.onBlocked?.('navigation', event.url);
         logger.warn('security.navigation-blocked', { targetScheme: schemeOf(event.url) });
       }
     });
     contents.on('will-redirect', (event) => {
       if (!rule()(event.url, event.isMainFrame)) {
         event.preventDefault();
+        if (event.isMainFrame) policy()?.onBlocked?.('redirect', event.url);
         logger.warn('security.redirect-blocked', { targetScheme: schemeOf(event.url) });
       }
     });

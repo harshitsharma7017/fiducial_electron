@@ -6,8 +6,10 @@ import { join } from 'node:path';
 import { app, safeStorage, session } from 'electron';
 import { createClientService } from './clients/service';
 import { createInsurerCredentials } from './insurers/credentials';
+import { createFormRecorder } from './insurers/form-recorder';
 import { createPortalWindows } from './insurers/portal-windows';
 import { createSessionClock } from './insurers/session-clock';
+import { createQuoteService } from './quotes/service';
 import { createVaultOpener } from './secrets/vault-opener';
 import { openClientStore } from './storage/client-store';
 import { createInsurerService, insurerPortalsEnabled } from './insurers/service';
@@ -99,14 +101,16 @@ function start(): void {
     const automation = insurerPortalsEnabled(process.env);
     const openVault = createVaultOpener(join(userData, 'secrets'), safeStorage);
     const credentials = createInsurerCredentials(openVault);
+    const portalWindows = createPortalWindows({
+      logger,
+      credentials,
+      clock: createSessionClock(join(userData, 'insurer-sessions.json')),
+    });
     const insurers = createInsurerService({
       enabled: automation,
       credentials,
-      windows: createPortalWindows({
-        logger,
-        credentials,
-        clock: createSessionClock(join(userData, 'insurer-sessions.json')),
-      }),
+      windows: portalWindows,
+      recorder: createFormRecorder({ dir: join(userData, 'recordings'), logger }),
       logger,
     });
     const clients = createClientService({
@@ -120,8 +124,14 @@ function start(): void {
       logger,
     });
     app.on('will-quit', () => clients.close());
+    const quotes = createQuoteService({
+      enabled: automation,
+      clients,
+      windowsOf: (id) => portalWindows.windowsOf(id),
+      logger,
+    });
     registerIpc(
-      createDispatcher(createHandlers({ insurers, clients }), {
+      createDispatcher(createHandlers({ insurers, clients, quotes }), {
         isTrustedSender: senderPolicy.isTrusted,
         logger,
       }),

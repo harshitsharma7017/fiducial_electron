@@ -34,7 +34,7 @@ describe('IPC contract', () => {
     expect(channels).not.toMatch(/from 'zod'/);
     expect(preload).not.toMatch(/from 'zod'/);
     // The contract (zod schemas) is imported for its types only, never as a value.
-    expect(preload).toMatch(/import type \{ [\w, ]+ \} from '..\/shared\/ipc\/contract'/);
+    expect(preload).toMatch(/import type \{[\s\w,]+\} from '..\/shared\/ipc\/contract'/);
     expect(preload).not.toMatch(/import \{[^}]*\} from '..\/shared\/ipc\/contract'/);
     expect(preload).not.toMatch(/ipcRenderer\.(on|send|sendSync|postMessage)\b/);
     expect(preload).not.toMatch(/exposeInMainWorld\([^)]*ipcRenderer/);

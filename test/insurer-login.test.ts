@@ -71,6 +71,11 @@ function allBytes(dir: string): Buffer {
   );
 }
 
+/** Quote runs are not exercised here (see quotes.test.ts). */
+const unusedQuotes = {
+  run: () => Promise.reject(new Error('not used')),
+};
+
 describe('insurer credentials (encrypted vault)', () => {
   it('saves, reads back in the main process, and survives a restart', async () => {
     const dir = freshDir();
@@ -174,12 +179,14 @@ function service(enabled: boolean, credentials = memoryCredentials()) {
         lastFill: null,
         sessionEndsAt: opened.includes(id) ? new Date(Date.UTC(2026, 10, 2, 22, 0)) : null,
         lastSessionEnd: null,
+        blockedOrigins: [],
       }),
       signOut: (id) => {
         const was = opened.includes(id);
         opened.splice(0, opened.length, ...opened.filter((o) => o !== id));
         return Promise.resolve(was);
       },
+      windowsOf: () => [],
     },
     logger: createLogger([(r) => records.push(r)]),
   });
@@ -283,10 +290,13 @@ describe('the insurer IPC channels', () => {
   function dispatcher() {
     const records: LogRecord[] = [];
     const { insurers, credentials } = service(true);
-    const dispatch = createDispatcher(createHandlers({ insurers, clients: unusedClients }), {
-      isTrustedSender: (s) => s.webContentsId === 1,
-      logger: createLogger([(r) => records.push(r)]),
-    });
+    const dispatch = createDispatcher(
+      createHandlers({ insurers, clients: unusedClients, quotes: unusedQuotes }),
+      {
+        isTrustedSender: (s) => s.webContentsId === 1,
+        logger: createLogger([(r) => records.push(r)]),
+      },
+    );
     return { dispatch, records, credentials };
   }
 

@@ -3,7 +3,12 @@
 // other call is refused, so no database is created.
 // The store opens on first use; if it cannot (secure storage unavailable, key or database
 // refused), the list says so and the next call tries again.
-import type { ClientInput, ClientRecord, ClientSummary } from '../../shared/contracts/client';
+import {
+  hasFutureDateOfBirth,
+  type ClientInput,
+  type ClientRecord,
+  type ClientSummary,
+} from '../../shared/contracts/client';
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
 import { ClientStoreError, type ClientStore } from '../storage/client-store';
@@ -26,6 +31,7 @@ export function createClientService(deps: {
   enabled: boolean;
   open: () => Promise<ClientStore>;
   logger: Logger;
+  now?: () => Date;
 }): ClientService {
   let store: ClientStore | null = null;
   let opening: Promise<ClientStore> | null = null;
@@ -95,6 +101,9 @@ export function createClientService(deps: {
 
     save: async (id, input) => {
       const s = await requireStore();
+      if (hasFutureDateOfBirth(input, (deps.now ?? (() => new Date()))())) {
+        throw new AppException('VALIDATION_FAILED');
+      }
       if (id !== null && !guard(() => s.get(id))) throw new AppException('VALIDATION_FAILED');
       const saved = guard(() => s.save(id, input));
       deps.logger.info('client.saved');

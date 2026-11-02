@@ -5,7 +5,12 @@ import { exposePortalDemo } from '../demo/portal-automation/preload/expose';
 import type { FqfApi } from '../shared/ipc/api';
 import { IPC_CHANNELS } from '../shared/ipc/channels';
 import type { ClientRecord } from '../shared/contracts/client';
-import type { AppInfo, ClientListResponse, InsurerPortalList } from '../shared/ipc/contract';
+import type {
+  AppInfo,
+  ClientListResponse,
+  InsurerPortalList,
+  QuoteRunResultView,
+} from '../shared/ipc/contract';
 import type { AppResult } from '../shared/ipc/result';
 
 const api: FqfApi = {
@@ -31,6 +36,14 @@ const api: FqfApi = {
       ipcRenderer.invoke(IPC_CHANNELS.insurersSignOut, { id }) as Promise<
         AppResult<{ signedOut: boolean }>
       >,
+    record: (id, action) =>
+      ipcRenderer.invoke(IPC_CHANNELS.insurersRecord, { id, action }) as Promise<
+        AppResult<{ recording: boolean; file: string | null }>
+      >,
+  },
+  quotes: {
+    run: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.quotesRun, request) as Promise<AppResult<QuoteRunResultView>>,
   },
   clients: {
     list: () =>

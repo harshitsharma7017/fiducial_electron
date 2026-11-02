@@ -38,7 +38,8 @@ import {
   type InsurerPortal,
 } from '../../shared/insurers/portals';
 import type { Logger } from '../logging/logger';
-import { hardenSession, setNavigationRule } from '../security/navigation-policy';
+import { hardenSession, setNavigationRule, setSessionPolicy } from '../security/navigation-policy';
+import { originOf, schemeOf } from '../security/origins';
 import { LOCKED_DOWN } from '../security/web-preferences';
 import type { InsurerCredentials } from './credentials';
 import { fillOutcomeOf } from './fill-outcome';
@@ -66,6 +67,8 @@ export interface PortalWindowState {
   sessionEndsAt: Date | null;
   /** Why the last session ended, if it ended while the app was running. */
   lastSessionEnd: SessionEnd | null;
+  /** Origins the portal tried to open that are not allowed (newest last, at most 5). */
+  blockedOrigins: string[];
 }
 
 export interface PortalWindows {
@@ -73,6 +76,8 @@ export interface PortalWindows {
   state(id: string): PortalWindowState;
   /** Ends the insurer's session now: closes its window and wipes its cookies and storage. */
   signOut(id: string): Promise<boolean>;
+  /** Every open window of the insurer: the portal and its pop-ups (for the form recorder). */
+  windowsOf(id: string): BrowserWindow[];
 }
 
 export function partitionFor(id: string): string {
@@ -96,6 +101,9 @@ export function createPortalWindows(deps: {
   const refill = new Map<string, () => Promise<void>>();
   const lastFill = new Map<string, FillOutcome>();
   const lastEnd = new Map<string, SessionEnd>();
+  /** Pop-ups the portal opened (within its own origins), by insurer. */
+  const children = new Map<string, Set<BrowserWindow>>();
+  const blocked = new Map<string, string[]>();
   let quitting = false;
   app.on('before-quit', () => {
     quitting = true;
@@ -104,8 +112,40 @@ export function createPortalWindows(deps: {
   const sessionOf = (id: string): Session => {
     const ses = session.fromPartition(partitionFor(id));
     hardenSession(ses, deps.logger);
+    const portal = findPortal(id);
+    if (portal) {
+      // Every window of this session (the portal and its pop-ups) follows the portal's origins;
+      // pop-ups within them open in the same signed-in session, locked down like the portal.
+      setSessionPolicy(ses, {
+        navigate: (url, isMainFrame) => mayNavigate(portal, url, isMainFrame),
+        popup: (url) =>
+          mayNavigate(portal, url, true)
+            ? {
+                width: 1280,
+                height: 900,
+                title: `${portal.displayName} \u2014 Fiducial Quote Fetcher`,
+                webPreferences: { ...LOCKED_DOWN, session: ses },
+              }
+            : null,
+        onBlocked: (_kind, url) => {
+          const origin = originOf(url) ?? schemeOf(url);
+          const list = (blocked.get(id) ?? []).filter((o) => o !== origin);
+          blocked.set(id, [...list, origin].slice(-5));
+        },
+      });
+    }
     return ses;
   };
+
+  /** A pop-up the portal opened: tracked so it can be recorded, and closed with the session. */
+  function adopt(portal: InsurerPortal, child: BrowserWindow): void {
+    const set = children.get(portal.id) ?? new Set<BrowserWindow>();
+    children.set(portal.id, set);
+    set.add(child);
+    child.on('page-title-updated', (event) => event.preventDefault());
+    child.webContents.on('did-create-window', (grandchild) => adopt(portal, grandchild));
+    child.on('closed', () => set.delete(child));
+  }
 
   const record = (portal: InsurerPortal, outcome: FillOutcome): void => {
     lastFill.set(portal.id, outcome);
@@ -120,6 +160,9 @@ export function createPortalWindows(deps: {
     const win = windows.get(id);
     windows.delete(id);
     refill.delete(id);
+    for (const child of children.get(id) ?? []) if (!child.isDestroyed()) child.destroy();
+    children.delete(id);
+    blocked.delete(id);
     if (win && !win.isDestroyed()) win.destroy();
     lastFill.delete(id);
     await wipe(sessionOf(id));
@@ -158,6 +201,7 @@ export function createPortalWindows(deps: {
     setNavigationRule(win.webContents, (url, isMainFrame) => mayNavigate(portal, url, isMainFrame));
     // Keep the insurer's name in the title bar, whatever the portal calls its page.
     win.on('page-title-updated', (event) => event.preventDefault());
+    win.webContents.on('did-create-window', (child) => adopt(portal, child));
     // Closing hides the window: the session and the portal's page stay until the session ends.
     win.on('close', (event) => {
       if (quitting) return;
@@ -324,8 +368,13 @@ export function createPortalWindows(deps: {
         lastFill: lastFill.get(id) ?? null,
         sessionEndsAt: deps.clock.endsAt(id),
         lastSessionEnd: lastEnd.get(id) ?? null,
+        blockedOrigins: blocked.get(id) ?? [],
       };
     },
+    windowsOf: (id) =>
+      [windows.get(id), ...(children.get(id) ?? [])].filter(
+        (w): w is BrowserWindow => !!w && !w.isDestroyed(),
+      ),
     signOut: async (id) => {
       if (!findPortal(id)) return false;
       await startup;

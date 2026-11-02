@@ -8,10 +8,12 @@ export const IPC_CHANNELS = {
   insurersForgetLogin: 'insurers:forget-login',
   insurersOpenPortal: 'insurers:open-portal',
   insurersSignOut: 'insurers:sign-out',
+  insurersRecord: 'insurers:record',
   clientsList: 'clients:list',
   clientsGet: 'clients:get',
   clientsSave: 'clients:save',
   clientsDelete: 'clients:delete',
+  quotesRun: 'quotes:run',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

@@ -19,6 +19,7 @@ import {
   type ClientRecord,
   type ClientSummary,
 } from '../../shared/contracts/client';
+import type { Gender, MaritalStatus } from '../../shared/contracts/client';
 import type { Relationship } from '../../shared/contracts/customer';
 import type { CoverType } from '../../shared/contracts/coverage';
 import { VaultOpenError, type VaultOpener } from '../secrets/vault-opener';
@@ -28,7 +29,7 @@ import type { StoreProblem } from './store-problems';
 
 const KEY_ENTRY = 'database-key';
 const KEY_HEX = /^[0-9a-f]{64}$/;
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /** Why the store could not be used. `code` is safe to show; `reason` is for logs and support. */
 export class ClientStoreError extends Error {
@@ -94,8 +95,10 @@ function migrate(db: Database.Database, store: DurableStore): void {
   const version = Number(db.pragma('user_version', { simple: true }));
   if (version > SCHEMA_VERSION) throw new ClientStoreError('STORAGE_ERROR', 'schema-too-new');
   if (version === SCHEMA_VERSION) return;
-  store.commit((d) => {
-    d.exec(`
+  // Version 1: clients and members.
+  if (version < 1)
+    store.commit((d) => {
+      d.exec(`
       CREATE TABLE client (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -119,7 +122,16 @@ function migrate(db: Database.Database, store: DurableStore): void {
         PRIMARY KEY (client_id, position)
       );
     `);
-    d.pragma(`user_version = ${SCHEMA_VERSION}`);
+      d.pragma('user_version = 1');
+    });
+  // Version 2 (2 November 2026): date of birth and gender per member, proposer marital status.
+  store.commit((d) => {
+    d.exec(`
+      ALTER TABLE client ADD COLUMN proposer_marital_status TEXT;
+      ALTER TABLE client_member ADD COLUMN date_of_birth TEXT;
+      ALTER TABLE client_member ADD COLUMN gender TEXT;
+    `);
+    d.pragma('user_version = 2');
   });
 }
 
@@ -130,6 +142,7 @@ interface ClientRow {
   email: string | null;
   notes: string | null;
   pincode: string;
+  proposer_marital_status: string | null;
   cover_type: string | null;
   sum_insured_paise: number | null;
   tenure_years: number | null;
@@ -169,10 +182,21 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
     (
       db
         .prepare(
-          'SELECT relationship, age FROM client_member WHERE client_id = ? ORDER BY position',
+          `SELECT relationship, age, date_of_birth, gender FROM client_member
+           WHERE client_id = ? ORDER BY position`,
         )
-        .all(id) as { relationship: Relationship; age: number }[]
-    ).map((m) => ({ relationship: m.relationship, age: m.age }));
+        .all(id) as {
+        relationship: Relationship;
+        age: number;
+        date_of_birth: string | null;
+        gender: string | null;
+      }[]
+    ).map((m) => ({
+      relationship: m.relationship,
+      age: m.age,
+      ...(m.date_of_birth !== null ? { dateOfBirth: m.date_of_birth } : {}),
+      ...(m.gender !== null ? { gender: m.gender as Gender } : {}),
+    }));
 
   const toRecord = (row: ClientRow): ClientRecord => {
     // Re-validated on the way out: a row that no longer fits the contract is not passed on.
@@ -185,6 +209,9 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
       },
       pincode: row.pincode,
       members: membersOf(row.id),
+      ...(row.proposer_marital_status !== null
+        ? { proposerMaritalStatus: row.proposer_marital_status as MaritalStatus }
+        : {}),
       ...(row.cover_type !== null && row.sum_insured_paise !== null && row.tenure_years !== null
         ? {
             preferences: {
@@ -256,6 +283,7 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
           email: c.email ?? null,
           notes: c.notes ?? null,
           pincode: input.pincode,
+          proposer_marital_status: input.proposerMaritalStatus ?? null,
           cover_type: p?.coverType ?? null,
           sum_insured_paise: p?.sumInsuredPaise ?? null,
           tenure_years: p?.tenureYears ?? null,
@@ -265,22 +293,26 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
         if (existing) {
           d.prepare(
             `UPDATE client SET name = @name, phone = @phone, email = @email, notes = @notes,
-               pincode = @pincode, cover_type = @cover_type, sum_insured_paise = @sum_insured_paise,
+               pincode = @pincode, proposer_marital_status = @proposer_marital_status,
+               cover_type = @cover_type, sum_insured_paise = @sum_insured_paise,
                tenure_years = @tenure_years, updated_at = @updated_at WHERE id = @id`,
           ).run(values);
           d.prepare('DELETE FROM client_member WHERE client_id = ?').run(clientId);
         } else {
           d.prepare(
-            `INSERT INTO client (id, name, phone, email, notes, pincode, cover_type,
-               sum_insured_paise, tenure_years, created_at, updated_at)
-             VALUES (@id, @name, @phone, @email, @notes, @pincode, @cover_type,
-               @sum_insured_paise, @tenure_years, @created_at, @updated_at)`,
+            `INSERT INTO client (id, name, phone, email, notes, pincode, proposer_marital_status,
+               cover_type, sum_insured_paise, tenure_years, created_at, updated_at)
+             VALUES (@id, @name, @phone, @email, @notes, @pincode, @proposer_marital_status,
+               @cover_type, @sum_insured_paise, @tenure_years, @created_at, @updated_at)`,
           ).run(values);
         }
         const member = d.prepare(
-          'INSERT INTO client_member (client_id, position, relationship, age) VALUES (?, ?, ?, ?)',
+          `INSERT INTO client_member (client_id, position, relationship, age, date_of_birth, gender)
+           VALUES (?, ?, ?, ?, ?, ?)`,
         );
-        input.members.forEach((m, i) => member.run(clientId, i, m.relationship, m.age));
+        input.members.forEach((m, i) =>
+          member.run(clientId, i, m.relationship, m.age, m.dateOfBirth ?? null, m.gender ?? null),
+        );
       });
       const saved = getRow(clientId);
       if (!saved) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');

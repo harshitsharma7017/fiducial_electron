@@ -111,6 +111,50 @@ module.exports = {
     `<form><input type="text" id="u"><input type="text" id="p"><input type="password" id="x"></form>`,
   ),
 
+  // Form recorder: a two-step synthetic quote form. "Get quote" posts JSON and shows a premium.
+  '/quote': page(
+    'Health quote',
+    `<h2>Health insurance quote</h2>
+     <form id="q" onsubmit="return false">
+       <label for="nm">Proposer name</label><input id="nm" name="proposerName" type="text">
+       <label for="dob">Date of birth</label><input id="dob" name="dob" type="text" placeholder="DD/MM/YYYY">
+       <label for="mob">Mobile</label><input id="mob" name="mobile" type="tel">
+       <label for="em">Email</label><input id="em" name="email" type="email">
+       <label for="rel">Relationship</label>
+       <select id="rel" name="relation"><option value="">Select</option><option value="SELF">Self</option><option value="SPOUSE">Spouse</option></select>
+       <label for="si">Sum insured</label>
+       <select id="si" name="sumInsured"><option value="500000">5 Lakh</option><option value="1000000">10 Lakh</option></select>
+       <label><input type="radio" name="gender" value="M"> Male</label>
+       <label><input type="radio" name="gender" value="F"> Female</label>
+       <button type="button" id="next">Get quote</button>
+     </form>
+     <div class="alert alert-danger" role="alert">Minimum sum insured for floater is 300000. Ref 9876543210</div>
+     <div id="result"></div>
+     <script>
+       document.getElementById('next').addEventListener('click', async () => {
+         const body = { proposer: { name: nm.value, dob: dob.value, mobile: mob.value, email: em.value }, relation: rel.value, si: Number(si.value) };
+         const r = await fetch('/api/quote', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+         const data = await r.json();
+         document.getElementById('q').style.display = 'none';
+         history.pushState({}, '', '/quote#/result');
+         document.getElementById('result').innerHTML = '<h3>Your premium</h3><div class="plan">Health Plus<span class="amt">' + data.premium + '</span></div>';
+       });
+     </script>`,
+  ),
+
+  // Pop-ups: a portal home page whose tiles open in new windows (as United India's do).
+  '/tiles': page(
+    'portal home',
+    `<a id="calc" href="/calc" target="_blank">Health Policy Premium Calculator</a>
+     <a id="away" href="https://evil.example/" target="_blank">Elsewhere</a>
+     <script>document.cookie = 'sid=signed-in; path=/';</script>`,
+  ),
+  '/calc': page('premium calculator', `<h2>Premium calculator</h2>`),
+  '/tiles-quote': page(
+    'portal home with a quote pop-up',
+    `<a id="health" href="/quote" target="_blank">Health Policy Premium Calculator</a>`,
+  ),
+
   // Refusals.
   '/ambiguous': page(
     'two user fields',

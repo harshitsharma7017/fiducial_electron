@@ -3,11 +3,13 @@
 import { app } from 'electron';
 import type { ClientService } from '../clients/service';
 import type { InsurerService } from '../insurers/service';
+import type { QuoteService } from '../quotes/service';
 import type { IpcHandlers } from './dispatcher';
 
 export function createHandlers(deps: {
   insurers: InsurerService;
   clients: ClientService;
+  quotes: QuoteService;
 }): IpcHandlers {
   return {
     'app:get-info': () => ({
@@ -31,11 +33,13 @@ export function createHandlers(deps: {
       return { opened: true as const };
     },
     'insurers:sign-out': async ({ id }) => ({ signedOut: await deps.insurers.signOut(id) }),
+    'insurers:record': ({ id, action }) => deps.insurers.record(id, action),
     'clients:list': () => deps.clients.list(),
     'clients:get': ({ id }) => deps.clients.get(id),
     'clients:save': async ({ id, client }) => ({
       id: await deps.clients.save(id ?? null, client),
     }),
     'clients:delete': async ({ id }) => ({ deleted: await deps.clients.delete(id) }),
+    'quotes:run': (request) => deps.quotes.run(request),
   };
 }

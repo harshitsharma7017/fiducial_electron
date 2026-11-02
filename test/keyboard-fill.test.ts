@@ -26,8 +26,8 @@ function page(
     focused: () =>
       Promise.resolve(
         at === null
-          ? { kind: 'none', empty: true }
-          : { kind: boxes[at]!.kind, empty: values[at] === '' },
+          ? { kind: 'none', empty: true, length: 0 }
+          : { kind: boxes[at]!.kind, empty: values[at] === '', length: values[at]!.length },
       ),
     type: (text) => {
       typed.push(text);
@@ -65,6 +65,16 @@ describe('keyboard fill (canvas portals)', () => {
     expect(await keyboardFill(p.target, HDFC, LOGIN)).toBe('field-wrong-type');
     expect(p.typed).toEqual([LOGIN.username]);
     expect(p.values.join('')).not.toContain(LOGIN.password);
+  });
+
+  it('stops before the password when a key press was lost in the user ID', async () => {
+    const p = page([{ kind: 'text' }, { kind: 'password' }], 0);
+    const lossy: KeyboardTarget = {
+      ...p.target,
+      type: async (text) => p.target.type(text.slice(1)), // first character dropped
+    };
+    expect(await keyboardFill(lossy, HDFC, LOGIN)).toBe('agent-failed');
+    expect(p.values[1]).toBe(''); // the password was never typed
   });
 
   it('keeps what the advisor already typed', async () => {

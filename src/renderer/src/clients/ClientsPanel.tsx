@@ -1,9 +1,17 @@
 // Saved clients: the details quotes are fetched for, kept encrypted on this computer until the
-// advisor deletes them. Members carry relationship and age only (data minimisation, C-05).
+// advisor deletes them. Members carry relationship and age, and optionally date of birth and
+// gender (United India's calculator needs them); the proposer may have a marital status. Each
+// client can be quoted from here ("Get quote").
 import { useCallback, useEffect, useState } from 'react';
-import type { ClientInputRaw, ClientSummary } from '../../../shared/contracts/client';
+import {
+  ageOn,
+  type ClientInputRaw,
+  type ClientSummary,
+  type Gender,
+  type MaritalStatus,
+} from '../../../shared/contracts/client';
 import { RELATIONSHIPS, type Relationship } from '../../../shared/contracts/customer';
-import type { ClientListResponse } from '../../../shared/ipc/contract';
+import type { ClientListResponse, QuoteRunResultView } from '../../../shared/ipc/contract';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
 
 const RELATIONSHIP_LABELS: Record<Relationship, string> = {
@@ -20,7 +28,17 @@ const RELATIONSHIP_LABELS: Record<Relationship, string> = {
 interface MemberDraft {
   relationship: Relationship;
   age: string;
+  /** YYYY-MM-DD, or '' if not given. */
+  dateOfBirth: string;
+  gender: Gender | '';
 }
+
+const MARITAL_LABELS: Record<MaritalStatus, string> = {
+  married: 'Married',
+  unmarried: 'Unmarried',
+  widowed: 'Widow / widower',
+  divorced: 'Divorced',
+};
 
 interface Draft {
   id: string | null;
@@ -29,6 +47,7 @@ interface Draft {
   email: string;
   notes: string;
   pincode: string;
+  maritalStatus: MaritalStatus | '';
   members: MemberDraft[];
   withPreferences: boolean;
   coverType: 'individual' | 'floater';
@@ -43,7 +62,8 @@ const EMPTY: Draft = {
   email: '',
   notes: '',
   pincode: '',
-  members: [{ relationship: 'self', age: '' }],
+  maritalStatus: '',
+  members: [{ relationship: 'self', age: '', dateOfBirth: '', gender: '' }],
   withPreferences: true,
   coverType: 'floater',
   sumInsuredRupees: '',
@@ -63,7 +83,13 @@ function toInput(d: Draft): ClientInputRaw {
       ...(notes ? { notes } : {}),
     },
     pincode: d.pincode,
-    members: d.members.map((m) => ({ relationship: m.relationship, age: Number(m.age) })),
+    ...(d.maritalStatus ? { proposerMaritalStatus: d.maritalStatus } : {}),
+    members: d.members.map((m) => ({
+      relationship: m.relationship,
+      age: Number(m.age),
+      ...(m.dateOfBirth ? { dateOfBirth: m.dateOfBirth } : {}),
+      ...(m.gender ? { gender: m.gender } : {}),
+    })),
     ...(d.withPreferences
       ? {
           preferences: {
@@ -85,6 +111,7 @@ export function ClientsPanel(): React.JSX.Element | null {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [quoting, setQuoting] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await window.fqf.clients.list().catch(() => null);
@@ -120,7 +147,13 @@ export function ClientsPanel(): React.JSX.Element | null {
       email: client.customer.email ?? '',
       notes: client.customer.notes ?? '',
       pincode: client.pincode,
-      members: client.members.map((m) => ({ relationship: m.relationship, age: String(m.age) })),
+      maritalStatus: client.proposerMaritalStatus ?? '',
+      members: client.members.map((m) => ({
+        relationship: m.relationship,
+        age: String(m.age),
+        dateOfBirth: m.dateOfBirth ?? '',
+        gender: m.gender ?? '',
+      })),
       withPreferences: !!client.preferences,
       coverType: client.preferences?.coverType ?? 'floater',
       sumInsuredRupees: client.preferences
@@ -142,7 +175,7 @@ export function ClientsPanel(): React.JSX.Element | null {
       <h2 id="clients-heading">Clients</h2>
       <p className="lead">
         Saved clients are reused when fetching quotes. They are stored encrypted on this computer
-        and kept until you delete them. Members are recorded by relationship and age only.
+        and kept until you delete them.
       </p>
       {list.storageError && (
         <p className="error" role="alert">
@@ -189,6 +222,14 @@ export function ClientsPanel(): React.JSX.Element | null {
                   <span className={c.hasPreferences ? 'badge saved' : 'badge'}>
                     {c.hasPreferences ? 'Ready to quote' : 'Quote details missing'}
                   </span>
+                  {c.hasPreferences && (
+                    <button
+                      type="button"
+                      onClick={() => setQuoting(quoting === c.id ? null : c.id)}
+                    >
+                      Get quote
+                    </button>
+                  )}
                   <button type="button" onClick={() => void edit(c)}>
                     Edit
                   </button>
@@ -208,6 +249,7 @@ export function ClientsPanel(): React.JSX.Element | null {
                   )}
                 </div>
               </div>
+              {quoting === c.id && <QuotePanel clientId={c.id} />}
             </li>
           ))}
         </ul>
@@ -228,6 +270,7 @@ function ClientForm(props: {
   const set = (patch: Partial<Draft>) => onChange({ ...d, ...patch });
   const setMember = (i: number, patch: Partial<MemberDraft>) =>
     set({ members: d.members.map((m, j) => (j === i ? { ...m, ...patch } : m)) });
+  const hasSelf = d.members.some((m) => m.relationship === 'self');
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -307,6 +350,21 @@ function ClientForm(props: {
               ))}
             </select>
             <input
+              aria-label={`Member ${i + 1} date of birth`}
+              type="date"
+              value={m.dateOfBirth}
+              min="1900-01-01"
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => {
+                const dateOfBirth = e.target.value;
+                // The age follows the date of birth.
+                setMember(i, {
+                  dateOfBirth,
+                  ...(dateOfBirth ? { age: String(ageOn(dateOfBirth, new Date())) } : {}),
+                });
+              }}
+            />
+            <input
               aria-label={`Member ${i + 1} age`}
               value={m.age}
               onChange={(e) => setMember(i, { age: e.target.value })}
@@ -314,7 +372,18 @@ function ClientForm(props: {
               placeholder="Age"
               maxLength={3}
               required
+              readOnly={!!m.dateOfBirth}
             />
+            <select
+              aria-label={`Member ${i + 1} gender`}
+              value={m.gender}
+              onChange={(e) => setMember(i, { gender: e.target.value as Gender | '' })}
+            >
+              <option value="">Gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="transgender">Transgender</option>
+            </select>
             {d.members.length > 1 && (
               <button
                 type="button"
@@ -325,10 +394,33 @@ function ClientForm(props: {
             )}
           </div>
         ))}
+        {hasSelf && (
+          <label>
+            Proposer&rsquo;s marital status
+            <select
+              value={d.maritalStatus}
+              onChange={(e) => set({ maritalStatus: e.target.value as MaritalStatus | '' })}
+            >
+              <option value="">Not given</option>
+              {(Object.keys(MARITAL_LABELS) as MaritalStatus[]).map((k) => (
+                <option key={k} value={k}>
+                  {MARITAL_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {d.members.length < 12 && (
           <button
             type="button"
-            onClick={() => set({ members: [...d.members, { relationship: 'spouse', age: '' }] })}
+            onClick={() =>
+              set({
+                members: [
+                  ...d.members,
+                  { relationship: 'spouse', age: '', dateOfBirth: '', gender: '' },
+                ],
+              })
+            }
           >
             Add member
           </button>
@@ -419,4 +511,66 @@ function describeField(path: string): string {
     );
   if (parts[0] === 'pincode') return 'pincode';
   return 'details';
+}
+
+/** Fills an insurer's quote form for one saved client (United India health so far). */
+function QuotePanel(props: { clientId: string }): React.JSX.Element {
+  const [goodHealth, setGoodHealth] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    const r = await window.fqf.quotes
+      .run({ clientId: props.clientId, insurerId: 'united-india', goodHealthConfirmed: goodHealth })
+      .catch(() => null);
+    setBusy(false);
+    setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
+  };
+
+  return (
+    <div className="quote-panel">
+      <p className="insurer-note">
+        <strong>United India, health (calculator).</strong> Sign in to United India and leave it on
+        its home page. The app opens the Health Policy Premium Calculator and fills it for this
+        client, then stops at &ldquo;User Details&rdquo; for you to check the email and mobile and
+        press Check Premium.
+      </p>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={goodHealth}
+          onChange={(e) => setGoodHealth(e.target.checked)}
+        />
+        Every member is in good health: no obesity, diabetes, hypertension or pre-existing condition
+        (United India&rsquo;s declaration, for this quote).
+      </label>
+      <div className="insurer-actions">
+        <button type="button" disabled={busy} onClick={() => void run()}>
+          {busy ? 'Filling United India…' : 'Fill United India calculator'}
+        </button>
+      </div>
+      {result && 'error' in result && (
+        <p className="error" role="alert">
+          {result.error}
+        </p>
+      )}
+      {result && 'outcome' in result && (
+        <div role="status">
+          <p className={result.outcome === 'ready' ? undefined : 'error'}>
+            {result.step ? `${result.step}: ` : ''}
+            {result.message}
+          </p>
+          {result.problems.length > 0 && (
+            <ul>
+              {result.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

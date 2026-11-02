@@ -2,7 +2,22 @@
 // serialised agent the portal windows inject, and the same keyboard fill (canvas portals).
 import { keyboardFill } from '../../src/main/insurers/keyboard-fill';
 import { keyboardTargetFor } from '../../src/main/insurers/keyboard-target';
+import { createFormRecorder } from '../../src/main/insurers/form-recorder';
 import { insurerLoginAgent } from '../../src/main/insurers/login-agent';
+import { createLogger } from '../../src/main/logging/logger';
+import { runUiicHealthQuote } from '../../src/main/quotes/run-uiic-health';
+import {
+  installNavigationPolicy,
+  setSessionPolicy,
+} from '../../src/main/security/navigation-policy';
 
 export const AGENT_SOURCE = insurerLoginAgent.toString();
-export { keyboardFill, keyboardTargetFor };
+export {
+  createFormRecorder,
+  createLogger,
+  installNavigationPolicy,
+  keyboardFill,
+  keyboardTargetFor,
+  runUiicHealthQuote,
+  setSessionPolicy,
+};

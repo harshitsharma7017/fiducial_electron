@@ -5,6 +5,7 @@ import type { InsurerPortalList, SaveLoginRequest } from '../../shared/ipc/contr
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
 import { CredentialError, type InsurerCredentials } from './credentials';
+import type { FormRecorder } from './form-recorder';
 import type { PortalWindows } from './portal-windows';
 
 export const INSURER_PORTALS_FLAG = 'FQF_INSURER_PORTALS';
@@ -19,6 +20,10 @@ export interface InsurerService {
   forgetLogin(id: string): Promise<boolean>;
   openPortal(id: string): Promise<void>;
   signOut(id: string): Promise<boolean>;
+  record(
+    id: string,
+    action: 'start' | 'stop',
+  ): Promise<{ recording: boolean; file: string | null }>;
 }
 
 function rethrow(err: unknown): never {
@@ -28,7 +33,8 @@ function rethrow(err: unknown): never {
 export function createInsurerService(deps: {
   enabled: boolean;
   credentials: InsurerCredentials;
-  windows: Pick<PortalWindows, 'open' | 'state' | 'signOut'>;
+  windows: Pick<PortalWindows, 'open' | 'state' | 'signOut' | 'windowsOf'>;
+  recorder?: FormRecorder;
   logger: Logger;
 }): InsurerService {
   const requireEnabled = (): void => {
@@ -65,6 +71,8 @@ export function createInsurerService(deps: {
             lastFill: window.lastFill,
             sessionEndsAt: window.sessionEndsAt?.toISOString() ?? null,
             lastSessionEnd: window.lastSessionEnd,
+            blockedOrigins: window.blockedOrigins,
+            recording: deps.recorder?.status(portal.id) ?? null,
           };
         }),
       };
@@ -109,7 +117,22 @@ export function createInsurerService(deps: {
     signOut: async (id) => {
       requireEnabled();
       if (!findPortal(id)) throw new AppException('VALIDATION_FAILED');
+      if (deps.recorder?.status(id)?.active) await deps.recorder.stop(id);
       return deps.windows.signOut(id);
+    },
+
+    record: async (id, action) => {
+      requireEnabled();
+      if (!findPortal(id) || !deps.recorder) throw new AppException('VALIDATION_FAILED');
+      if (action === 'stop') {
+        const file = await deps.recorder.stop(id);
+        return { recording: false, file };
+      }
+      // Recording needs the insurer's window open (signed in). It follows every window of the
+      // insurer, including pop-ups that open while recording (such as a premium calculator).
+      if (deps.windows.windowsOf(id).length === 0) throw new AppException('MANUAL_ACTION_REQUIRED');
+      deps.recorder.start(id, () => deps.windows.windowsOf(id));
+      return { recording: true, file: null };
     },
   };
 }

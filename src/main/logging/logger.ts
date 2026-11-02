@@ -30,10 +30,13 @@ export const LOG_EVENTS = [
   'insurer.login-saved',
   'insurer.login-forgotten',
   'insurer.session-ended',
+  'insurer.recording-started',
+  'insurer.recording-stopped',
   'client.saved',
   'client.deleted',
   'storage.open-failed',
   'storage.write-failed',
+  'quote.run',
 ] as const;
 
 export type LogEvent = (typeof LOG_EVENTS)[number];
@@ -76,6 +79,8 @@ const FIELD_SCHEMAS = {
   sessionEnd: z.enum(['expired', 'signed-out']),
   /** Why the client database could not be used (never any client data). */
   storeProblem: z.enum(STORE_PROBLEMS),
+  /** How a quote run ended (never client data). */
+  quoteOutcome: z.enum(['ready', 'refused', 'failed']),
 } as const;
 
 export type LogFields = { [K in keyof typeof FIELD_SCHEMAS]?: z.infer<(typeof FIELD_SCHEMAS)[K]> };
