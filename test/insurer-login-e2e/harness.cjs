@@ -10,10 +10,11 @@ const http = require('node:http');
 const { app, BrowserWindow, session } = require('electron');
 const FIXTURES = require('./fixtures.cjs');
 
-const { AGENT_SOURCE } = require(process.env.FQF_LOGIN_E2E_BUNDLE);
+const { AGENT_SOURCE, keyboardFill, keyboardTargetFor } = require(process.env.FQF_LOGIN_E2E_BUNDLE);
 const WORLD_ID = 1801;
 const USER = 'SYNTHETIC.USER01';
 const PASS = 'Synthetic-Pw-9f3a';
+const PASS_WITH_SYMBOLS = 'Synth@Pass#9! x';
 
 app.on('window-all-closed', () => {});
 
@@ -200,13 +201,91 @@ app.whenReady().then(async () => {
     win.destroy();
   }
 
+  // Keyboard fill: real key events (sendInputEvent) through the app's own target.
+  const KEYBOARD = [
+    {
+      name: 'keyboard fill: user ID, Tab, password, when the advisor clicked the user ID box',
+      path: '/kbd',
+      focus: '#u',
+      outcome: 'filled',
+      values: { '#u': USER, '#p': PASS_WITH_SYMBOLS },
+    },
+    {
+      name: 'keyboard fill: types nothing when no box has the cursor',
+      path: '/kbd',
+      focus: null,
+      outcome: 'click-username-first',
+      values: { '#u': '', '#p': '' },
+    },
+    {
+      name: 'keyboard fill: types nothing when the cursor is in the password box',
+      path: '/kbd',
+      focus: '#p',
+      outcome: 'click-username-first',
+      values: { '#u': '', '#p': '' },
+    },
+    {
+      name: 'keyboard fill: no password typed when Tab does not land in a password box',
+      path: '/kbd-two-text',
+      focus: '#u',
+      outcome: 'field-wrong-type',
+      values: { '#u': USER, '#p': '', '#x': '' },
+    },
+  ];
+  const portal = {
+    automation: 'shortcut',
+    loginOrigin: origin,
+    shortcutPages: [{ path: '/kbd' }, { path: '/kbd-two-text' }],
+  };
+  for (const c of KEYBOARD) {
+    const win = new BrowserWindow({
+      show: true,
+      width: 800,
+      height: 600,
+      webPreferences: {
+        session: ses,
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    await win.loadURL(origin + c.path);
+    win.focus();
+    if (c.focus)
+      await win.webContents.executeJavaScript(`document.querySelector('${c.focus}').focus(); true`);
+    const outcome = await keyboardFill(keyboardTargetFor(win.webContents, WORLD_ID), portal, {
+      username: USER,
+      password: PASS_WITH_SYMBOLS,
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    const page = await win.webContents.executeJavaScript(`(() => {
+      const values = {};
+      for (const sel of ${JSON.stringify(Object.keys(c.values))}) values[sel] = document.querySelector(sel).value;
+      return { values, seen: window.__seen };
+    })()`);
+    const problems = [];
+    if (outcome !== c.outcome) problems.push(`outcome ${outcome}`);
+    if (!same(page.values, c.values))
+      problems.push(
+        `values ${JSON.stringify(Object.fromEntries(Object.entries(page.values).map(([k, v]) => [k, v.length])))}`,
+      );
+    if (page.seen.submit !== 0 || page.seen.click !== 0)
+      problems.push(`submitted ${page.seen.submit}, clicked ${page.seen.click}`);
+    console.log(
+      `${problems.length ? 'FAIL' : 'pass'}  ${c.name}${problems.length ? `\n      ${problems.join('\n      ')}` : ''}`,
+    );
+    failures += problems.length ? 1 : 0;
+    win.destroy();
+  }
+
   if (writes.length) {
     console.log(`FAIL  requests other than GET reached the server: ${writes.join(', ')}`);
     failures += 1;
   } else {
     console.log('pass  no request other than GET reached the server');
   }
-  console.log(`\n${CASES.length + 1 - failures} of ${CASES.length + 1} checks passed`);
+  const total = CASES.length + KEYBOARD.length + 1;
+  console.log(`\n${total - failures} of ${total} checks passed`);
   server.close();
   app.exit(failures ? 1 : 0);
 });

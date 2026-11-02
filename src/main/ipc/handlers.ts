@@ -1,10 +1,14 @@
 // IPC handlers: read-only application information (M2) and the insurer portals feature
 // (src/main/insurers/service.ts), which is off unless switched on.
 import { app } from 'electron';
+import type { ClientService } from '../clients/service';
 import type { InsurerService } from '../insurers/service';
 import type { IpcHandlers } from './dispatcher';
 
-export function createHandlers(deps: { insurers: InsurerService }): IpcHandlers {
+export function createHandlers(deps: {
+  insurers: InsurerService;
+  clients: ClientService;
+}): IpcHandlers {
   return {
     'app:get-info': () => ({
       name: app.getName(),
@@ -27,5 +31,11 @@ export function createHandlers(deps: { insurers: InsurerService }): IpcHandlers 
       return { opened: true as const };
     },
     'insurers:sign-out': async ({ id }) => ({ signedOut: await deps.insurers.signOut(id) }),
+    'clients:list': () => deps.clients.list(),
+    'clients:get': ({ id }) => deps.clients.get(id),
+    'clients:save': async ({ id, client }) => ({
+      id: await deps.clients.save(id ?? null, client),
+    }),
+    'clients:delete': async ({ id }) => ({ deleted: await deps.clients.delete(id) }),
   };
 }

@@ -24,6 +24,12 @@ const insurerStubs: Omit<IpcHandlers, 'app:get-info'> = {
   'insurers:forget-login': () => ({ forgotten: false }),
   'insurers:open-portal': () => ({ opened: true }),
   'insurers:sign-out': () => ({ signedOut: false }),
+  'clients:list': () => ({ enabled: false, storageError: null, clients: [] }),
+  'clients:get': () => {
+    throw new AppException('VALIDATION_FAILED');
+  },
+  'clients:save': () => ({ id: 'x' }),
+  'clients:delete': () => ({ deleted: false }),
 };
 
 function setup(handler: IpcHandlers['app:get-info'] = () => info) {

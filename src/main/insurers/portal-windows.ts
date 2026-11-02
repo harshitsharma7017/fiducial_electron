@@ -30,6 +30,7 @@
 import { app, BrowserWindow, session, type Session } from 'electron';
 import type { FillOutcome } from '../../shared/insurers/fill-outcomes';
 import {
+  FILL_SHORTCUT_KEY,
   findPortal,
   INSURER_PORTALS,
   mayFillLogin,
@@ -41,6 +42,8 @@ import { hardenSession, setNavigationRule } from '../security/navigation-policy'
 import { LOCKED_DOWN } from '../security/web-preferences';
 import type { InsurerCredentials } from './credentials';
 import { fillOutcomeOf } from './fill-outcome';
+import { keyboardFill } from './keyboard-fill';
+import { keyboardTargetFor } from './keyboard-target';
 import { insurerLoginAgent, type FillCommand, type FillResult } from './login-agent';
 import type { SessionClock } from './session-clock';
 
@@ -169,6 +172,45 @@ export function createPortalWindows(deps: {
       }
     });
 
+    // Shortcut portals: the advisor clicks into the user ID box and presses Cmd/Ctrl+Shift+L.
+    if (portal.automation === 'shortcut') {
+      // Typing starts once the advisor has let go of Cmd/Ctrl and Shift, so the page does not
+      // read the typed letters as shortcuts (Cmd+A and so on); at the latest after 2 seconds.
+      let state: 'idle' | 'waiting' | 'typing' = 'idle';
+      let fallback: NodeJS.Timeout | undefined;
+      const start = () => {
+        if (state !== 'waiting') return;
+        clearTimeout(fallback);
+        state = 'typing';
+        void typeLogin(win, portal).finally(() => {
+          state = 'idle';
+        });
+      };
+      win.webContents.on('before-input-event', (event, input) => {
+        const isShortcut =
+          input.type === 'keyDown' &&
+          input.shift &&
+          (process.platform === 'darwin' ? input.meta : input.control) &&
+          input.key.toLowerCase() === FILL_SHORTCUT_KEY;
+        if (isShortcut) {
+          event.preventDefault();
+          if (state !== 'idle') return;
+          state = 'waiting';
+          fallback = setTimeout(start, 2000);
+          return;
+        }
+        if (
+          state === 'waiting' &&
+          input.type === 'keyUp' &&
+          !input.meta &&
+          !input.control &&
+          !input.shift
+        ) {
+          start();
+        }
+      });
+    }
+
     let filling = false;
     const tryFill = async (): Promise<void> => {
       if (filling || win.isDestroyed()) return;
@@ -188,6 +230,30 @@ export function createPortalWindows(deps: {
     });
     void win.loadURL(portal.startUrl).catch(() => undefined);
     return win;
+  }
+
+  async function typeLogin(win: BrowserWindow, portal: InsurerPortal): Promise<void> {
+    let login;
+    try {
+      login = await deps.credentials.read(portal.id);
+    } catch {
+      record(portal, 'login-unreadable');
+      return;
+    }
+    if (!login) {
+      record(portal, 'no-login-saved');
+      return;
+    }
+    try {
+      const outcome = await keyboardFill(
+        keyboardTargetFor(win.webContents, WORLD_ID),
+        portal,
+        login,
+      );
+      record(portal, outcome);
+    } catch {
+      record(portal, 'agent-failed');
+    }
   }
 
   async function fill(win: BrowserWindow, portal: InsurerPortal): Promise<void> {

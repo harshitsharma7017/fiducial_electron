@@ -1,6 +1,13 @@
 // The renderer-facing API exposed by the preload as `window.fqf`. Type-only imports keep zod
 // out of the preload bundle. API_SHAPE lists the exact exposed surface, checked by the smoke test.
-import type { AppInfo, InsurerPortalList, SaveLoginRequest } from './contract';
+import type { ClientRecord } from '../contracts/client';
+import type {
+  AppInfo,
+  ClientListResponse,
+  InsurerPortalList,
+  SaveClientRequest,
+  SaveLoginRequest,
+} from './contract';
 import type { AppResult } from './result';
 
 export interface FqfApi {
@@ -16,9 +23,16 @@ export interface FqfApi {
     /** Ends the insurer's saved session: its window closes and its cookies are wiped. */
     signOut(id: string): Promise<AppResult<{ signedOut: boolean }>>;
   };
+  clients: {
+    list(): Promise<AppResult<ClientListResponse>>;
+    get(id: string): Promise<AppResult<ClientRecord>>;
+    save(request: SaveClientRequest): Promise<AppResult<{ id: string }>>;
+    delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
+  };
 }
 
 export const API_SHAPE = {
   app: ['getInfo'],
   insurers: ['list', 'saveLogin', 'forgetLogin', 'openPortal', 'signOut'],
+  clients: ['list', 'get', 'save', 'delete'],
 } as const satisfies { [K in keyof FqfApi]: readonly (keyof FqfApi[K])[] };

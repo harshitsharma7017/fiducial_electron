@@ -3,7 +3,13 @@
   "compilerOptions": {
     "composite": true,
     "lib": ["ES2023"],
-    "types": ["node"]
+    "types": ["node"],
+    // The package ships its types in index.d.ts but does not name them in package.json.
+    "paths": {
+      "better-sqlite3-multiple-ciphers": [
+        "./node_modules/better-sqlite3-multiple-ciphers/index.d.ts"
+      ]
+    }
   },
   "include": [
     "src/main/**/*.ts",

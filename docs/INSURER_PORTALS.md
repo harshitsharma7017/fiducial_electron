@@ -17,12 +17,19 @@ solves a CAPTCHA.
 | ICICI Lombard | password | fills user ID and password            | CAPTCHA, LOGIN              |
 | Niva Bupa     | password | fills user ID and password            | checks the role, LOGIN      |
 | Bajaj Allianz | password | fills user ID and password            | Sign In                     |
-| HDFC ERGO     | password | opens the portal only                 | signs in by hand (see note) |
+| HDFC ERGO     | password | types user ID, Tab, password on ⌘⇧L (Ctrl+Shift+L on Windows) | clicks Username first, then presses Login |
 | Star Health   | OTP      | opens the portal only (OTP: later)    | signs in with the OTP       |
 | Tata AIG      | OTP      | opens the portal only (OTP: later)    | signs in with the OTP       |
 
-HDFC ERGO's portal draws its sign-in page on a canvas (Flutter), so there are no form fields to
-fill.
+HDFC ERGO's portal is a Flutter app that draws its sign-in page on a canvas: there are no form fields
+to find. So the advisor clicks into the Username box and presses the fill shortcut. The app then
+types as a keyboard would, checking before each step:
+- **Before the user ID:** the cursor is in an empty text box. Otherwise nothing is typed.
+- **Before the password:** after Tab, the cursor is in an empty password box. Otherwise the password is
+  not typed.
+
+It never clicks. On HDFC's live page, with synthetic details and the network sealed, the user ID
+and password appeared in the right boxes (2 November 2026).
 
 The portal list and login types came from Fiducial. The form details came from a read-only
 inspection of each public sign-in page (2 November 2026): the pages were loaded with no

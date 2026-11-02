@@ -6,14 +6,14 @@
 //   them back: only the portal window code in the main process reads them, to fill the
 //   insurer's own sign-in form.
 // - Nothing here logs, and errors carry codes only, never values.
-// - The vault opens on first use. If OS secure storage is unavailable, saving fails with
-//   SECRET_STORE_UNAVAILABLE; nothing is ever written in plain text.
+// - The vault (shared, src/main/secrets/vault-opener.ts) opens on first use. If OS secure storage
+//   is unavailable, saving fails with SECRET_STORE_UNAVAILABLE; nothing is written in plain text.
 import { z } from 'zod';
 import type { InsurerId } from '../../shared/contracts/insurer';
 import type { AppErrorCode } from '../../shared/ipc/errors';
-import type { SecretBackend } from '../secrets/secret-store';
+import { VaultOpenError, type VaultOpener } from '../secrets/vault-opener';
 import type { VaultErrorCode } from '../secrets/vault/errors';
-import { SecretVault } from '../secrets/vault/vault';
+import type { SecretVault } from '../secrets/vault/vault';
 
 export interface InsurerLogin {
   username: string;
@@ -54,18 +54,15 @@ export interface InsurerCredentials {
   read(id: InsurerId): Promise<InsurerLogin | null>;
 }
 
-export function createInsurerCredentials(dir: string, backend: SecretBackend): InsurerCredentials {
-  let opening: Promise<SecretVault> | null = null;
-
-  const vault = (): Promise<SecretVault> => {
-    opening ??= SecretVault.open(dir, backend).then((result) => {
-      if (!result.ok) {
-        opening = null; // try again next time (for example after the keychain is unlocked)
-        throw new CredentialError(appCode(result.error.code));
-      }
-      return result.data;
-    });
-    return opening;
+export function createInsurerCredentials(openVault: VaultOpener): InsurerCredentials {
+  const vault = async (): Promise<SecretVault> => {
+    try {
+      return await openVault();
+    } catch (err) {
+      throw new CredentialError(
+        err instanceof VaultOpenError ? appCode(err.code) : 'SECRET_STORE_UNAVAILABLE',
+      );
+    }
   };
 
   return {

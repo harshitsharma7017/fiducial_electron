@@ -2,6 +2,7 @@
 // (new quote, results, history, settings) arrive in M6 per IMPLEMENTATION_PLAN.
 import { Suspense, lazy, useEffect, useState } from 'react';
 import type { AppInfo } from '../../shared/ipc/contract';
+import { ClientsPanel } from './clients/ClientsPanel';
 import { InsurerPortals } from './insurers/InsurerPortals';
 
 // DEVELOPMENT ONLY: the M3 Quote Comparison demo with synthetic data. It wraps the home screen
@@ -91,7 +92,8 @@ export function App(): React.JSX.Element {
           )}
         </div>
       </section>
-      {/* Shown only when the insurer portals feature is switched on (FQF_INSURER_PORTALS=1). */}
+      {/* Shown only when the automation features are switched on (FQF_INSURER_PORTALS=1). */}
+      {status.state === 'ready' && <ClientsPanel />}
       {status.state === 'ready' && <InsurerPortals />}
     </main>
   );

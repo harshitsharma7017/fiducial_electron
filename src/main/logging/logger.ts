@@ -7,6 +7,7 @@ import { isIpcChannel } from '../../shared/ipc/channels';
 import { FILL_OUTCOMES } from '../../shared/insurers/fill-outcomes';
 import { INSURER_PORTALS } from '../../shared/insurers/portals';
 import { APP_ERROR_CODES } from '../../shared/ipc/errors';
+import { STORE_PROBLEMS } from '../storage/store-problems';
 
 export const LOG_EVENTS = [
   'app.start',
@@ -29,6 +30,10 @@ export const LOG_EVENTS = [
   'insurer.login-saved',
   'insurer.login-forgotten',
   'insurer.session-ended',
+  'client.saved',
+  'client.deleted',
+  'storage.open-failed',
+  'storage.write-failed',
 ] as const;
 
 export type LogEvent = (typeof LOG_EVENTS)[number];
@@ -69,6 +74,8 @@ const FIELD_SCHEMAS = {
   fillOutcome: z.enum(FILL_OUTCOMES),
   /** Why an insurer session ended. */
   sessionEnd: z.enum(['expired', 'signed-out']),
+  /** Why the client database could not be used (never any client data). */
+  storeProblem: z.enum(STORE_PROBLEMS),
 } as const;
 
 export type LogFields = { [K in keyof typeof FIELD_SCHEMAS]?: z.infer<(typeof FIELD_SCHEMAS)[K]> };

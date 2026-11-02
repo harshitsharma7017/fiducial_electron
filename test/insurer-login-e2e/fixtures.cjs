@@ -100,6 +100,17 @@ module.exports = {
     </form>${MODEL_FROM_INPUT}`,
   ),
 
+  // Keyboard fill (canvas portals such as HDFC ERGO): plain boxes in Tab order. The harness
+  // focuses a box first, standing in for the advisor's click.
+  '/kbd': page(
+    'keyboard sign-in',
+    `<form><input type="text" id="u" aria-label="Enter Username"><input type="password" id="p"><button type="button">Login</button></form>`,
+  ),
+  '/kbd-two-text': page(
+    'Tab lands in another text box',
+    `<form><input type="text" id="u"><input type="text" id="p"><input type="password" id="x"></form>`,
+  ),
+
   // Refusals.
   '/ambiguous': page(
     'two user fields',

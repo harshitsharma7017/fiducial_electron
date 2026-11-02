@@ -31,14 +31,22 @@ describe('the insurer portal registry', () => {
     ]);
   });
 
-  it('fills sign-in only for the five password portals with a fillable form', () => {
+  it('uses saved sign-in details for the six password portals', () => {
     expect(
       INSURER_PORTALS.filter(usesSavedLogin)
         .map((p) => p.id)
         .sort(),
-    ).toEqual(['bajaj-allianz', 'icici-lombard', 'new-india', 'niva-bupa', 'united-india']);
-    // HDFC ERGO draws its page on a canvas: opened for signing in by hand.
-    expect(portal('hdfc-ergo')).toMatchObject({ loginMethod: 'password', automation: 'manual' });
+    ).toEqual([
+      'bajaj-allianz',
+      'hdfc-ergo',
+      'icici-lombard',
+      'new-india',
+      'niva-bupa',
+      'united-india',
+    ]);
+    // HDFC ERGO draws its page on a canvas: filled by keyboard after the advisor's click.
+    expect(portal('hdfc-ergo')).toMatchObject({ loginMethod: 'password', automation: 'shortcut' });
+    expect(portal('hdfc-ergo').form).toBeUndefined();
   });
 
   it('leaves the OTP portals (Star Health, Tata AIG) for later', () => {
@@ -74,6 +82,8 @@ describe('the insurer portal registry', () => {
       { ...good, allowedOrigins: ['https://auth.prod.bajajgeneral.com'] },
       { ...good, automation: 'manual' }, // has a form but would not use it
       { ...portal('hdfc-ergo'), automation: 'autofill' }, // autofill without a form
+      { ...portal('hdfc-ergo'), shortcutPages: undefined }, // shortcut without its pages
+      { ...portal('star-health'), automation: 'shortcut', shortcutPages: [{ path: '/' }] }, // OTP
       { ...good, loginMethod: 'otp' }, // OTP is never filled
       { ...good, form: { ...good.form, username: 'input{color:red}' } },
       { ...good, extra: true },
@@ -90,6 +100,7 @@ describe('mayFillLogin', () => {
     ['new-india', 'https://web.newindia.co.in/NIABancsPortal/IntermediaryLogin.html'],
     ['icici-lombard', 'https://nysa.icicilombard.com/#/login'],
     ['icici-lombard', 'https://nysa.icicilombard.com/#/login?returnUrl=%2Fhome'],
+    ['hdfc-ergo', 'https://1up.hdfcergo.com/'],
     ['niva-bupa', 'https://uno.nivabupa.com/uno/#/login'],
     [
       'bajaj-allianz',
@@ -117,8 +128,8 @@ describe('mayFillLogin', () => {
     ['united-india', 'https://www.uiic.in:8443/GCWebPortal/login/LoginAction.do'],
     ['united-india', 'https://x:y@www.uiic.in/GCWebPortal/login/LoginAction.do'],
     ['icici-lombard', 'https://evil.example/#/login'],
-    // Portals without a fillable form.
-    ['hdfc-ergo', 'https://1up.hdfcergo.com/'],
+    // Other pages of the canvas portal, and portals without a fillable form.
+    ['hdfc-ergo', 'https://1up.hdfcergo.com/home'],
     ['star-health', 'https://atompro.starhealth.in/sso/login'],
     ['tata-aig', 'https://sellonline.tataaig.com/ipdsv2/login/#/login'],
     ['united-india', 'not a url'],

@@ -11,11 +11,13 @@ import {
   type InsurerCredentials,
 } from '../src/main/insurers/credentials';
 import { fillOutcomeOf, isFormProblem } from '../src/main/insurers/fill-outcome';
+import { createClientService } from '../src/main/clients/service';
 import { createInsurerService, insurerPortalsEnabled } from '../src/main/insurers/service';
 import { createDispatcher } from '../src/main/ipc/dispatcher';
 import { createHandlers } from '../src/main/ipc/handlers';
 import { createLogger, type LogRecord } from '../src/main/logging/logger';
 import type { SecretBackend } from '../src/main/secrets/secret-store';
+import { createVaultOpener } from '../src/main/secrets/vault-opener';
 import { FILL_OUTCOMES } from '../src/shared/insurers/fill-outcomes';
 import { ipcContract } from '../src/shared/ipc/contract';
 
@@ -72,18 +74,21 @@ function allBytes(dir: string): Buffer {
 describe('insurer credentials (encrypted vault)', () => {
   it('saves, reads back in the main process, and survives a restart', async () => {
     const dir = freshDir();
-    const store = createInsurerCredentials(dir, fakeBackend());
+    const store = createInsurerCredentials(createVaultOpener(dir, fakeBackend()));
     await store.save('bajaj-allianz', LOGIN);
     expect(await store.read('bajaj-allianz')).toEqual(LOGIN);
     expect([...(await store.saved())]).toEqual(['bajaj-allianz']);
-    const reopened = createInsurerCredentials(dir, fakeBackend());
+    const reopened = createInsurerCredentials(createVaultOpener(dir, fakeBackend()));
     expect(await reopened.read('bajaj-allianz')).toEqual(LOGIN);
     expect(await reopened.read('united-india')).toBeNull();
   });
 
   it('writes neither the user ID nor the password to disk in plain text', async () => {
     const dir = freshDir();
-    await createInsurerCredentials(dir, fakeBackend()).save('united-india', LOGIN);
+    await createInsurerCredentials(createVaultOpener(dir, fakeBackend())).save(
+      'united-india',
+      LOGIN,
+    );
     const bytes = allBytes(dir);
     for (const value of [LOGIN.username, LOGIN.password]) {
       expect(bytes.includes(Buffer.from(value, 'utf8'))).toBe(false);
@@ -93,7 +98,7 @@ describe('insurer credentials (encrypted vault)', () => {
   });
 
   it('forgets saved details, and reports whether there were any', async () => {
-    const store = createInsurerCredentials(freshDir(), fakeBackend());
+    const store = createInsurerCredentials(createVaultOpener(freshDir(), fakeBackend()));
     await store.save('niva-bupa', LOGIN);
     expect(await store.forget('niva-bupa')).toBe(true);
     expect(await store.forget('niva-bupa')).toBe(false);
@@ -103,7 +108,7 @@ describe('insurer credentials (encrypted vault)', () => {
 
   it('refuses to store anything when OS secure storage is unavailable', async () => {
     const dir = freshDir();
-    const store = createInsurerCredentials(dir, fakeBackend(false));
+    const store = createInsurerCredentials(createVaultOpener(dir, fakeBackend(false)));
     await expect(store.save('new-india', LOGIN)).rejects.toMatchObject({
       code: 'SECRET_STORE_UNAVAILABLE',
     });
@@ -112,7 +117,7 @@ describe('insurer credentials (encrypted vault)', () => {
 
   it('reports a damaged entry as unreadable, and saving again replaces it', async () => {
     const dir = freshDir();
-    const store = createInsurerCredentials(dir, fakeBackend());
+    const store = createInsurerCredentials(createVaultOpener(dir, fakeBackend()));
     await store.save('icici-lombard', LOGIN);
     const file = join(dir, 'insurer-login.icici-lombard.fqse');
     const bytes = readFileSync(file);
@@ -124,7 +129,7 @@ describe('insurer credentials (encrypted vault)', () => {
   });
 
   it('rejects empty or oversized details before anything is stored', async () => {
-    const store = createInsurerCredentials(freshDir(), fakeBackend());
+    const store = createInsurerCredentials(createVaultOpener(freshDir(), fakeBackend()));
     await expect(store.save('bajaj-allianz', { username: '', password: 'x' })).rejects.toThrow();
     await expect(
       store.save('bajaj-allianz', { username: 'u', password: 'x'.repeat(257) }),
@@ -236,7 +241,7 @@ describe('the insurer service', () => {
 
   it('stores sign-in details only for portals it fills', async () => {
     const { insurers, credentials } = service(true);
-    for (const id of ['hdfc-ergo', 'star-health', 'tata-aig', 'no-such-insurer']) {
+    for (const id of ['star-health', 'tata-aig', 'no-such-insurer']) {
       await expect(insurers.saveLogin({ id, ...LOGIN })).rejects.toMatchObject({
         code: 'VALIDATION_FAILED',
       });
@@ -265,13 +270,20 @@ describe('the insurer service', () => {
   });
 });
 
+/** The client handlers are not exercised here (see client-store.test.ts). */
+const unusedClients = createClientService({
+  enabled: false,
+  open: () => Promise.reject(new Error('not used')),
+  logger: createLogger([]),
+});
+
 describe('the insurer IPC channels', () => {
   const trusted = { webContentsId: 1, frameIsMain: true, frameUrl: 'app://fqf/index.html' };
 
   function dispatcher() {
     const records: LogRecord[] = [];
     const { insurers, credentials } = service(true);
-    const dispatch = createDispatcher(createHandlers({ insurers }), {
+    const dispatch = createDispatcher(createHandlers({ insurers, clients: unusedClients }), {
       isTrustedSender: (s) => s.webContentsId === 1,
       logger: createLogger([(r) => records.push(r)]),
     });

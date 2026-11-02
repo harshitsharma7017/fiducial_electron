@@ -4,9 +4,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { app, safeStorage, session } from 'electron';
+import { createClientService } from './clients/service';
 import { createInsurerCredentials } from './insurers/credentials';
 import { createPortalWindows } from './insurers/portal-windows';
 import { createSessionClock } from './insurers/session-clock';
+import { createVaultOpener } from './secrets/vault-opener';
+import { openClientStore } from './storage/client-store';
 import { createInsurerService, insurerPortalsEnabled } from './insurers/service';
 import { createDispatcher } from './ipc/dispatcher';
 import { createHandlers } from './ipc/handlers';
@@ -88,24 +91,37 @@ function start(): void {
 
     const origin = devOrigin ?? APP_ORIGIN;
     const senderPolicy = createSenderPolicy(origin);
-    // Insurer portals (phase 1: sign-in autofill). Off unless FQF_INSURER_PORTALS=1; sign-in
-    // details are kept only in the encrypted vault under <userData>/secrets.
-    const credentials = createInsurerCredentials(
-      join(app.getPath('userData'), 'secrets'),
-      safeStorage,
-    );
+    // Automation features: insurer portals (sign-in autofill, 12-hour sessions) and saved
+    // clients. Off unless FQF_INSURER_PORTALS=1. Secrets (sign-in details, the database key) are
+    // kept only in the encrypted vault under <userData>/secrets; clients in the encrypted
+    // database under <userData>/data.
+    const userData = app.getPath('userData');
+    const automation = insurerPortalsEnabled(process.env);
+    const openVault = createVaultOpener(join(userData, 'secrets'), safeStorage);
+    const credentials = createInsurerCredentials(openVault);
     const insurers = createInsurerService({
-      enabled: insurerPortalsEnabled(process.env),
+      enabled: automation,
       credentials,
       windows: createPortalWindows({
         logger,
         credentials,
-        clock: createSessionClock(join(app.getPath('userData'), 'insurer-sessions.json')),
+        clock: createSessionClock(join(userData, 'insurer-sessions.json')),
       }),
       logger,
     });
+    const clients = createClientService({
+      enabled: automation,
+      open: () =>
+        openClientStore({
+          dbPath: join(userData, 'data', 'fqf.db'),
+          ledgerPath: join(userData, 'ledger', 'fqf.ledger'),
+          openVault,
+        }),
+      logger,
+    });
+    app.on('will-quit', () => clients.close());
     registerIpc(
-      createDispatcher(createHandlers({ insurers }), {
+      createDispatcher(createHandlers({ insurers, clients }), {
         isTrustedSender: senderPolicy.isTrusted,
         logger,
       }),

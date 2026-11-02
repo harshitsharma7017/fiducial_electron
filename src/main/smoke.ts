@@ -1,10 +1,15 @@
 // Smoke self-test (P1-05 subset; M2 verification of SEC-01..06, TC-22 surface, TC-23).
 // Started with --smoke-test. Checks run against the real window, preload, IPC dispatcher and
 // app:// protocol. Results are booleans and short codes only; no page content is reported.
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { app, BrowserWindow, ipcMain, net } from 'electron';
 import { API_SHAPE } from '../shared/ipc/api';
 import { PRODUCTION_CSP } from './security/csp';
 import { APP_ORIGIN, originOf } from './security/origins';
+import { cipherName, openEncrypted } from './storage/encrypted-db';
 
 export interface SmokeCheck {
   id: string;
@@ -85,6 +90,24 @@ export async function runSmokeChecks(win: BrowserWindow): Promise<SmokeCheck[]> 
     ['protocol.other-host', 'app://other/index.html'],
   ] as const) {
     add(id, (await net.fetch(url)).status === 404);
+  }
+
+  // The encrypted database module loads in this build (packaged: from app.asar.unpacked) and
+  // encrypts: a throwaway database with a random key, in a fresh temporary folder that is
+  // deleted again, whose file must not carry the plain SQLite header.
+  const scratch = mkdtempSync(join(tmpdir(), 'fqf-smoke-db-'));
+  try {
+    const file = join(scratch, 'check.db');
+    const db = openEncrypted(file, randomBytes(32));
+    db.exec('CREATE TABLE t (x TEXT); INSERT INTO t VALUES (1);');
+    const cipher = cipherName(db);
+    db.close();
+    const header = readFileSync(file).subarray(0, 16).toString('latin1');
+    add('storage.encrypted-db', cipher === 'sqlcipher' && header !== 'SQLite format 3\0');
+  } catch {
+    add('storage.encrypted-db', false);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
   }
 
   // The temporary portal demo is not in production builds. scripts/smoke.mjs sets its variables:

@@ -41,6 +41,10 @@ const FILL_MESSAGES: Record<FillOutcome, { text: string; problem: boolean }> = {
   },
   'left-login-page': { text: 'The page changed before the form could be filled.', problem: false },
   'agent-failed': { text: 'The sign-in form could not be filled: sign in by hand.', problem: true },
+  'click-username-first': {
+    text: 'Click in the empty Username box first, then press the fill shortcut again.',
+    problem: false,
+  },
 };
 
 function endTime(iso: string): string {
@@ -50,8 +54,14 @@ function endTime(iso: string): string {
   return sameDay ? time : `${time} tomorrow`;
 }
 
+/** Portals the app fills from saved sign-in details. */
+function usesLogin(portal: InsurerPortalView): boolean {
+  return portal.automation === 'autofill' || portal.automation === 'shortcut';
+}
+
 function automationText(portal: InsurerPortalView): string {
   if (portal.automation === 'autofill') return 'Fills your user ID and password';
+  if (portal.automation === 'shortcut') return 'Click Username, then press the fill shortcut';
   if (portal.automation === 'later') return 'OTP sign-in, by hand for now';
   return 'Sign in by hand';
 }
@@ -146,7 +156,7 @@ export function InsurerPortals(): React.JSX.Element | null {
                   <span className="insurer-mode">{automationText(portal)}</span>
                 </div>
                 <div className="insurer-actions">
-                  {portal.automation === 'autofill' && (
+                  {usesLogin(portal) && (
                     <span className={portal.loginSaved ? 'badge saved' : 'badge'}>
                       {portal.loginSaved ? 'Sign-in saved' : 'No sign-in saved'}
                     </span>
@@ -157,7 +167,7 @@ export function InsurerPortals(): React.JSX.Element | null {
                   >
                     {portal.windowOpen ? 'Show portal' : 'Open portal'}
                   </button>
-                  {portal.automation === 'autofill' && !load.list.vaultError && (
+                  {usesLogin(portal) && !load.list.vaultError && (
                     <button type="button" onClick={() => setEditing(portal.id)}>
                       {portal.loginSaved ? 'Change sign-in' : 'Save sign-in'}
                     </button>

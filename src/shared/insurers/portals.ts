@@ -10,8 +10,11 @@
 // - "autofill": fills the saved user ID and password into the portal's own form. It never clicks
 //   the sign-in button and never touches a CAPTCHA: the advisor completes the CAPTCHA (if any) and
 //   signs in.
-// - "manual": opens the portal; the advisor signs in by hand (HDFC ERGO draws its page on a
-//   canvas, so there are no form fields to fill).
+// - "shortcut": for portals drawn on a canvas (HDFC ERGO is a Flutter app: no form fields to find
+//   and fill). The advisor clicks into the user ID box and presses the fill shortcut; the app then
+//   types the user ID, presses Tab and types the password, as a keyboard would, checking before
+//   each step that the box with the cursor is the right kind (keyboard-fill.ts). It never clicks.
+// - "manual": opens the portal; the advisor signs in by hand.
 // - "later": OTP sign-in (Star Health, Tata AIG), not automated yet; the portal opens for manual
 //   sign-in.
 // User IDs and passwords are never part of this file: they live in the encrypted vault.
@@ -19,7 +22,10 @@ import { z } from 'zod';
 import { insurerIdSchema } from '../contracts/insurer';
 
 export const LOGIN_METHODS = ['password', 'otp'] as const;
-export const LOGIN_AUTOMATION = ['autofill', 'manual', 'later'] as const;
+export const LOGIN_AUTOMATION = ['autofill', 'shortcut', 'manual', 'later'] as const;
+
+/** The fill shortcut for "shortcut" portals: Cmd+Shift+L on macOS, Ctrl+Shift+L elsewhere. */
+export const FILL_SHORTCUT_KEY = 'l';
 export const LOGIN_BARRIERS = [
   'none',
   'image-captcha',
@@ -102,6 +108,8 @@ export const insurerPortalSchema = z
     automation: z.enum(LOGIN_AUTOMATION),
     barrier: z.enum(LOGIN_BARRIERS),
     form: loginFormSchema.optional(),
+    /** For "shortcut" portals: pages on which the shortcut may type sign-in details. */
+    shortcutPages: z.array(loginPageSchema).min(1).max(5).optional(),
     /** Date the login page was last inspected, or null if never. */
     inspectedOn: z
       .string()
@@ -113,7 +121,15 @@ export const insurerPortalSchema = z
   .refine((p) => p.allowedOrigins.includes(p.loginOrigin), 'loginOrigin must be allowed')
   .refine((p) => p.allowedOrigins.includes(new URL(p.startUrl).origin), 'startUrl must be allowed')
   .refine((p) => (p.automation === 'autofill') === (p.form !== undefined), 'autofill needs a form')
-  .refine((p) => p.loginMethod === 'password' || p.automation !== 'autofill', 'OTP is not filled');
+  .refine(
+    (p) => (p.automation === 'shortcut') === (p.shortcutPages !== undefined),
+    'shortcut needs its pages',
+  )
+  .refine(
+    (p) =>
+      p.loginMethod === 'password' || (p.automation !== 'autofill' && p.automation !== 'shortcut'),
+    'OTP is not filled',
+  );
 
 export type InsurerPortal = z.infer<typeof insurerPortalSchema>;
 
@@ -163,11 +179,13 @@ const PORTALS: readonly InsurerPortal[] = [
     allowedOrigins: ['https://1up.hdfcergo.com'],
     subframeOrigins: [],
     loginMethod: 'password',
-    automation: 'manual',
-    barrier: 'unknown',
+    automation: 'shortcut',
+    barrier: 'none',
+    // The Flutter app keeps its sign-in screen at the root address.
+    shortcutPages: [{ path: '/' }],
     inspectedOn: '2026-11-02',
     advisorNote:
-      'This portal draws its sign-in page as a picture, so it cannot be filled. Sign in by hand.',
+      'Click in the Username box, then press \u2318\u21e7L (Ctrl+Shift+L on Windows) to fill. Then press Login.',
   },
   {
     id: 'icici-lombard',
@@ -270,7 +288,7 @@ export function findPortal(id: string): InsurerPortal | undefined {
 
 /** Whether saved sign-in details are useful for this portal (only autofill portals use them). */
 export function usesSavedLogin(portal: InsurerPortal): boolean {
-  return portal.automation === 'autofill';
+  return portal.automation === 'autofill' || portal.automation === 'shortcut';
 }
 
 /**
@@ -278,7 +296,8 @@ export function usesSavedLogin(portal: InsurerPortal): boolean {
  * login pages. Everything else on the portal (and every other site) is refused.
  */
 export function mayFillLogin(portal: InsurerPortal, url: string): boolean {
-  if (!portal.form) return false;
+  const pages = portal.form?.pages ?? portal.shortcutPages;
+  if (!pages) return false;
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -286,7 +305,7 @@ export function mayFillLogin(portal: InsurerPortal, url: string): boolean {
     return false;
   }
   if (parsed.origin !== portal.loginOrigin || parsed.username || parsed.password) return false;
-  return portal.form.pages.some(
+  return pages.some(
     (page) =>
       parsed.pathname === page.path &&
       (page.hashPrefix === undefined || hashMatches(parsed.hash, page.hashPrefix)),

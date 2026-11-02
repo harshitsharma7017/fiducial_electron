@@ -12,6 +12,8 @@ export const FILL_OUTCOMES = [
   'field-wrong-type',
   'left-login-page',
   'agent-failed',
+  /** Shortcut portals: the cursor was not in an empty user ID box when the shortcut was pressed. */
+  'click-username-first',
 ] as const;
 
 export type FillOutcome = (typeof FILL_OUTCOMES)[number];

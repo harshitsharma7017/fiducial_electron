@@ -13,6 +13,13 @@ files:
   - out/preload/**
   - out/renderer/**
   - package.json
+  # The encrypted database module (DM-02) ships only what runs: its JavaScript and the prebuilt
+  # macOS and Windows binaries. Its C/C++ sources, the Linux binaries and the build-time
+  # node-addon-api headers are left out. (Platform-level "files" lists are not used: one holding
+  # only exclusions makes electron-builder include the whole repository.)
+  - '!node_modules/better-sqlite3-multiple-ciphers/{deps,src}/**'
+  - '!node_modules/better-sqlite3-multiple-ciphers/prebuilds/{linux,linuxmusl}-*.node'
+  - '!node_modules/node-addon-api/**'
 asar: true
 # DM-04 / M1 S2: the launch guard alone cannot stop Node's inspector; these fuses are mandatory.
 electronFuses:
