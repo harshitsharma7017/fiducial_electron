@@ -4,12 +4,32 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { exposePortalDemo } from '../demo/portal-automation/preload/expose';
 import type { FqfApi } from '../shared/ipc/api';
 import { IPC_CHANNELS } from '../shared/ipc/channels';
-import type { AppInfo } from '../shared/ipc/contract';
+import type { AppInfo, InsurerPortalList } from '../shared/ipc/contract';
 import type { AppResult } from '../shared/ipc/result';
 
 const api: FqfApi = {
   app: {
     getInfo: () => ipcRenderer.invoke(IPC_CHANNELS.appGetInfo, {}) as Promise<AppResult<AppInfo>>,
+  },
+  insurers: {
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.insurersList, {}) as Promise<AppResult<InsurerPortalList>>,
+    saveLogin: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.insurersSaveLogin, request) as Promise<
+        AppResult<{ saved: true }>
+      >,
+    forgetLogin: (id) =>
+      ipcRenderer.invoke(IPC_CHANNELS.insurersForgetLogin, { id }) as Promise<
+        AppResult<{ forgotten: boolean }>
+      >,
+    openPortal: (id) =>
+      ipcRenderer.invoke(IPC_CHANNELS.insurersOpenPortal, { id }) as Promise<
+        AppResult<{ opened: true }>
+      >,
+    signOut: (id) =>
+      ipcRenderer.invoke(IPC_CHANNELS.insurersSignOut, { id }) as Promise<
+        AppResult<{ signedOut: boolean }>
+      >,
   },
 };
 

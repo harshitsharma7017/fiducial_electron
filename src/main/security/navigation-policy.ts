@@ -12,30 +12,43 @@ export function isNavigationAllowed(allowedOrigins: ReadonlySet<string>, url: st
   return origin !== null && allowedOrigins.has(origin);
 }
 
-const allowedByContents = new Map<number, ReadonlySet<string>>();
-const hardenedSessions = new WeakSet<Session>();
+/** Decides whether a frame of one webContents may navigate (or be redirected) to `url`. */
+export type NavigationRule = (url: string, isMainFrame: boolean) => boolean;
 
-/** Allows renderer-initiated navigation of `contents` to exactly these origins. */
+const rulesByContents = new Map<number, NavigationRule>();
+const hardenedSessions = new WeakSet<Session>();
+const DENY_ALL: NavigationRule = () => false;
+
+/** Allows renderer-initiated navigation of `contents` (every frame) to exactly these origins. */
 export function allowOrigins(contents: WebContents, origins: readonly string[]): void {
-  allowedByContents.set(contents.id, new Set(origins));
+  const allowed = new Set(origins);
+  rulesByContents.set(contents.id, (url) => isNavigationAllowed(allowed, url));
+}
+
+/**
+ * Sets a custom rule for `contents`, for windows whose sub-frames need different origins from
+ * the main frame (insurer portals with a CAPTCHA provider frame). Still default-deny.
+ */
+export function setNavigationRule(contents: WebContents, rule: NavigationRule): void {
+  rulesByContents.set(contents.id, rule);
 }
 
 export function installNavigationPolicy(logger: Logger): void {
   app.on('web-contents-created', (_event, contents) => {
     const id = contents.id;
-    const allowed = (): ReadonlySet<string> => allowedByContents.get(id) ?? new Set();
+    const rule = (): NavigationRule => rulesByContents.get(id) ?? DENY_ALL;
     contents.setWindowOpenHandler(({ url }) => {
       logger.warn('security.popup-blocked', { targetScheme: schemeOf(url) });
       return { action: 'deny' };
     });
     contents.on('will-frame-navigate', (event) => {
-      if (!isNavigationAllowed(allowed(), event.url)) {
+      if (!rule()(event.url, event.isMainFrame)) {
         event.preventDefault();
         logger.warn('security.navigation-blocked', { targetScheme: schemeOf(event.url) });
       }
     });
     contents.on('will-redirect', (event) => {
-      if (!isNavigationAllowed(allowed(), event.url)) {
+      if (!rule()(event.url, event.isMainFrame)) {
         event.preventDefault();
         logger.warn('security.redirect-blocked', { targetScheme: schemeOf(event.url) });
       }
@@ -44,7 +57,7 @@ export function installNavigationPolicy(logger: Logger): void {
       event.preventDefault();
       logger.warn('security.webview-blocked');
     });
-    contents.once('destroyed', () => allowedByContents.delete(id));
+    contents.once('destroyed', () => rulesByContents.delete(id));
   });
 }
 

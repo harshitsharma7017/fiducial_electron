@@ -17,13 +17,22 @@ const info = {
   isPackaged: false,
 };
 
+/** Insurer handlers are not exercised here (see insurer-ipc.test.ts); they must exist for the type. */
+const insurerStubs: Omit<IpcHandlers, 'app:get-info'> = {
+  'insurers:list': () => ({ enabled: false, vaultError: null, portals: [] }),
+  'insurers:save-login': () => ({ saved: true }),
+  'insurers:forget-login': () => ({ forgotten: false }),
+  'insurers:open-portal': () => ({ opened: true }),
+  'insurers:sign-out': () => ({ signedOut: false }),
+};
+
 function setup(handler: IpcHandlers['app:get-info'] = () => info) {
   const records: LogRecord[] = [];
   const policy = createSenderPolicy(APP_ORIGIN);
   policy.trust(1);
   let id = 0;
   const dispatch = createDispatcher(
-    { [IPC_CHANNELS.appGetInfo]: handler },
+    { ...insurerStubs, [IPC_CHANNELS.appGetInfo]: handler },
     {
       isTrustedSender: policy.isTrusted,
       logger: createLogger([(r) => records.push(r)]),

@@ -3,7 +3,11 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { app, session } from 'electron';
+import { app, safeStorage, session } from 'electron';
+import { createInsurerCredentials } from './insurers/credentials';
+import { createPortalWindows } from './insurers/portal-windows';
+import { createSessionClock } from './insurers/session-clock';
+import { createInsurerService, insurerPortalsEnabled } from './insurers/service';
 import { createDispatcher } from './ipc/dispatcher';
 import { createHandlers } from './ipc/handlers';
 import { registerIpc } from './ipc/register';
@@ -84,8 +88,27 @@ function start(): void {
 
     const origin = devOrigin ?? APP_ORIGIN;
     const senderPolicy = createSenderPolicy(origin);
+    // Insurer portals (phase 1: sign-in autofill). Off unless FQF_INSURER_PORTALS=1; sign-in
+    // details are kept only in the encrypted vault under <userData>/secrets.
+    const credentials = createInsurerCredentials(
+      join(app.getPath('userData'), 'secrets'),
+      safeStorage,
+    );
+    const insurers = createInsurerService({
+      enabled: insurerPortalsEnabled(process.env),
+      credentials,
+      windows: createPortalWindows({
+        logger,
+        credentials,
+        clock: createSessionClock(join(app.getPath('userData'), 'insurer-sessions.json')),
+      }),
+      logger,
+    });
     registerIpc(
-      createDispatcher(createHandlers(), { isTrustedSender: senderPolicy.isTrusted, logger }),
+      createDispatcher(createHandlers({ insurers }), {
+        isTrustedSender: senderPolicy.isTrusted,
+        logger,
+      }),
     );
     // DEMO ONLY — temporary portal automation demo (src/demo/portal-automation/README.md), in
     // development builds only. `import.meta.env.DEV` is `false` in production builds, so this
@@ -111,6 +134,9 @@ function start(): void {
       senderPolicy,
       show: !smoke,
     });
+    // Insurer windows hide instead of closing (their sessions stay), so closing the app window
+    // must quit the app itself rather than wait for every window to close.
+    win.on('closed', () => app.quit());
     win.webContents.on('render-process-gone', (_event, details) => {
       logger.error('renderer.gone', { reason: details.reason });
     });

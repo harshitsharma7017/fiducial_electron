@@ -2,6 +2,14 @@
 // before any handler runs and validates responses before they leave. Schemas are strict:
 // unexpected fields are rejected, not ignored.
 import { z } from 'zod';
+import { insurerIdSchema } from '../contracts/insurer';
+import { FILL_OUTCOMES } from '../insurers/fill-outcomes';
+import {
+  hasControlCharacter,
+  LOGIN_AUTOMATION,
+  LOGIN_BARRIERS,
+  LOGIN_METHODS,
+} from '../insurers/portals';
 import { IPC_CHANNELS, type IpcChannel } from './channels';
 
 const shortText = (max: number) => z.string().min(1).max(max);
@@ -19,10 +27,83 @@ export const appInfoSchema = z
 
 export type AppInfo = z.infer<typeof appInfoSchema>;
 
+/** One insurer portal as the advisor sees it. Never includes a user ID or password. */
+export const insurerPortalViewSchema = z
+  .object({
+    id: insurerIdSchema,
+    displayName: shortText(80),
+    loginMethod: z.enum(LOGIN_METHODS),
+    automation: z.enum(LOGIN_AUTOMATION),
+    barrier: z.enum(LOGIN_BARRIERS),
+    advisorNote: z.string().max(240),
+    loginSaved: z.boolean(),
+    windowOpen: z.boolean(),
+    lastFill: z.enum(FILL_OUTCOMES).nullable(),
+    /** When the insurer's saved session ends (ISO time), or null if none is running. */
+    sessionEndsAt: z.iso.datetime().nullable(),
+    /** Why the last session ended, if it ended while the app was running. */
+    lastSessionEnd: z.enum(['expired', 'signed-out']).nullable(),
+  })
+  .strict();
+
+export type InsurerPortalView = z.infer<typeof insurerPortalViewSchema>;
+
+export const insurerPortalListSchema = z
+  .object({
+    /** False unless the insurer portals feature is switched on (FQF_INSURER_PORTALS=1). */
+    enabled: z.boolean(),
+    /** Null when the vault could not be opened (for example OS secure storage is unavailable). */
+    vaultError: z.enum(['SECRET_STORE_UNAVAILABLE', 'STORAGE_ERROR']).nullable(),
+    portals: z.array(insurerPortalViewSchema).max(20),
+  })
+  .strict();
+
+export type InsurerPortalList = z.infer<typeof insurerPortalListSchema>;
+
+/** Printable text without control characters (a sign-in detail is a single line). */
+const singleLine = (max: number) =>
+  z
+    .string()
+    .min(1)
+    .max(max)
+    .refine((value) => !hasControlCharacter(value), 'no control characters');
+
+export const saveLoginRequestSchema = z
+  .object({
+    id: insurerIdSchema,
+    username: singleLine(120),
+    password: singleLine(256),
+  })
+  .strict();
+
+export type SaveLoginRequest = z.infer<typeof saveLoginRequestSchema>;
+
+const insurerOnly = z.object({ id: insurerIdSchema }).strict();
+
 export const ipcContract = {
   [IPC_CHANNELS.appGetInfo]: {
     request: z.object({}).strict(),
     response: appInfoSchema,
+  },
+  [IPC_CHANNELS.insurersList]: {
+    request: z.object({}).strict(),
+    response: insurerPortalListSchema,
+  },
+  [IPC_CHANNELS.insurersSaveLogin]: {
+    request: saveLoginRequestSchema,
+    response: z.object({ saved: z.literal(true) }).strict(),
+  },
+  [IPC_CHANNELS.insurersForgetLogin]: {
+    request: insurerOnly,
+    response: z.object({ forgotten: z.boolean() }).strict(),
+  },
+  [IPC_CHANNELS.insurersOpenPortal]: {
+    request: insurerOnly,
+    response: z.object({ opened: z.literal(true) }).strict(),
+  },
+  [IPC_CHANNELS.insurersSignOut]: {
+    request: insurerOnly,
+    response: z.object({ signedOut: z.boolean() }).strict(),
   },
 } as const satisfies Record<IpcChannel, { request: z.ZodType; response: z.ZodType }>;
 

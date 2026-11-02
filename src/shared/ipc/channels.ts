@@ -3,6 +3,11 @@
 
 export const IPC_CHANNELS = {
   appGetInfo: 'app:get-info',
+  insurersList: 'insurers:list',
+  insurersSaveLogin: 'insurers:save-login',
+  insurersForgetLogin: 'insurers:forget-login',
+  insurersOpenPortal: 'insurers:open-portal',
+  insurersSignOut: 'insurers:sign-out',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

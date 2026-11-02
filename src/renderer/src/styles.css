@@ -64,3 +64,70 @@ body {
 .error {
   color: var(--error);
 }
+
+/* Insurer portals */
+.insurers {
+  margin-top: 24px;
+}
+
+.insurer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.insurer-row {
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+}
+
+.insurer-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.insurer-mode {
+  display: block;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.insurer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.insurer-note {
+  margin: 8px 0 0;
+  font-size: 0.875rem;
+}
+
+.badge {
+  font-size: 0.75rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.badge.saved {
+  color: var(--fg);
+}
+
+.login-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  max-width: 360px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.875rem;
+}

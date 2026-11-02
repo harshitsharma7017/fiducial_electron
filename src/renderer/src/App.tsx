@@ -2,6 +2,7 @@
 // (new quote, results, history, settings) arrive in M6 per IMPLEMENTATION_PLAN.
 import { Suspense, lazy, useEffect, useState } from 'react';
 import type { AppInfo } from '../../shared/ipc/contract';
+import { InsurerPortals } from './insurers/InsurerPortals';
 
 // DEVELOPMENT ONLY: the M3 Quote Comparison demo with synthetic data. It wraps the home screen
 // and adds its own launcher, so all of its text lives in the dev chunk. `import.meta.env.DEV` is
@@ -90,6 +91,8 @@ export function App(): React.JSX.Element {
           )}
         </div>
       </section>
+      {/* Shown only when the insurer portals feature is switched on (FQF_INSURER_PORTALS=1). */}
+      {status.state === 'ready' && <InsurerPortals />}
     </main>
   );
 

@@ -4,6 +4,8 @@
 // cannot reach a log through this API.
 import { z } from 'zod';
 import { isIpcChannel } from '../../shared/ipc/channels';
+import { FILL_OUTCOMES } from '../../shared/insurers/fill-outcomes';
+import { INSURER_PORTALS } from '../../shared/insurers/portals';
 import { APP_ERROR_CODES } from '../../shared/ipc/errors';
 
 export const LOG_EVENTS = [
@@ -21,6 +23,12 @@ export const LOG_EVENTS = [
   'protocol.request-rejected',
   'renderer.gone',
   'smoke.result',
+  'insurer.portal-opened',
+  'insurer.portal-closed',
+  'insurer.login-fill',
+  'insurer.login-saved',
+  'insurer.login-forgotten',
+  'insurer.session-ended',
 ] as const;
 
 export type LogEvent = (typeof LOG_EVENTS)[number];
@@ -55,6 +63,12 @@ const FIELD_SCHEMAS = {
   packaged: z.boolean(),
   passed: z.boolean(),
   failedChecks: z.array(token(/^[a-z0-9.-]{1,60}$/)).max(50),
+  /** An insurer id from the portal registry; never a user ID or any sign-in detail. */
+  insurer: z.string().refine((value) => INSURER_PORTALS.some((p) => p.id === value)),
+  /** What happened when the app tried to fill an insurer's sign-in form. */
+  fillOutcome: z.enum(FILL_OUTCOMES),
+  /** Why an insurer session ended. */
+  sessionEnd: z.enum(['expired', 'signed-out']),
 } as const;
 
 export type LogFields = { [K in keyof typeof FIELD_SCHEMAS]?: z.infer<(typeof FIELD_SCHEMAS)[K]> };
