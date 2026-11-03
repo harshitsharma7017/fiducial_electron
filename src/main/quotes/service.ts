@@ -1,8 +1,8 @@
 // Quote runs behind the IPC channel. Off unless the automation features are switched on. United
 // India only so far (health and motor calculators, the Family Medicare e-proposal); other insurers
 // are refused with a reason. Motor quotes are for a saved vehicle, the others for a saved client.
-import type { BrowserWindow } from 'electron';
 import type { ClientService } from '../clients/service';
+import type { PortalPage } from '../insurers/portal-host';
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
 import type { QuoteRunRequest } from '../../shared/ipc/contract';
@@ -20,7 +20,8 @@ export interface QuoteService {
 export function createQuoteService(deps: {
   enabled: boolean;
   clients: Pick<ClientService, 'get' | 'aadhaarFor' | 'getVehicle'>;
-  windowsOf: (insurerId: string) => BrowserWindow[];
+  /** The insurer's open pages: its portal first, then its pop-ups. */
+  windowsOf: (insurerId: string) => PortalPage[];
   logger: Logger;
   now?: () => Date;
 }): QuoteService {

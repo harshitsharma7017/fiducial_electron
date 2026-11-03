@@ -5,7 +5,8 @@
 //
 // A session may carry its own policy (insurer portals, setSessionPolicy): its navigation rule
 // applies to every webContents of that session without a rule of its own (such as a pop-up), and
-// it may allow pop-ups it approves, which then open in the same session. Anything it blocks is
+// it may allow pop-ups it approves, which then open in the same session (in a window of their own,
+// or adopted where the policy says, such as a tab of the app window). Anything it blocks is
 // reported to its onBlocked callback (the portal shows the blocked origin to the advisor).
 import {
   app,
@@ -29,6 +30,11 @@ export interface SessionPolicy {
   navigate: NavigationRule;
   /** Whether a pop-up to `url` may open (in this session, with the options returned). */
   popup(url: string): BrowserWindowConstructorOptions | null;
+  /**
+   * Where an allowed pop-up goes instead of a window of its own (insurer portals: a tab of the app
+   * window). Gets Electron's options for the pop-up, which carry its contents, and returns them.
+   */
+  adopt?(options: BrowserWindowConstructorOptions): WebContents;
   onBlocked?(kind: 'navigation' | 'redirect' | 'popup', url: string): void;
 }
 
@@ -62,8 +68,17 @@ export function installNavigationPolicy(logger: Logger): void {
     const policy = (): SessionPolicy | undefined => sessionPolicies.get(contents.session);
     const rule = (): NavigationRule => rulesByContents.get(id) ?? policy()?.navigate ?? DENY_ALL;
     contents.setWindowOpenHandler(({ url }) => {
-      const options = policy()?.popup(url) ?? null;
-      if (options) return { action: 'allow', overrideBrowserWindowOptions: options };
+      const current = policy();
+      const options = current?.popup(url) ?? null;
+      if (options) {
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: options,
+          ...(current?.adopt
+            ? { createWindow: (o: BrowserWindowConstructorOptions) => current.adopt!(o) }
+            : {}),
+        };
+      }
       policy()?.onBlocked?.('popup', url);
       logger.warn('security.popup-blocked', { targetScheme: schemeOf(url) });
       return { action: 'deny' };

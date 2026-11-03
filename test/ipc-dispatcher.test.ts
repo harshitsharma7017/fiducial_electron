@@ -37,6 +37,10 @@ const insurerStubs: Omit<IpcHandlers, 'app:get-info'> = {
   },
   'vehicles:save': () => ({ id: 'x' }),
   'vehicles:delete': () => ({ deleted: false }),
+  'portals:tabs': () => ({ version: 1, tabs: [], active: null }),
+  'portals:show': () => ({ shown: true }),
+  'portals:close': () => ({ closed: true }),
+  'portals:set-bounds': () => ({ set: true }),
   'quotes:run': () => ({ outcome: 'refused', step: null, message: 'x', problems: [] }),
 };
 

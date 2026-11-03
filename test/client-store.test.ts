@@ -376,7 +376,7 @@ describe('the client service and IPC channels', () => {
           blockedOrigins: [],
         }),
         signOut: () => Promise.resolve(false),
-        windowsOf: () => [],
+        pagesOf: () => [],
       },
       logger,
     });

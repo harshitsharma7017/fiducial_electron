@@ -8,6 +8,7 @@ import type {
   AppInfo,
   ClientListResponse,
   ClientView,
+  PortalTabsView,
   InsurerPortalList,
   QuoteRunResultView,
 } from '../shared/ipc/contract';
@@ -56,6 +57,22 @@ const api: FqfApi = {
     delete: (id) =>
       ipcRenderer.invoke(IPC_CHANNELS.clientsDelete, { id }) as Promise<
         AppResult<{ deleted: boolean }>
+      >,
+  },
+  portals: {
+    tabs: (since) =>
+      ipcRenderer.invoke(IPC_CHANNELS.portalsTabs, { since }) as Promise<AppResult<PortalTabsView>>,
+    show: (tabId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.portalsShow, { tabId }) as Promise<
+        AppResult<{ shown: true }>
+      >,
+    close: (tabId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.portalsClose, { tabId }) as Promise<
+        AppResult<{ closed: true }>
+      >,
+    setBounds: (bounds) =>
+      ipcRenderer.invoke(IPC_CHANNELS.portalsSetBounds, bounds) as Promise<
+        AppResult<{ set: true }>
       >,
   },
   vehicles: {

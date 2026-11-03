@@ -4,6 +4,7 @@ import type {
   AppInfo,
   ClientListResponse,
   ClientView,
+  PortalTabsView,
   QuoteRunRequest,
   InsurerPortalList,
   QuoteRunResultView,
@@ -43,6 +44,20 @@ export interface FqfApi {
     save(request: SaveClientRequest): Promise<AppResult<{ id: string }>>;
     delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
   };
+  /** Insurer pages as tabs of the app window. */
+  portals: {
+    /** The tabs, once they changed after version `since` (or after 20 seconds anyway). */
+    tabs(since: number): Promise<AppResult<PortalTabsView>>;
+    /** Shows a tab, or the app's own screens (null). */
+    show(tabId: string | null): Promise<AppResult<{ shown: true }>>;
+    close(tabId: string): Promise<AppResult<{ closed: true }>>;
+    setBounds(bounds: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }): Promise<AppResult<{ set: true }>>;
+  };
   /** Saved vehicles, for motor quotes (kept on their own, not part of a client). */
   vehicles: {
     list(): Promise<AppResult<{ vehicles: VehicleSummary[] }>>;
@@ -57,5 +72,6 @@ export const API_SHAPE = {
   insurers: ['list', 'saveLogin', 'forgetLogin', 'openPortal', 'signOut', 'record'],
   quotes: ['run'],
   clients: ['list', 'get', 'save', 'delete'],
+  portals: ['tabs', 'show', 'close', 'setBounds'],
   vehicles: ['list', 'get', 'save', 'delete'],
 } as const satisfies { [K in keyof FqfApi]: readonly (keyof FqfApi[K])[] };

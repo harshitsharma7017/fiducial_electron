@@ -1,6 +1,7 @@
 // Application frame: a floating sidebar, a frosted top bar and the scrolling content area. Screens
 // are passed in and stay mounted while hidden, so a half-filled form or a running sign-in status
-// poll survives switching sections.
+// poll survives switching sections. Insurer pages open as tabs in the top bar (App, then each
+// insurer page and pop-up); while one is shown, it fills the content area.
 import {
   Building2,
   Car,
@@ -14,6 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { PortalArea, PortalTabStrip, showAppScreens, usePortalTabs } from '../insurers/PortalTabs';
 import { ThemeSwitcher } from '../theme/ThemeSwitcher';
 
 export type ViewId = 'overview' | 'clients' | 'vehicles' | 'insurers' | 'development';
@@ -65,15 +67,22 @@ export function AppShell(props: {
   const items = NAV.filter((item) => automation || !item.automation);
   const devItems = development ? [DEVELOPMENT_ITEM] : [];
   const current = [...items, ...devItems].find((item) => item.id === view) ?? items[0];
+  const portals = usePortalTabs(automation);
+  const portalShown = portals?.active != null;
+  const hasTabs = (portals?.tabs.length ?? 0) > 0;
 
   const renderItem = ({ id, label, icon: Icon }: NavItem) => (
     <li key={id}>
       <button
         type="button"
         className="nav-item"
-        aria-current={id === view ? 'page' : undefined}
+        aria-current={id === view && !portalShown ? 'page' : undefined}
         title={collapsed ? label : undefined}
-        onClick={() => onViewChange(id)}
+        onClick={() => {
+          // Choosing a section shows the app's screens again.
+          if (portalShown) showAppScreens();
+          onViewChange(id);
+        }}
       >
         <Icon size={18} aria-hidden="true" />
         <span className="nav-text">{label}</span>
@@ -137,11 +146,18 @@ export function AppShell(props: {
               <PanelLeftClose size={18} aria-hidden="true" />
             )}
           </button>
-          <span className="topbar-title">{current?.label}</span>
+          {portals && hasTabs ? (
+            <PortalTabStrip state={portals} />
+          ) : (
+            <span className="topbar-title">{current?.label}</span>
+          )}
           <span className="topbar-spacer" />
           <ThemeSwitcher />
         </header>
-        <main className="content">{children}</main>
+        <main className="content" hidden={portalShown}>
+          {children}
+        </main>
+        {portalShown && <PortalArea />}
       </div>
     </div>
   );

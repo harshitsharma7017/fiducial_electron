@@ -5,6 +5,7 @@ import { keyboardTargetFor } from '../../src/main/insurers/keyboard-target';
 import { createFormRecorder } from '../../src/main/insurers/form-recorder';
 import { insurerLoginAgent } from '../../src/main/insurers/login-agent';
 import { createLogger } from '../../src/main/logging/logger';
+import { createPortalHost } from '../../src/main/insurers/portal-host';
 import {
   runUiicFamilyMedicareProposal,
   runUiicHealthQuote,
@@ -19,6 +20,7 @@ export const AGENT_SOURCE = insurerLoginAgent.toString();
 export {
   createFormRecorder,
   createLogger,
+  createPortalHost,
   installNavigationPolicy,
   keyboardFill,
   keyboardTargetFor,

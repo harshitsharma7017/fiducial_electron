@@ -8,7 +8,8 @@
 // recording is written to <userData>/recordings (owner-only), and its path is returned.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { BrowserWindow, OnBeforeRequestListenerDetails, Session } from 'electron';
+import type { OnBeforeRequestListenerDetails, Session } from 'electron';
+import type { PortalPage } from './portal-host';
 import {
   bodyFieldNames,
   RECORDING_FORMAT,
@@ -55,7 +56,7 @@ type Entry =
 
 interface Active {
   insurer: string;
-  windows: () => BrowserWindow[];
+  windows: () => PortalPage[];
   session: Session;
   startedAt: Date;
   pages: PageEntry[];
@@ -89,7 +90,7 @@ export function sanitise(value: unknown, key = '', choice = false): unknown {
 
 export interface FormRecorder {
   /** Records every window `windows()` returns at each drain (they share one session). */
-  start(insurer: string, windows: () => BrowserWindow[]): void;
+  start(insurer: string, windows: () => PortalPage[]): void;
   stop(insurer: string): Promise<string | null>;
   status(insurer: string): RecordingStatus | null;
 }
@@ -98,7 +99,7 @@ export function createFormRecorder(deps: { dir: string; logger: Logger }): FormR
   const active = new Map<string, Active>();
   const lastFile = new Map<string, string>();
 
-  const drainWindow = async (rec: Active, win: BrowserWindow): Promise<void> => {
+  const drainWindow = async (rec: Active, win: PortalPage): Promise<void> => {
     if (win.isDestroyed()) return;
     const id = win.webContents.id;
     let result: RecorderDrain;

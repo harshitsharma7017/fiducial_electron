@@ -186,7 +186,7 @@ function service(enabled: boolean, credentials = memoryCredentials()) {
         opened.splice(0, opened.length, ...opened.filter((o) => o !== id));
         return Promise.resolve(was);
       },
-      windowsOf: () => [],
+      pagesOf: () => [],
     },
     logger: createLogger([(r) => records.push(r)]),
   });

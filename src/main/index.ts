@@ -3,11 +3,12 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { app, safeStorage, session } from 'electron';
+import { app, safeStorage, session, type BrowserWindow } from 'electron';
 import { createAadhaarVault } from './clients/aadhaar-vault';
 import { createClientService } from './clients/service';
 import { createInsurerCredentials } from './insurers/credentials';
 import { createFormRecorder } from './insurers/form-recorder';
+import { createPortalHost } from './insurers/portal-host';
 import { createPortalWindows } from './insurers/portal-windows';
 import { createSessionClock } from './insurers/session-clock';
 import { createSessionKeeper } from './insurers/session-keeper';
@@ -103,7 +104,11 @@ function start(): void {
     const automation = insurerPortalsEnabled(process.env);
     const openVault = createVaultOpener(join(userData, 'secrets'), safeStorage);
     const credentials = createInsurerCredentials(openVault);
+    // Insurer pages are tabs of the app window (created below, once the services exist).
+    let appWindow: BrowserWindow | null = null;
+    const portalHost = createPortalHost({ window: () => appWindow });
     const portalWindows = createPortalWindows({
+      host: portalHost,
       logger,
       credentials,
       clock: createSessionClock(join(userData, 'insurer-sessions.json')),
@@ -131,11 +136,11 @@ function start(): void {
     const quotes = createQuoteService({
       enabled: automation,
       clients,
-      windowsOf: (id) => portalWindows.windowsOf(id),
+      windowsOf: (id) => portalWindows.pagesOf(id),
       logger,
     });
     registerIpc(
-      createDispatcher(createHandlers({ insurers, clients, quotes }), {
+      createDispatcher(createHandlers({ insurers, clients, quotes, portals: portalHost }), {
         isTrustedSender: senderPolicy.isTrusted,
         logger,
       }),
@@ -164,9 +169,12 @@ function start(): void {
       senderPolicy,
       show: !smoke,
     });
-    // Insurer windows hide instead of closing (their sessions stay), so closing the app window
-    // must quit the app itself rather than wait for every window to close.
-    win.on('closed', () => app.quit());
+    appWindow = win;
+    // Closing the app window quits the app (insurer pages are tabs inside it).
+    win.on('closed', () => {
+      appWindow = null;
+      app.quit();
+    });
     win.webContents.on('render-process-gone', (_event, details) => {
       logger.error('renderer.gone', { reason: details.reason });
     });

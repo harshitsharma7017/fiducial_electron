@@ -2,6 +2,7 @@
 // (src/main/insurers/service.ts), which is off unless switched on.
 import { app } from 'electron';
 import type { ClientService } from '../clients/service';
+import type { PortalHost } from '../insurers/portal-host';
 import type { InsurerService } from '../insurers/service';
 import type { QuoteService } from '../quotes/service';
 import type { IpcHandlers } from './dispatcher';
@@ -10,7 +11,10 @@ export function createHandlers(deps: {
   insurers: InsurerService;
   clients: ClientService;
   quotes: QuoteService;
+  /** Insurer pages as tabs of the app window (absent: no tabs, in tests). */
+  portals?: PortalHost;
 }): IpcHandlers {
+  const noTabs = { version: 1, tabs: [], active: null };
   return {
     'app:get-info': () => ({
       name: app.getName(),
@@ -50,5 +54,19 @@ export function createHandlers(deps: {
     }),
     'vehicles:delete': async ({ id }) => ({ deleted: await deps.clients.deleteVehicle(id) }),
     'quotes:run': (request) => deps.quotes.run(request),
+    'portals:tabs': async ({ since }) =>
+      deps.portals ? deps.portals.waitForChange(since, 20_000) : noTabs,
+    'portals:show': ({ tabId }) => {
+      deps.portals?.show(tabId);
+      return { shown: true as const };
+    },
+    'portals:close': ({ tabId }) => {
+      deps.portals?.close(tabId);
+      return { closed: true as const };
+    },
+    'portals:set-bounds': (bounds) => {
+      deps.portals?.setBounds(bounds);
+      return { set: true as const };
+    },
   };
 }

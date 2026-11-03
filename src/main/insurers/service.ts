@@ -33,7 +33,7 @@ function rethrow(err: unknown): never {
 export function createInsurerService(deps: {
   enabled: boolean;
   credentials: InsurerCredentials;
-  windows: Pick<PortalWindows, 'open' | 'state' | 'signOut' | 'windowsOf'>;
+  windows: Pick<PortalWindows, 'open' | 'state' | 'signOut' | 'pagesOf'>;
   recorder?: FormRecorder;
   logger: Logger;
 }): InsurerService {
@@ -130,8 +130,8 @@ export function createInsurerService(deps: {
       }
       // Recording needs the insurer's window open (signed in). It follows every window of the
       // insurer, including pop-ups that open while recording (such as a premium calculator).
-      if (deps.windows.windowsOf(id).length === 0) throw new AppException('MANUAL_ACTION_REQUIRED');
-      deps.recorder.start(id, () => deps.windows.windowsOf(id));
+      if (deps.windows.pagesOf(id).length === 0) throw new AppException('MANUAL_ACTION_REQUIRED');
+      deps.recorder.start(id, () => deps.windows.pagesOf(id));
       return { recording: true, file: null };
     },
   };

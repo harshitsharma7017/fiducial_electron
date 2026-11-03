@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
 import type { VehicleSummary } from '../../../shared/contracts/vehicle';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
+import { showAppScreens } from '../insurers/PortalTabs';
 import {
   EMPTY_VEHICLE,
   VEHICLE_CLASS_LABELS,
@@ -227,6 +228,8 @@ function MotorQuotePanel(props: { vehicleId: string }): React.JSX.Element {
       .catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
+    // The premium is shown here: come back from the calculator's tab (left open to check it).
+    if (r?.ok && r.data.premium) showAppScreens();
   };
   return (
     <div className="quote-panel">

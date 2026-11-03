@@ -1,11 +1,12 @@
-// Runs a United India premium calculator for a saved client in the signed-in United India window:
-// from the home page it opens the calculator (a pop-up in the same session), performs each step
-// of the plan, and after every step checks for United India's ERRORS pop-up.
+// Runs a United India premium calculator in the signed-in United India page: from the home page it
+// opens the calculator (a pop-up in the same session, shown as a tab of the app window), performs
+// each step of the plan, and after every step checks for United India's ERRORS pop-up.
 // - Health (plan: uiic-health.ts): stops at the "User Details" pop-up for the advisor.
 // - Motor (plan: uiic-motor.ts): reads the premium from "Premium Details" and returns it.
 // - Family Medicare e-proposal (plan: uiic-fm-proposal.ts): fills sections I-II and stops; the
 //   advisor fills the rest and saves it. The app never saves or submits a proposal.
-import type { BrowserWindow, WebContents } from 'electron';
+import type { WebContents } from 'electron';
+import type { PortalPage } from '../insurers/portal-host';
 import type { ClientInput } from '../../shared/contracts/client';
 import type { Vehicle } from '../../shared/contracts/vehicle';
 import { quotePageAgent, type PageOp, type PageOpResult } from './page-ops';
@@ -60,7 +61,7 @@ const refused = (message: string, problems: string[] = []): QuoteRunResult => ({
 
 /** Opens a calculator from the United India home page and runs the steps in it. */
 async function runInCalculator(deps: {
-  windows: () => BrowserWindow[];
+  windows: () => PortalPage[];
   tile: string;
   calculatorPath: string;
   steps: PlanStep[];
@@ -83,7 +84,7 @@ async function runInCalculator(deps: {
     problems: [],
   });
 
-  const before = new Set(deps.windows().map((w) => w.id));
+  const before = new Set(deps.windows().map((w) => w.webContents.id));
   const opened = await exec(main.webContents, { op: 'clickLink', text: deps.tile });
   if (!opened.ok) {
     return {
@@ -95,21 +96,21 @@ async function runInCalculator(deps: {
       notes: [],
     };
   }
-  let calculator: BrowserWindow | undefined;
+  let calculator: PortalPage | undefined;
   for (let waited = 0; waited < 20_000 && !calculator; waited += 300) {
     await new Promise((resolve) => setTimeout(resolve, 300));
     calculator = deps
       .windows()
       .find(
         (w) =>
-          !before.has(w.id) &&
+          !before.has(w.webContents.id) &&
           !w.isDestroyed() &&
           pathOf(w.webContents.getURL()) === deps.calculatorPath,
       );
   }
   if (!calculator) {
     return {
-      result: failed('Open the calculator', 'The calculator window did not open.'),
+      result: failed('Open the calculator', 'The calculator did not open.'),
       last: null,
       notes: [],
     };
@@ -166,8 +167,8 @@ async function runInCalculator(deps: {
 }
 
 export async function runUiicHealthQuote(deps: {
-  /** The United India windows: the portal first, then its pop-ups. */
-  windows: () => BrowserWindow[];
+  /** The United India pages (tabs): the portal first, then its pop-ups. */
+  windows: () => PortalPage[];
   client: ClientInput;
   goodHealth: boolean;
   today: Date;
@@ -192,7 +193,7 @@ export async function runUiicHealthQuote(deps: {
 }
 
 export async function runUiicMotorQuote(deps: {
-  windows: () => BrowserWindow[];
+  windows: () => PortalPage[];
   vehicle: Vehicle;
   today: Date;
 }): Promise<QuoteRunResult> {
@@ -217,7 +218,7 @@ export async function runUiicMotorQuote(deps: {
 }
 
 export async function runUiicFamilyMedicareProposal(deps: {
-  windows: () => BrowserWindow[];
+  windows: () => PortalPage[];
   client: ClientInput;
   /** The client's Aadhaar number, read from the vault just now; never returned or logged. */
   aadhaar: string | null;

@@ -126,8 +126,8 @@ credentials, and nothing was typed, clicked or submitted.
 The advisor signs in once per insurer and keeps working in that portal, for as many quotes as
 needed:
 
-- **While the app is open:** the session is kept for up to 12 hours, even if the insurer window is
-  closed. Closing hides the window; **Show portal** brings back the same page.
+- **While the app is open:** the session is kept for up to 12 hours, even if the insurer's tab is
+  closed. Closing the insurer's tab only hides it; **Show portal** brings back the same page.
 - **After 12 hours:** the app ends the session and wipes that insurer's cookies and storage, even
   if the advisor is still working. The 12 hours count from the first open, not the sign-in. The
   next open starts at the login page, which the app fills again.
@@ -136,7 +136,7 @@ needed:
   portals do not need the client's OTP again. Most portals (Bajaj, United India) sign in with
   session cookies, which Electron never writes to disk. The app keeps them itself
   (`src/main/insurers/session-keeper.ts`):
-  - **What:** only the session cookies, plus the page the insurer window was on, so it reopens
+  - **What:** only the session cookies, plus the page the insurer was on, so it reopens
     there and not on the login page.
   - **Where:** `<userData>/insurer-sessions/<insurer>.session`, encrypted with the OS key (the same
     key as the saved sign-in details), owner-only.
@@ -186,10 +186,16 @@ Without the variable the screen is hidden and every insurer channel refuses (`UN
   - **Locked boxes:** United India locks its boxes until they are focused (against browser
     autofill). The agent focuses them as a click would; it never removes a lock itself, and a box
     that stays locked is refused.
-- **Portal windows:**
-  - **Bridge and session:** each window has no bridge to the app, and its own in-memory session
-    (the sign-in is forgotten on quit).
-  - **Permissions:** permissions and downloads are denied, and popups are blocked.
+- **Insurer pages (tabs of the app window, decision of 3 November 2026):**
+  - **Where:** each insurer page is a separate view laid over the app window's content area
+    (`src/main/insurers/portal-host.ts`), shown as a tab in the top bar. The pop-ups it opens
+    (calculators, proposal forms) become more tabs of the same insurer, not windows. Only the shown
+    tab is attached to the window; the others keep running in the background.
+  - **Bridge and session:** each page has no preload and so no bridge to the app; it runs in its
+    own process with its own session (partition), so being drawn inside the app window gives it no
+    access to the app's page. Checked end to end: `node test/insurer-login-e2e/run-motor.mjs tabs`.
+  - **Permissions:** permissions and downloads are denied; pop-ups are allowed only within the
+    insurer's own origins, as tabs.
   - **Navigation:** pages may navigate only within the insurer's own origins, and sub-frames
     also to its CAPTCHA provider.
 - **Logs:** only the insurer id and what happened (for example `filled`, `field-not-found`).

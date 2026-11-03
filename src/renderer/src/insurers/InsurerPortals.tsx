@@ -13,7 +13,7 @@ import { endTime, InsurerAvatar, portalStatus, StatusBadge } from './branding';
 
 const FILL_MESSAGES: Record<FillOutcome, { text: string; problem: boolean }> = {
   filled: {
-    text: 'Sign-in details filled. Finish signing in in the insurer window.',
+    text: 'Sign-in details filled. Finish signing in on the insurer tab.',
     problem: false,
   },
   'kept-advisor-input': {
@@ -88,7 +88,7 @@ export function InsurerPortals(): React.JSX.Element | null {
     void refresh();
   }, [refresh]);
 
-  // While any insurer window is open, keep its sign-in status up to date.
+  // While any insurer page is open, keep its sign-in status up to date.
   const anyOpen =
     load.state === 'ready' &&
     load.list.portals.some((p) => p.windowOpen || p.sessionEndsAt !== null);
@@ -123,10 +123,10 @@ export function InsurerPortals(): React.JSX.Element | null {
       <p className="lead">
         Save each insurer&rsquo;s sign-in once. When you open a portal, the app fills your user ID
         and password into the insurer&rsquo;s own page; you complete any CAPTCHA and press the
-        sign-in button. Details are stored encrypted on this computer only. Once signed in, keep the
-        app open and the session stays for up to {SESSION_HOURS} hours, even if you close the
-        insurer window. Quitting the app ends it for most insurers, and an insurer may end it
-        sooner.
+        sign-in button. Each portal opens as a tab at the top of this window, and the pages it opens
+        (calculators, proposal forms) as more tabs. Details are stored encrypted on this computer
+        only. Once signed in, the session stays for up to {SESSION_HOURS} hours, even if you hide
+        the insurer&rsquo;s tab or restart the app; an insurer may end it sooner.
       </p>
       {load.list.vaultError && (
         <p className="error" role="alert">

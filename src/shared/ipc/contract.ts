@@ -179,6 +179,30 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
 
 export type QuoteRunRequest = z.infer<typeof quoteRunRequestSchema>;
 
+/** A tab of the app window: an insurer's page or a pop-up it opened (src/main/insurers/portal-host.ts). */
+const portalTabIdSchema = z.string().regex(/^[a-z0-9-]{1,40}:\d{1,9}$/);
+export const portalTabsSchema = z
+  .object({
+    version: z.int().min(1),
+    tabs: z
+      .array(
+        z
+          .object({
+            id: portalTabIdSchema,
+            insurerId: insurerIdSchema,
+            title: z.string().max(120),
+            kind: z.enum(['portal', 'popup']),
+            loading: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(50),
+    /** The tab shown, or null for the app's own screens. */
+    active: portalTabIdSchema.nullable(),
+  })
+  .strict();
+export type PortalTabsView = z.infer<typeof portalTabsSchema>;
+
 export const ipcContract = {
   [IPC_CHANNELS.appGetInfo]: {
     request: z.object({}).strict(),
@@ -223,6 +247,31 @@ export const ipcContract = {
   [IPC_CHANNELS.quotesRun]: {
     request: quoteRunRequestSchema,
     response: quoteRunResultSchema,
+  },
+  [IPC_CHANNELS.portalsTabs]: {
+    /** Answers once the tabs changed after version `since` (or after 20 seconds anyway). */
+    request: z.object({ since: z.int().min(0) }).strict(),
+    response: portalTabsSchema,
+  },
+  [IPC_CHANNELS.portalsShow]: {
+    request: z.object({ tabId: portalTabIdSchema.nullable() }).strict(),
+    response: z.object({ shown: z.literal(true) }).strict(),
+  },
+  [IPC_CHANNELS.portalsClose]: {
+    request: z.object({ tabId: portalTabIdSchema }).strict(),
+    response: z.object({ closed: z.literal(true) }).strict(),
+  },
+  [IPC_CHANNELS.portalsSetBounds]: {
+    /** Where the insurer page goes in the app window, in its page's CSS pixels. */
+    request: z
+      .object({
+        x: z.number().min(0).max(100_000),
+        y: z.number().min(0).max(100_000),
+        width: z.number().min(0).max(100_000),
+        height: z.number().min(0).max(100_000),
+      })
+      .strict(),
+    response: z.object({ set: z.literal(true) }).strict(),
   },
   [IPC_CHANNELS.clientsDelete]: {
     request: clientOnly,

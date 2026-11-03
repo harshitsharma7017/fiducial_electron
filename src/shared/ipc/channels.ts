@@ -18,6 +18,10 @@ export const IPC_CHANNELS = {
   vehiclesSave: 'vehicles:save',
   vehiclesDelete: 'vehicles:delete',
   quotesRun: 'quotes:run',
+  portalsTabs: 'portals:tabs',
+  portalsShow: 'portals:show',
+  portalsClose: 'portals:close',
+  portalsSetBounds: 'portals:set-bounds',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
