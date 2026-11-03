@@ -39,7 +39,6 @@ const server = http.createServer((req, res) => {
 });
 
 const F = 'motorPolicyData.mtrInitData.NewMotorPolicyForm';
-const base = { customer: { name: 'Synthetic Vehicle Owner' }, pincode: '560001', members: [] };
 const CASES = [
   {
     name: 'new private car: cover period, CC band, both dates, IDV, discount, premium read',
@@ -132,7 +131,7 @@ app.whenReady().then(async () => {
   let failures = 0;
   const today = new Date(2026, 10, 2);
 
-  const runCase = async (client) => {
+  const runCase = async (vehicle) => {
     const ses = session.fromPartition(`uiic-motor-${Math.random()}`);
     setSessionPolicy(ses, {
       navigate: (url) => url.startsWith(origin + '/'),
@@ -165,7 +164,7 @@ app.whenReady().then(async () => {
         .then((t) => trace('page', t))
         .catch((e) => trace('page read failed', e.message));
     }, 3000);
-    const result = await runUiicMotorQuote({ windows, client, today });
+    const result = await runUiicMotorQuote({ windows, vehicle, today });
     clearInterval(watch);
     const calc = windows().find((w) => w.webContents.getURL().includes('MotorQuote.html'));
     const state =
@@ -192,7 +191,7 @@ app.whenReady().then(async () => {
   for (const c of CASES.filter(
     (_, i) => !process.env.FQF_E2E_CASE || String(i + 1) === process.env.FQF_E2E_CASE,
   )) {
-    const { result, state } = await runCase({ ...base, vehicle: c.vehicle });
+    const { result, state } = await runCase(c.vehicle);
     const problems = [];
     if (result.outcome !== 'ready')
       problems.push(
@@ -211,10 +210,7 @@ app.whenReady().then(async () => {
 
   // United India's ERRORS pop-up stops the run, with its message.
   {
-    const { result } = await runCase({
-      ...base,
-      vehicle: { ...CASES[0].vehicle, idvRupees: 60000000 },
-    });
+    const { result } = await runCase({ ...CASES[0].vehicle, idvRupees: 60000000 });
     const ok =
       result.outcome === 'failed' &&
       result.step === 'Click To See Premium' &&

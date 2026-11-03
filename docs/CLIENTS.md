@@ -16,7 +16,6 @@ advisor deletes.
 | Where             | pincode                                                                |
 | Members (1 to 12) | relationship and age only: no names, gender or date of birth (C-05)    |
 | Quote details     | cover type (floater or individual), sum insured, policy term (optional) |
-| Vehicle           | class, new or pre-owned, registration date, zone, IDV, and the details its class needs (optional; motor quotes, 2 November 2026) |
 | Proposal details  | proposer: PAN, address, state, city, village, occupation, high-risk type, landline, CKYC and e-insurance numbers, high-risk customer; nominee: name, relationship, address, contact; intermediary: place of signing (all optional; e-proposal forms, 3 November 2026) |
 
 **The Aadhaar number is kept apart (decision of 3 November 2026).** UIDAI's rules ask that Aadhaar
@@ -35,6 +34,26 @@ A client with quote details is **Ready to quote**: `quoteRequestFor()`
 (`src/shared/contracts/client.ts`) turns it into the quote request that quote automation will
 use. Fields such as date of birth or gender are added per insurer only when that insurer's
 recorded quote form requires them.
+
+## Saved vehicles (kept on their own)
+
+Decision of 3 November 2026: vehicles are **not part of a client**. They have their own list
+(**Vehicles** screen), and motor quotes run from a vehicle.
+
+- **What:** a name the advisor chooses (for example "Swift – Ramesh") and the details United
+  India's Motor calculator asks for:
+  - class, new or pre-owned, registration date, zone, IDV and OD discount;
+  - the details its class needs: cubic capacity or horse power, seats, gross weight, type of bus or
+    special vehicle, battery, long-term cover, claim and previous no-claim bonus.
+- **No link to a client.** No owner details are stored with a vehicle.
+- **Where:** the same encrypted database as clients, in its own `vehicle` table. It is kept until
+  the advisor deletes it.
+- **Upgrade from earlier versions (schema version 5):** each vehicle that was saved inside a
+  client became a saved vehicle named after that client. Clients that held only a vehicle (no
+  members) were removed, with any Aadhaar number saved for them. All of this happens in one commit:
+  it all applies or none of it does.
+
+Clients again need at least one member.
 
 ## How it is stored
 

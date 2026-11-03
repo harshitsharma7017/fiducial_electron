@@ -34,6 +34,8 @@ export const LOG_EVENTS = [
   'insurer.recording-started',
   'insurer.recording-stopped',
   'client.saved',
+  'vehicle.saved',
+  'vehicle.deleted',
   'client.deleted',
   'storage.open-failed',
   'storage.write-failed',

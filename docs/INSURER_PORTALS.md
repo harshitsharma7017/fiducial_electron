@@ -16,9 +16,10 @@ verified with a real sign-in.** Off by default.
   (kept apart in the secret vault: see `docs/CLIENTS.md`).
 - **Product lines:** health, motor and travel.
   - **Health** uses the saved client data (members, ages, sum insured).
-  - **Motor** needs vehicle details, and **travel** needs trip details (destination, dates,
-    traveller ages). Their client records are designed once each insurer's recorded forms show which
-    fields are required.
+  - **Motor** uses a saved vehicle. Vehicles are kept on their own, not as part of a client
+    (decision of 3 November 2026; see `docs/CLIENTS.md`).
+  - **Travel** needs trip details (destination, dates, traveller ages), designed once the
+    insurer's recorded forms show which fields are required.
 - **Per insurer:** every product is recorded once with dummy data (form recorder), then automated
   and tested. United India first.
 

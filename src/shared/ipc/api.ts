@@ -4,12 +4,14 @@ import type {
   AppInfo,
   ClientListResponse,
   ClientView,
+  QuoteRunRequest,
   InsurerPortalList,
   QuoteRunResultView,
   SaveClientRequest,
   SaveLoginRequest,
 } from './contract';
 import type { AppResult } from './result';
+import type { VehicleInputRaw, VehicleRecord, VehicleSummary } from '../contracts/vehicle';
 
 export interface FqfApi {
   app: {
@@ -31,18 +33,21 @@ export interface FqfApi {
   };
   quotes: {
     /** Fills the insurer's quote form for a saved client (United India health so far). */
-    run(request: {
-      clientId: string;
-      insurerId: string;
-      product: 'health' | 'motor' | 'fm-proposal';
-      goodHealthConfirmed: boolean;
-    }): Promise<AppResult<QuoteRunResultView>>;
+    /** Motor: for a saved vehicle; health and the Family Medicare e-proposal: for a client. */
+    run(request: QuoteRunRequest): Promise<AppResult<QuoteRunResultView>>;
   };
   clients: {
     list(): Promise<AppResult<ClientListResponse>>;
     /** The client, and of the Aadhaar number only its last four digits. */
     get(id: string): Promise<AppResult<ClientView>>;
     save(request: SaveClientRequest): Promise<AppResult<{ id: string }>>;
+    delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
+  };
+  /** Saved vehicles, for motor quotes (kept on their own, not part of a client). */
+  vehicles: {
+    list(): Promise<AppResult<{ vehicles: VehicleSummary[] }>>;
+    get(id: string): Promise<AppResult<VehicleRecord>>;
+    save(request: { id?: string; saved: VehicleInputRaw }): Promise<AppResult<{ id: string }>>;
     delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
   };
 }
@@ -52,4 +57,5 @@ export const API_SHAPE = {
   insurers: ['list', 'saveLogin', 'forgetLogin', 'openPortal', 'signOut', 'record'],
   quotes: ['run'],
   clients: ['list', 'get', 'save', 'delete'],
+  vehicles: ['list', 'get', 'save', 'delete'],
 } as const satisfies { [K in keyof FqfApi]: readonly (keyof FqfApi[K])[] };

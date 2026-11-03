@@ -79,63 +79,6 @@ export const clientMemberSchema = memberSchema.extend({
 
 export type ClientMember = z.infer<typeof clientMemberSchema>;
 
-/**
- * Vehicle classes for motor quotes (decision of 2 November 2026: all classes of United India's
- * Motor calculator). Named for what they are, not for an insurer's codes.
- */
-export const VEHICLE_CLASSES = [
-  'private-car',
-  'two-wheeler',
-  'taxi-upto-6',
-  'bus-above-6',
-  'passenger-2w',
-  'passenger-3w-upto-6',
-  'passenger-3w-7-to-17',
-  'goods-private',
-  'goods-public',
-  'goods-3w-private',
-  'goods-3w-public',
-  'e-cart-private',
-  'e-cart-public',
-  'e-rickshaw',
-  'special',
-] as const;
-export const vehicleClassSchema = z.enum(VEHICLE_CLASSES);
-export type VehicleClass = z.infer<typeof vehicleClassSchema>;
-
-export const PREVIOUS_NCB = [0, 20, 25, 35, 45, 50] as const;
-
-/**
- * A client's vehicle, for motor quotes. Which of the optional details a quote needs depends on
- * the class (the insurer's form says; see src/main/quotes/uiic-motor.ts).
- */
-export const vehicleSchema = z.strictObject({
-  vehicleClass: vehicleClassSchema,
-  condition: z.enum(['new', 'pre-owned']),
-  registrationDate: dateOfBirthSchema,
-  zone: z.enum(['A', 'B', 'C']),
-  idvRupees: z.int().positive().max(1_000_000_000),
-  odDiscountPercent: z.int().min(0).max(95).optional(),
-  cubicCapacityCc: z.int().positive().max(100_000).optional(),
-  horsePower: z.number().positive().max(10_000).optional(),
-  seatingCapacity: z.int().min(1).max(500).optional(),
-  grossWeightKg: z.int().positive().max(1_000_000).optional(),
-  busType: z.enum(['school', 'other']).optional(),
-  /** Special vehicles: the type as the insurer lists it (for example "Agricultural Tractors"). */
-  specialType: z.string().trim().min(1).max(100).optional(),
-  batteryOperated: z.boolean().optional(),
-  /** New vehicles: own damage cover for the whole liability period (3 years car, 5 years bike). */
-  longTermOd: z.boolean().optional(),
-  /** Pre-owned vehicles. */
-  claimLastYear: z.boolean().optional(),
-  previousNcbPercent: z
-    .int()
-    .refine((v) => (PREVIOUS_NCB as readonly number[]).includes(v), 'a no-claim bonus step')
-    .optional(),
-});
-
-export type Vehicle = z.infer<typeof vehicleSchema>;
-
 /** Nominee relationships, as United India's proposal forms list them. */
 export const NOMINEE_RELATIONSHIPS = [
   'spouse',
@@ -282,24 +225,19 @@ export const proposalDetailsSchema = z.strictObject({
 });
 export type ProposalDetails = z.infer<typeof proposalDetailsSchema>;
 
-export const clientInputSchema = z
-  .strictObject({
-    customer: customerSchema,
-    pincode: pincodeSchema,
-    /** Policy members for health quotes; empty for a vehicle-only (motor) client. */
-    members: z.array(clientMemberSchema).max(MAX_CONTRACT_MEMBERS),
-    /** The proposer's ("self") marital status. */
-    proposerMaritalStatus: maritalStatusSchema.optional(),
-    preferences: quotePreferencesSchema.optional(),
-    /** The vehicle, for motor quotes. */
-    vehicle: vehicleSchema.optional(),
-    /** Proposal details, for e-proposal forms. */
-    proposal: proposalDetailsSchema.optional(),
-  })
-  .refine((c) => c.members.length > 0 || c.vehicle !== undefined, {
-    message: 'members for health, or a vehicle for motor',
-    path: ['members'],
-  });
+// Vehicles are not part of a client (decision of 3 November 2026): they are kept on their own, see
+// ./vehicle.ts.
+export const clientInputSchema = z.strictObject({
+  customer: customerSchema,
+  pincode: pincodeSchema,
+  /** Policy members for health quotes and proposals. */
+  members: z.array(clientMemberSchema).min(1).max(MAX_CONTRACT_MEMBERS),
+  /** The proposer's ("self") marital status. */
+  proposerMaritalStatus: maritalStatusSchema.optional(),
+  preferences: quotePreferencesSchema.optional(),
+  /** Proposal details, for e-proposal forms. */
+  proposal: proposalDetailsSchema.optional(),
+});
 
 export type ClientInputRaw = z.input<typeof clientInputSchema>;
 export type ClientInput = z.output<typeof clientInputSchema>;
@@ -318,8 +256,7 @@ export const clientSummarySchema = z.strictObject({
   id: entityIdSchema,
   name: z.string().min(1).max(100),
   pincode: z.string().regex(/^\d{6}$/),
-  memberCount: z.int().min(0).max(MAX_CONTRACT_MEMBERS),
-  hasVehicle: z.boolean(),
+  memberCount: z.int().min(1).max(MAX_CONTRACT_MEMBERS),
   hasPreferences: z.boolean(),
   updatedAt: isoDateTimeSchema,
 });

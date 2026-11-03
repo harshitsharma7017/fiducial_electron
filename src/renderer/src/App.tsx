@@ -3,6 +3,7 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 import type { AppInfo } from '../../shared/ipc/contract';
 import { ClientsPanel } from './clients/ClientsPanel';
+import { VehiclesPanel } from './vehicles/VehiclesPanel';
 import { InsurerPortals } from './insurers/InsurerPortals';
 
 // DEVELOPMENT ONLY: the M3 Quote Comparison demo with synthetic data. It wraps the home screen
@@ -94,6 +95,7 @@ export function App(): React.JSX.Element {
       </section>
       {/* Shown only when the automation features are switched on (FQF_INSURER_PORTALS=1). */}
       {status.state === 'ready' && <ClientsPanel />}
+      {status.state === 'ready' && <VehiclesPanel />}
       {status.state === 'ready' && <InsurerPortals />}
     </main>
   );

@@ -13,6 +13,10 @@ export const IPC_CHANNELS = {
   clientsGet: 'clients:get',
   clientsSave: 'clients:save',
   clientsDelete: 'clients:delete',
+  vehiclesList: 'vehicles:list',
+  vehiclesGet: 'vehicles:get',
+  vehiclesSave: 'vehicles:save',
+  vehiclesDelete: 'vehicles:delete',
   quotesRun: 'quotes:run',
 } as const;
 

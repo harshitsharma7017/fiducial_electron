@@ -12,6 +12,7 @@ import type {
   QuoteRunResultView,
 } from '../shared/ipc/contract';
 import type { AppResult } from '../shared/ipc/result';
+import type { VehicleRecord, VehicleSummary } from '../shared/contracts/vehicle';
 
 const api: FqfApi = {
   app: {
@@ -54,6 +55,20 @@ const api: FqfApi = {
       ipcRenderer.invoke(IPC_CHANNELS.clientsSave, request) as Promise<AppResult<{ id: string }>>,
     delete: (id) =>
       ipcRenderer.invoke(IPC_CHANNELS.clientsDelete, { id }) as Promise<
+        AppResult<{ deleted: boolean }>
+      >,
+  },
+  vehicles: {
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.vehiclesList, {}) as Promise<
+        AppResult<{ vehicles: VehicleSummary[] }>
+      >,
+    get: (id) =>
+      ipcRenderer.invoke(IPC_CHANNELS.vehiclesGet, { id }) as Promise<AppResult<VehicleRecord>>,
+    save: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.vehiclesSave, request) as Promise<AppResult<{ id: string }>>,
+    delete: (id) =>
+      ipcRenderer.invoke(IPC_CHANNELS.vehiclesDelete, { id }) as Promise<
         AppResult<{ deleted: boolean }>
       >,
   },

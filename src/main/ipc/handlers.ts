@@ -43,6 +43,12 @@ export function createHandlers(deps: {
       id: await deps.clients.save(id ?? null, client, aadhaar),
     }),
     'clients:delete': async ({ id }) => ({ deleted: await deps.clients.delete(id) }),
+    'vehicles:list': async () => ({ vehicles: await deps.clients.listVehicles() }),
+    'vehicles:get': ({ id }) => deps.clients.getVehicle(id),
+    'vehicles:save': async ({ id, saved }) => ({
+      id: await deps.clients.saveVehicle(id ?? null, saved),
+    }),
+    'vehicles:delete': async ({ id }) => ({ deleted: await deps.clients.deleteVehicle(id) }),
     'quotes:run': (request) => deps.quotes.run(request),
   };
 }

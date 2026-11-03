@@ -7,6 +7,7 @@
 //   advisor fills the rest and saves it. The app never saves or submits a proposal.
 import type { BrowserWindow, WebContents } from 'electron';
 import type { ClientInput } from '../../shared/contracts/client';
+import type { Vehicle } from '../../shared/contracts/vehicle';
 import { quotePageAgent, type PageOp, type PageOpResult } from './page-ops';
 import { planUiicHealthQuote, type PlanStep } from './uiic-health';
 import { planUiicFamilyMedicareProposal } from './uiic-fm-proposal';
@@ -192,10 +193,10 @@ export async function runUiicHealthQuote(deps: {
 
 export async function runUiicMotorQuote(deps: {
   windows: () => BrowserWindow[];
-  client: ClientInput;
+  vehicle: Vehicle;
   today: Date;
 }): Promise<QuoteRunResult> {
-  const plan = planUiicMotorQuote(deps.client, { today: deps.today });
+  const plan = planUiicMotorQuote(deps.vehicle, { today: deps.today });
   if (!plan.ok) return refused('This vehicle cannot be quoted automatically yet.', plan.problems);
   const { result, last } = await runInCalculator({
     windows: deps.windows,

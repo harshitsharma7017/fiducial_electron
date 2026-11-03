@@ -8,6 +8,8 @@
 //   is in the database file, and a lost or older database file is refused, never silently used.
 // - Deleting a client removes it and its members; secure_delete overwrites the deleted content.
 // - Clients are kept until the advisor deletes them (retention period Q-B06 still open).
+// - Saved vehicles (for motor quotes) are kept in the same database, in their own table, not as
+//   part of a client (decision of 3 November 2026).
 // - Nothing here logs; errors carry codes only, never client data.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
@@ -21,6 +23,13 @@ import {
 } from '../../shared/contracts/client';
 import type { Gender, MaritalStatus } from '../../shared/contracts/client';
 import type { Relationship } from '../../shared/contracts/customer';
+import {
+  vehicleInputSchema,
+  vehicleSchema,
+  type VehicleInput,
+  type VehicleRecord,
+  type VehicleSummary,
+} from '../../shared/contracts/vehicle';
 import type { CoverType } from '../../shared/contracts/coverage';
 import { VaultOpenError, type VaultOpener } from '../secrets/vault-opener';
 import { openDurable, type DurableStore } from './durable-db';
@@ -29,7 +38,7 @@ import type { StoreProblem } from './store-problems';
 
 const KEY_ENTRY = 'database-key';
 const KEY_HEX = /^[0-9a-f]{64}$/;
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 /** Why the store could not be used. `code` is safe to show; `reason` is for logs and support. */
 export class ClientStoreError extends Error {
@@ -49,6 +58,17 @@ export interface ClientStore {
   save(id: string | null, input: ClientInput): ClientRecord;
   /** Removes the client and its members. Returns whether it existed. */
   delete(id: string): boolean;
+  vehicles: {
+    list(): VehicleSummary[];
+    get(id: string): VehicleRecord | null;
+    /** Creates a vehicle (id null) or replaces an existing one. Returns the saved record. */
+    save(id: string | null, input: VehicleInput): VehicleRecord;
+    /** Removes the vehicle. Returns whether it existed. */
+    delete(id: string): boolean;
+  };
+  /** Clients the last upgrade removed (vehicle-only clients, version 5): their Aadhaar entries
+   * are removed by the caller. */
+  removedByUpgrade: readonly string[];
   close(): void;
 }
 
@@ -91,10 +111,16 @@ async function databaseKey(openVault: VaultOpener, dbPath: string): Promise<Buff
   return key;
 }
 
-function migrate(db: Database.Database, store: DurableStore): void {
+/** Brings the database up to SCHEMA_VERSION. Returns the ids of clients the upgrade removed. */
+function migrate(
+  db: Database.Database,
+  store: DurableStore,
+  at: string,
+  newId: () => string,
+): string[] {
   const version = Number(db.pragma('user_version', { simple: true }));
   if (version > SCHEMA_VERSION) throw new ClientStoreError('STORAGE_ERROR', 'schema-too-new');
-  if (version === SCHEMA_VERSION) return;
+  if (version === SCHEMA_VERSION) return [];
   // Version 1: clients and members.
   if (version < 1)
     store.commit((d) => {
@@ -150,6 +176,42 @@ function migrate(db: Database.Database, store: DurableStore): void {
       d.pragma('user_version = 4');
     });
   }
+  // Version 5 (3 November 2026): vehicles are kept on their own. Each client's vehicle becomes a
+  // saved vehicle named after the client; clients that held only a vehicle (no members) are
+  // removed; the client's vehicle column is dropped. One commit: all of it or none.
+  let removed: string[] = [];
+  if (version < 5) {
+    removed = store.commit((d) => {
+      d.exec(`
+        CREATE TABLE vehicle (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          vehicle_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      const owners = d
+        .prepare(
+          'SELECT id, name, vehicle_json, created_at FROM client WHERE vehicle_json IS NOT NULL',
+        )
+        .all() as { id: string; name: string; vehicle_json: string; created_at: string }[];
+      const insert = d.prepare(
+        'INSERT INTO vehicle (id, name, vehicle_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      );
+      for (const o of owners) insert.run(newId(), o.name, o.vehicle_json, o.created_at, at);
+      const vehicleOnly = `vehicle_json IS NOT NULL AND NOT EXISTS
+        (SELECT 1 FROM client_member m WHERE m.client_id = client.id)`;
+      const gone = (
+        d.prepare(`SELECT id FROM client WHERE ${vehicleOnly}`).all() as { id: string }[]
+      ).map((r) => r.id);
+      d.prepare(`DELETE FROM client WHERE ${vehicleOnly}`).run();
+      d.exec('ALTER TABLE client DROP COLUMN vehicle_json;');
+      d.pragma('user_version = 5');
+      return gone;
+    }).value;
+  }
+  return removed;
 }
 
 interface ClientRow {
@@ -160,11 +222,18 @@ interface ClientRow {
   notes: string | null;
   pincode: string;
   proposer_marital_status: string | null;
-  vehicle_json: string | null;
   proposal_json: string | null;
   cover_type: string | null;
   sum_insured_paise: number | null;
   tenure_years: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface VehicleRow {
+  id: string;
+  name: string;
+  vehicle_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -188,8 +257,9 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
     throw new ClientStoreError('STORAGE_ERROR', 'durability-refused');
   }
   const store = opened.store;
+  let removedByUpgrade: string[];
   try {
-    migrate(db, store);
+    removedByUpgrade = migrate(db, store, now().toISOString(), newId);
   } catch (err) {
     db.close();
     throw err instanceof ClientStoreError
@@ -231,7 +301,6 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
       ...(row.proposer_marital_status !== null
         ? { proposerMaritalStatus: row.proposer_marital_status as MaritalStatus }
         : {}),
-      ...(row.vehicle_json !== null ? { vehicle: JSON.parse(row.vehicle_json) as unknown } : {}),
       ...(row.proposal_json !== null ? { proposal: JSON.parse(row.proposal_json) as unknown } : {}),
       ...(row.cover_type !== null && row.sum_insured_paise !== null && row.tenure_years !== null
         ? {
@@ -249,6 +318,19 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
   const getRow = (id: string): ClientRow | undefined =>
     db.prepare('SELECT * FROM client WHERE id = ?').get(id) as ClientRow | undefined;
 
+  const getVehicleRow = (id: string): VehicleRow | undefined =>
+    db.prepare('SELECT * FROM vehicle WHERE id = ?').get(id) as VehicleRow | undefined;
+  const toVehicleRecord = (row: VehicleRow): VehicleRecord => ({
+    id: row.id,
+    // Re-validated on the way out, like clients.
+    saved: vehicleInputSchema.parse({
+      name: row.name,
+      vehicle: JSON.parse(row.vehicle_json) as unknown,
+    }),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+
   const write = <T>(work: (d: Database.Database) => T): T => {
     try {
       return store.commit(work).value;
@@ -262,7 +344,7 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
       (
         db
           .prepare(
-            `SELECT c.id, c.name, c.pincode, c.cover_type, c.updated_at, c.vehicle_json,
+            `SELECT c.id, c.name, c.pincode, c.cover_type, c.updated_at,
                     (SELECT count(*) FROM client_member m WHERE m.client_id = c.id) AS members
              FROM client c ORDER BY c.updated_at DESC, c.name`,
           )
@@ -272,7 +354,6 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
           pincode: string;
           cover_type: string | null;
           updated_at: string;
-          vehicle_json: string | null;
           members: number;
         }[]
       ).map((r) => ({
@@ -280,7 +361,6 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
         name: r.name,
         pincode: r.pincode,
         memberCount: r.members,
-        hasVehicle: r.vehicle_json !== null,
         hasPreferences: r.cover_type !== null,
         updatedAt: r.updated_at,
       })),
@@ -307,7 +387,6 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
           notes: c.notes ?? null,
           pincode: input.pincode,
           proposer_marital_status: input.proposerMaritalStatus ?? null,
-          vehicle_json: input.vehicle ? JSON.stringify(input.vehicle) : null,
           proposal_json: input.proposal ? JSON.stringify(input.proposal) : null,
           cover_type: p?.coverType ?? null,
           sum_insured_paise: p?.sumInsuredPaise ?? null,
@@ -319,7 +398,7 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
           d.prepare(
             `UPDATE client SET name = @name, phone = @phone, email = @email, notes = @notes,
                pincode = @pincode, proposer_marital_status = @proposer_marital_status,
-               vehicle_json = @vehicle_json, proposal_json = @proposal_json,
+               proposal_json = @proposal_json,
                cover_type = @cover_type, sum_insured_paise = @sum_insured_paise,
                tenure_years = @tenure_years, updated_at = @updated_at WHERE id = @id`,
           ).run(values);
@@ -327,11 +406,11 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
         } else {
           d.prepare(
             `INSERT INTO client (id, name, phone, email, notes, pincode, proposer_marital_status,
-               vehicle_json, proposal_json, cover_type, sum_insured_paise, tenure_years,
-               created_at, updated_at)
+               proposal_json, cover_type, sum_insured_paise, tenure_years, created_at,
+               updated_at)
              VALUES (@id, @name, @phone, @email, @notes, @pincode, @proposer_marital_status,
-               @vehicle_json, @proposal_json, @cover_type, @sum_insured_paise, @tenure_years,
-               @created_at, @updated_at)`,
+               @proposal_json, @cover_type, @sum_insured_paise, @tenure_years, @created_at,
+               @updated_at)`,
           ).run(values);
         }
         const member = d.prepare(
@@ -348,6 +427,66 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
     },
 
     delete: (id) => write((d) => d.prepare('DELETE FROM client WHERE id = ?').run(id).changes > 0),
+
+    vehicles: {
+      list: () =>
+        (
+          db
+            .prepare(
+              'SELECT id, name, vehicle_json, updated_at FROM vehicle ORDER BY updated_at DESC, name',
+            )
+            .all() as VehicleRow[]
+        ).map((r) => {
+          const v = vehicleSchema.parse(JSON.parse(r.vehicle_json));
+          return {
+            id: r.id,
+            name: r.name,
+            vehicleClass: v.vehicleClass,
+            condition: v.condition,
+            updatedAt: r.updated_at,
+          };
+        }),
+      get: (id) => {
+        const row = getVehicleRow(id);
+        return row ? toVehicleRecord(row) : null;
+      },
+      save: (id, raw) => {
+        const input = vehicleInputSchema.parse(raw);
+        const at = now().toISOString();
+        const existing = id === null ? undefined : getVehicleRow(id);
+        if (id !== null && !existing) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');
+        const vehicleId = existing?.id ?? newId();
+        const values = {
+          id: vehicleId,
+          name: input.name,
+          vehicle_json: JSON.stringify(input.vehicle),
+          created_at: existing?.created_at ?? at,
+          updated_at: at,
+        };
+        write((d) =>
+          existing
+            ? d
+                .prepare(
+                  `UPDATE vehicle SET name = @name, vehicle_json = @vehicle_json,
+                     updated_at = @updated_at WHERE id = @id`,
+                )
+                .run(values)
+            : d
+                .prepare(
+                  `INSERT INTO vehicle (id, name, vehicle_json, created_at, updated_at)
+                   VALUES (@id, @name, @vehicle_json, @created_at, @updated_at)`,
+                )
+                .run(values),
+        );
+        const saved = getVehicleRow(vehicleId);
+        if (!saved) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');
+        return toVehicleRecord(saved);
+      },
+      delete: (id) =>
+        write((d) => d.prepare('DELETE FROM vehicle WHERE id = ?').run(id).changes > 0),
+    },
+
+    removedByUpgrade,
 
     close: () => {
       try {

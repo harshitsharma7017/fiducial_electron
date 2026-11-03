@@ -6,7 +6,7 @@ import {
   UIIC_VEHICLE_CLASS,
 } from '../src/main/quotes/uiic-motor';
 import type { PageOp } from '../src/main/quotes/page-ops';
-import { clientInputSchema, VEHICLE_CLASSES, type Vehicle } from '../src/shared/contracts/client';
+import { VEHICLE_CLASSES, vehicleSchema, type Vehicle } from '../src/shared/contracts/vehicle';
 
 const TODAY = new Date(2026, 10, 2);
 const CAR: Vehicle = {
@@ -22,13 +22,7 @@ const CAR: Vehicle = {
 };
 
 function plan(vehicle: Partial<Vehicle> & Pick<Vehicle, 'vehicleClass'>) {
-  const client = clientInputSchema.parse({
-    customer: { name: 'Synthetic Vehicle Owner' },
-    pincode: '560001',
-    members: [],
-    vehicle: { ...CAR, ...vehicle },
-  });
-  return planUiicMotorQuote(client, { today: TODAY });
+  return planUiicMotorQuote(vehicleSchema.parse({ ...CAR, ...vehicle }), { today: TODAY });
 }
 
 function ops(vehicle: Partial<Vehicle> & Pick<Vehicle, 'vehicleClass'>): PageOp[] {
@@ -169,18 +163,6 @@ describe('planUiicMotorQuote', () => {
     const result = plan(change);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.problems.join(' ')).toContain(reason);
-  });
-
-  it('refuses a client without a vehicle', () => {
-    const client = clientInputSchema.parse({
-      customer: { name: 'No Vehicle' },
-      pincode: '560001',
-      members: [{ relationship: 'self', age: 40 }],
-    });
-    expect(planUiicMotorQuote(client, { today: TODAY })).toEqual({
-      ok: false,
-      problems: ['Add the vehicle details to this client.'],
-    });
   });
 
   it('knows United India’s value for every vehicle class', () => {

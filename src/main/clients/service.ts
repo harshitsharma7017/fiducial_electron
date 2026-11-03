@@ -11,6 +11,7 @@ import {
 } from '../../shared/contracts/client';
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
+import type { VehicleInput, VehicleRecord, VehicleSummary } from '../../shared/contracts/vehicle';
 import { ClientStoreError, type ClientStore } from '../storage/client-store';
 import type { AadhaarVault } from './aadhaar-vault';
 
@@ -31,6 +32,11 @@ export interface ClientService {
   aadhaarLastFour(id: string): Promise<string | null>;
   /** Main process only (filling an insurer's form): the whole Aadhaar number, or null. */
   aadhaarFor(id: string): Promise<string | null>;
+  /** Saved vehicles (for motor quotes), kept on their own in the same encrypted database. */
+  listVehicles(): Promise<VehicleSummary[]>;
+  getVehicle(id: string): Promise<VehicleRecord>;
+  saveVehicle(id: string | null, input: VehicleInput): Promise<string>;
+  deleteVehicle(id: string): Promise<boolean>;
   close(): void;
 }
 
@@ -51,6 +57,10 @@ export function createClientService(deps: {
       .open()
       .then((opened) => {
         store = opened;
+        // Clients removed by an upgrade (vehicle-only clients, when vehicles moved to their own
+        // list) take their Aadhaar number with them, as a deleted client does.
+        for (const id of opened.removedByUpgrade)
+          void deps.aadhaar?.clear(id).catch(() => undefined);
         return opened;
       })
       .catch((err: unknown) => {
@@ -139,6 +149,35 @@ export function createClientService(deps: {
     aadhaarFor: async (id) => {
       await requireStore();
       return deps.aadhaar ? deps.aadhaar.read(id) : null;
+    },
+
+    listVehicles: async () => {
+      const s = await requireStore();
+      return guard(() => s.vehicles.list());
+    },
+
+    getVehicle: async (id) => {
+      const s = await requireStore();
+      const record = guard(() => s.vehicles.get(id));
+      if (!record) throw new AppException('VALIDATION_FAILED');
+      return record;
+    },
+
+    saveVehicle: async (id, input) => {
+      const s = await requireStore();
+      if (id !== null && !guard(() => s.vehicles.get(id))) {
+        throw new AppException('VALIDATION_FAILED');
+      }
+      const saved = guard(() => s.vehicles.save(id, input));
+      deps.logger.info('vehicle.saved');
+      return saved.id;
+    },
+
+    deleteVehicle: async (id) => {
+      const s = await requireStore();
+      const deleted = guard(() => s.vehicles.delete(id));
+      if (deleted) deps.logger.info('vehicle.deleted');
+      return deleted;
     },
 
     close: () => {

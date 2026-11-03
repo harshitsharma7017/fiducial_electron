@@ -8,7 +8,7 @@
 //   "Premium Details": the premium (including GST) is read and returned.
 // Only Package Policy is automated (the other cover types were not recorded). A vehicle missing
 // a detail its class needs is refused with the reason, before anything is touched.
-import type { ClientInput, Vehicle, VehicleClass } from '../../shared/contracts/client';
+import type { Vehicle, VehicleClass } from '../../shared/contracts/vehicle';
 import type { PageOp } from './page-ops';
 import type { PlanStep } from './uiic-health';
 
@@ -85,9 +85,7 @@ const isoToday = (today: Date): string =>
 
 export type UiicMotorPlan = { ok: true; steps: PlanStep[] } | { ok: false; problems: string[] };
 
-export function planUiicMotorQuote(client: ClientInput, options: { today: Date }): UiicMotorPlan {
-  const v = client.vehicle;
-  if (!v) return { ok: false, problems: ['Add the vehicle details to this client.'] };
+export function planUiicMotorQuote(v: Vehicle, options: { today: Date }): UiicMotorPlan {
   const need = CLASS_FIELDS[v.vehicleClass];
   const problems: string[] = [];
   if (v.registrationDate > isoToday(options.today)) {

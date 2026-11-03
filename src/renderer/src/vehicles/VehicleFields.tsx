@@ -1,7 +1,7 @@
-// The vehicle part of the client form, for motor quotes. Shows only the details the chosen
-// vehicle class needs (as United India's Motor calculator asks for them).
-import type { Vehicle, VehicleClass } from '../../../shared/contracts/client';
-import { PREVIOUS_NCB, VEHICLE_CLASSES } from '../../../shared/contracts/client';
+// The vehicle form's details, for motor quotes. Shows only the details the chosen vehicle class
+// needs (as United India's Motor calculator asks for them).
+import type { Vehicle, VehicleClass } from '../../../shared/contracts/vehicle';
+import { PREVIOUS_NCB, VEHICLE_CLASSES } from '../../../shared/contracts/vehicle';
 
 export const VEHICLE_CLASS_LABELS: Record<VehicleClass, string> = {
   'private-car': 'Private car',
@@ -151,7 +151,7 @@ export function VehicleFields(props: {
   const c = v.vehicleClass;
   return (
     <fieldset>
-      <legend>Vehicle (for motor quotes)</legend>
+      <legend>Vehicle details</legend>
       <label>
         Vehicle class
         <select value={c} onChange={(e) => set({ vehicleClass: e.target.value as VehicleClass })}>

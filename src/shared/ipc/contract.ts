@@ -9,6 +9,11 @@ import {
   clientSummarySchema,
 } from '../contracts/client';
 import { entityIdSchema } from '../contracts/common';
+import {
+  vehicleInputSchema,
+  vehicleRecordSchema,
+  vehicleSummarySchema,
+} from '../contracts/vehicle';
 import { insurerIdSchema } from '../contracts/insurer';
 import { FILL_OUTCOMES } from '../insurers/fill-outcomes';
 import {
@@ -153,6 +158,27 @@ export const quoteRunResultSchema = z
 
 export type QuoteRunResultView = z.infer<typeof quoteRunResultSchema>;
 
+/**
+ * A quote run: motor quotes are for a saved vehicle; health quotes and the Family Medicare
+ * e-proposal (filled, never saved or submitted) are for a saved client.
+ */
+export const quoteRunRequestSchema = z.discriminatedUnion('product', [
+  z
+    .object({ product: z.literal('motor'), vehicleId: entityIdSchema, insurerId: insurerIdSchema })
+    .strict(),
+  z
+    .object({
+      product: z.enum(['health', 'fm-proposal']),
+      clientId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      /** Health: the advisor confirms, for this quote, every member's good health declaration. */
+      goodHealthConfirmed: z.boolean(),
+    })
+    .strict(),
+]);
+
+export type QuoteRunRequest = z.infer<typeof quoteRunRequestSchema>;
+
 export const ipcContract = {
   [IPC_CHANNELS.appGetInfo]: {
     request: z.object({}).strict(),
@@ -195,20 +221,32 @@ export const ipcContract = {
     response: z.object({ id: entityIdSchema }).strict(),
   },
   [IPC_CHANNELS.quotesRun]: {
-    request: z
-      .object({
-        clientId: entityIdSchema,
-        insurerId: insurerIdSchema,
-        /** health / motor: premium calculators; fm-proposal: Family Medicare e-proposal (filled,
-         * never saved or submitted). */
-        product: z.enum(['health', 'motor', 'fm-proposal']),
-        /** Health: the advisor confirms, for this quote, every member's good health declaration. */
-        goodHealthConfirmed: z.boolean(),
-      })
-      .strict(),
+    request: quoteRunRequestSchema,
     response: quoteRunResultSchema,
   },
   [IPC_CHANNELS.clientsDelete]: {
+    request: clientOnly,
+    response: z.object({ deleted: z.boolean() }).strict(),
+  },
+  [IPC_CHANNELS.vehiclesList]: {
+    request: z.object({}).strict(),
+    response: z.object({ vehicles: z.array(vehicleSummarySchema).max(10_000) }).strict(),
+  },
+  [IPC_CHANNELS.vehiclesGet]: {
+    request: clientOnly,
+    response: vehicleRecordSchema,
+  },
+  [IPC_CHANNELS.vehiclesSave]: {
+    request: z
+      .object({
+        /** Absent for a new vehicle. */
+        id: entityIdSchema.optional(),
+        saved: vehicleInputSchema,
+      })
+      .strict(),
+    response: z.object({ id: entityIdSchema }).strict(),
+  },
+  [IPC_CHANNELS.vehiclesDelete]: {
     request: clientOnly,
     response: z.object({ deleted: z.boolean() }).strict(),
   },

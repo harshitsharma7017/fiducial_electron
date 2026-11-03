@@ -163,7 +163,6 @@ describe('the client store', () => {
         name: `Synthetic Client ${MARK}`,
         pincode: '560001',
         memberCount: 3,
-        hasVehicle: false,
         hasPreferences: true,
         updatedAt: '2026-11-02T10:00:00.000Z',
       },
@@ -451,6 +450,37 @@ describe('the client service and IPC channels', () => {
     clients.close();
   });
 
+  it('saves, lists, reads and deletes vehicles through the real dispatcher and contract', async () => {
+    const { call, clients } = setup(true);
+    const vehicle = {
+      vehicleClass: 'two-wheeler',
+      condition: 'new',
+      registrationDate: '2026-10-01',
+      zone: 'B',
+      idvRupees: 90000,
+      cubicCapacityCc: 125,
+    };
+    const saved = await call('vehicles:save', { saved: { name: 'Synthetic Scooter', vehicle } });
+    const id = idOf(saved);
+    expect(await call('vehicles:list', {})).toMatchObject({
+      ok: true,
+      data: { vehicles: [{ id, name: 'Synthetic Scooter', vehicleClass: 'two-wheeler' }] },
+    });
+    expect(await call('vehicles:get', { id })).toMatchObject({
+      ok: true,
+      data: { id, saved: { name: 'Synthetic Scooter', vehicle } },
+    });
+    expect(
+      await call('vehicles:save', { saved: { name: 'X', vehicle: { ...vehicle, zone: 'Z' } } }),
+    ).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } });
+    expect(await call('vehicles:delete', { id })).toEqual({ ok: true, data: { deleted: true } });
+    expect(await call('vehicles:get', { id })).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_FAILED' },
+    });
+    clients.close();
+  });
+
   it('is off unless switched on: no database is created', async () => {
     const { call, p } = setup(false);
     expect(await call('clients:list', {})).toEqual({
@@ -633,7 +663,7 @@ describe('date of birth, gender and marital status (schema version 2)', () => {
   });
 });
 
-describe('vehicles for motor quotes (schema version 3)', () => {
+describe('saved vehicles, kept on their own (schema version 5)', () => {
   const CAR = {
     vehicleClass: 'private-car',
     condition: 'pre-owned',
@@ -647,29 +677,37 @@ describe('vehicles for motor quotes (schema version 3)', () => {
     previousNcbPercent: 25,
   };
 
-  it('saves a vehicle-only client (no health members) and reads it back', async () => {
+  it('saves, lists, updates and deletes a vehicle, with no client involved', async () => {
     const store = await open(place());
-    const saved = store.save(null, {
-      customer: { name: 'Synthetic Car Owner' },
-      pincode: '560001',
-      members: [],
+    const saved = store.vehicles.save(null, {
+      name: '  Swift   - Synthetic ',
       vehicle: CAR,
     } as never);
-    expect(store.get(saved.id)?.client).toEqual({
-      customer: { name: 'Synthetic Car Owner' },
-      pincode: '560001',
-      members: [],
+    expect(store.vehicles.get(saved.id)?.saved).toEqual({
+      name: 'Swift - Synthetic',
       vehicle: CAR,
     });
-    expect(store.list()[0]).toMatchObject({ memberCount: 0, hasVehicle: true });
-    expect(quoteRequestFor(saved.client)).toBeNull();
+    expect(store.vehicles.list()).toEqual([
+      {
+        id: saved.id,
+        name: 'Swift - Synthetic',
+        vehicleClass: 'private-car',
+        condition: 'pre-owned',
+        updatedAt: '2026-11-02T10:00:00.000Z',
+      },
+    ]);
+    expect(store.list()).toEqual([]); // no client was created
+    store.vehicles.save(saved.id, { name: 'Swift', vehicle: { ...CAR, zone: 'B' } } as never);
+    expect(store.vehicles.get(saved.id)?.saved.vehicle.zone).toBe('B');
+    expect(store.vehicles.get(saved.id)?.createdAt).toBe(saved.createdAt);
+    expect(store.vehicles.delete(saved.id)).toBe(true);
+    expect(store.vehicles.delete(saved.id)).toBe(false);
+    expect(store.vehicles.list()).toEqual([]);
     store.close();
   });
 
-  it('needs members or a vehicle, and rejects invalid vehicle details', async () => {
+  it('rejects invalid vehicles, and clients without members, before anything is written', async () => {
     const store = await open(place());
-    const base = { customer: { name: 'X' }, pincode: '560001' };
-    expect(() => store.save(null, { ...base, members: [] })).toThrow();
     for (const bad of [
       { ...CAR, vehicleClass: 'spaceship' },
       { ...CAR, zone: 'D' },
@@ -678,10 +716,74 @@ describe('vehicles for motor quotes (schema version 3)', () => {
       { ...CAR, registrationDate: '2021-02-30' },
       { ...CAR, extra: true },
     ]) {
-      expect(() => store.save(null, { ...base, members: [], vehicle: bad } as never)).toThrow();
+      expect(() => store.vehicles.save(null, { name: 'X', vehicle: bad } as never)).toThrow();
     }
+    expect(() => store.vehicles.save(null, { name: '', vehicle: CAR } as never)).toThrow();
+    expect(() =>
+      store.save(null, { customer: { name: 'X' }, pincode: '560001', members: [] }),
+    ).toThrow();
+    expect(store.vehicles.list()).toEqual([]);
     expect(store.list()).toEqual([]);
     store.close();
+  });
+
+  it('upgrades a version 4 database: vehicles move to their own list, vehicle-only clients go', async () => {
+    const p = place();
+    // A version 4 database as the app wrote it before 3 November 2026: vehicles inside clients.
+    const opener = createVaultOpener(p.vaultDir, backend);
+    const vault = await opener();
+    const key = randomBytes(32);
+    await vault.put('database-key', key.toString('hex'));
+    mkdirSync(join(p.dir, 'data'), { recursive: true });
+    mkdirSync(join(p.dir, 'ledger'), { recursive: true });
+    const db = openEncrypted(p.dbPath, key);
+    const opened = openDurable(db, { ledgerPath: p.ledgerPath, key });
+    if (!opened.ok) throw opened.error;
+    const car = JSON.stringify(CAR);
+    opened.store.commit((d) => {
+      d.exec(`
+        CREATE TABLE client (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, email TEXT,
+          notes TEXT, pincode TEXT NOT NULL, cover_type TEXT, sum_insured_paise INTEGER,
+          tenure_years INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+          proposer_marital_status TEXT, vehicle_json TEXT, proposal_json TEXT);
+        CREATE TABLE client_member (client_id TEXT NOT NULL REFERENCES client(id) ON DELETE CASCADE,
+          position INTEGER NOT NULL, relationship TEXT NOT NULL, age INTEGER NOT NULL,
+          date_of_birth TEXT, gender TEXT, PRIMARY KEY (client_id, position));
+      `);
+      const add = d.prepare(
+        `INSERT INTO client (id, name, pincode, created_at, updated_at, vehicle_json)
+         VALUES (?, ?, '560001', '2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z', ?)`,
+      );
+      add.run('family', 'Synthetic Family', car); // members and a vehicle
+      add.run('car-only', 'Synthetic Car Owner', car); // a vehicle only
+      add.run('health-only', 'Synthetic Health', null); // members only
+      d.prepare("INSERT INTO client_member VALUES ('family', 0, 'self', 45, NULL, NULL)").run();
+      d.prepare(
+        "INSERT INTO client_member VALUES ('health-only', 0, 'self', 30, NULL, NULL)",
+      ).run();
+      d.pragma('user_version = 4');
+    });
+    db.close();
+
+    const store = await open(p);
+    expect(store.removedByUpgrade).toEqual(['car-only']);
+    expect(
+      store
+        .list()
+        .map((c) => c.id)
+        .sort(),
+    ).toEqual(['family', 'health-only']);
+    expect(store.get('family')?.client).not.toHaveProperty('vehicle');
+    const vehicles = store.vehicles.list();
+    expect(vehicles.map((v) => v.name).sort()).toEqual(['Synthetic Car Owner', 'Synthetic Family']);
+    for (const v of vehicles) expect(store.vehicles.get(v.id)?.saved.vehicle).toEqual(CAR);
+    store.close();
+
+    // The client table no longer has a vehicle column; opening again changes nothing.
+    const again = await open(p);
+    expect(again.removedByUpgrade).toEqual([]);
+    expect(again.vehicles.list()).toHaveLength(2);
+    again.close();
   });
 });
 
