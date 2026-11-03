@@ -1,6 +1,7 @@
 // Home dashboard: summary cards, the insurer connection table and build details. Read-only; it
-// only calls the same list endpoints the Clients, Vehicles and Insurer portals screens use.
-import { Building2, Car, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+// only calls the same list endpoints the Health clients, Travel clients, Vehicles and Insurer
+// portals screens use.
+import { Building2, Car, Plane, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { AppInfo, InsurerPortalList } from '../../../shared/ipc/contract';
 import { endTime, InsurerAvatar, portalStatus, StatusBadge } from '../insurers/branding';
@@ -13,6 +14,7 @@ export type AppStatus =
 interface Counts {
   clients: number;
   readyClients: number;
+  travellers: number;
   vehicles: number;
   portals: InsurerPortalList | null;
   storageError: boolean;
@@ -53,8 +55,9 @@ export function Overview(props: {
     if (!active || !automation) return;
     let live = true;
     void (async () => {
-      const [clients, vehicles, portals] = await Promise.all([
+      const [clients, travellers, vehicles, portals] = await Promise.all([
         window.fqf.clients.list().catch(() => null),
+        window.fqf.travellers.list().catch(() => null),
         window.fqf.vehicles.list().catch(() => null),
         window.fqf.insurers.list().catch(() => null),
       ]);
@@ -62,6 +65,7 @@ export function Overview(props: {
       setCounts({
         clients: clients?.ok ? clients.data.clients.length : 0,
         readyClients: clients?.ok ? clients.data.clients.filter((c) => c.hasPreferences).length : 0,
+        travellers: travellers?.ok ? travellers.data.travellers.length : 0,
         vehicles: vehicles?.ok ? vehicles.data.vehicles.length : 0,
         portals: portals?.ok ? portals.data : null,
         storageError: !!(clients?.ok && clients.data.storageError) || !clients?.ok,
@@ -90,9 +94,15 @@ export function Overview(props: {
         <section className="kpi-grid" aria-label="Summary">
           <KpiCard
             icon={Users}
-            label="Clients"
+            label="Health clients"
             value={String(counts.clients)}
             note={`${counts.readyClients} ready to quote`}
+          />
+          <KpiCard
+            icon={Plane}
+            label="Travel clients"
+            value={String(counts.travellers)}
+            note="For travel e-proposals"
           />
           <KpiCard
             icon={Car}

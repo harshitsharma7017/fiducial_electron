@@ -53,6 +53,19 @@ export function createHandlers(deps: {
       id: await deps.clients.saveVehicle(id ?? null, saved),
     }),
     'vehicles:delete': async ({ id }) => ({ deleted: await deps.clients.deleteVehicle(id) }),
+    'travellers:list': async () => ({ travellers: await deps.clients.listTravellers() }),
+    'travellers:get': async ({ id }) => ({
+      ...(await deps.clients.getTraveller(id)),
+      aadhaarLastFour: await deps.clients.aadhaarLastFour(id),
+      passportLastFour: await deps.clients.passportLastFour(id),
+    }),
+    'travellers:save': async ({ id, traveller, aadhaar, passport }) => ({
+      id: await deps.clients.saveTraveller(id ?? null, traveller, {
+        ...(aadhaar !== undefined ? { aadhaar } : {}),
+        ...(passport !== undefined ? { passport } : {}),
+      }),
+    }),
+    'travellers:delete': async ({ id }) => ({ deleted: await deps.clients.deleteTraveller(id) }),
     'quotes:run': (request) => deps.quotes.run(request),
     'portals:tabs': async ({ since }) =>
       deps.portals ? deps.portals.waitForChange(since, 20_000) : noTabs,

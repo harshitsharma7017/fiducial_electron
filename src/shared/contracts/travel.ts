@@ -1,6 +1,6 @@
-// A trip, for United India's Overseas Travel Insurance e-proposal (recording of 3 November 2026).
-// Entered by the advisor for each run and never saved: the trip and the passport number belong to
-// one proposal, not to the client. The insured is the proposer ("Self").
+// A trip, for United India's travel e-proposals (recordings of 3 November 2026). Entered by the
+// advisor for each run and never saved: the trip belongs to one proposal. The traveller (a travel
+// client, ./traveller.ts) is the proposer and insured ("Self"), with their passport.
 import { z } from 'zod';
 import { dateOfBirthSchema } from './client';
 
@@ -40,9 +40,6 @@ export const travelTripSchema = z
     startDate: dateOfBirthSchema,
     /** Days of travel, counting the first. */
     days: z.int().min(1).max(365),
-    occupation: z.enum(TRAVEL_OCCUPATIONS).optional(),
-    /** For this proposal only: never saved or logged. */
-    passportNumber: passportNumberSchema.optional(),
   })
   .refine(
     (trip) =>
@@ -51,3 +48,24 @@ export const travelTripSchema = z
   );
 
 export type TravelTrip = z.output<typeof travelTripSchema>;
+
+/**
+ * United India's Overseas Mediclaim e-proposals (recording of 3 November 2026: B&H; the advisor
+ * says SCHENGEN and Studies have the same fields). Their plans are offered after the trip and the
+ * insured's date of birth are entered, by code (A-1, A-2…) with their premiums: the advisor picks
+ * one by its place in the list, lowest first.
+ */
+export const OMP_FORMS = ['business-holiday', 'schengen', 'studies'] as const;
+export type OmpForm = (typeof OMP_FORMS)[number];
+
+export const ompTripSchema = z.strictObject({
+  form: z.enum(OMP_FORMS),
+  destination: z.enum(TRAVEL_DESTINATIONS),
+  /** The first day of travel, YYYY-MM-DD (not before today: checked by the plan). */
+  startDate: dateOfBirthSchema,
+  days: z.int().min(1).max(365),
+  /** The plan's place among those United India offers, 1 for the first (lowest). */
+  plan: z.int().min(1).max(8),
+});
+
+export type OmpTrip = z.output<typeof ompTripSchema>;

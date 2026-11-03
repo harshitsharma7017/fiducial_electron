@@ -3,6 +3,7 @@
 import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
 import { ClientsPanel } from './clients/ClientsPanel';
 import { VehiclesPanel } from './vehicles/VehiclesPanel';
+import { TravellersPanel } from './travellers/TravellersPanel';
 import { InsurerPortals } from './insurers/InsurerPortals';
 import { AppShell, type ViewId } from './shell/AppShell';
 import { Overview, type AppStatus } from './shell/Overview';
@@ -59,7 +60,8 @@ export function App(): React.JSX.Element {
     };
   }, []);
 
-  // The Clients, Vehicles and Insurer portals screens exist only when the automation features are
+  // The Health clients, Travel clients, Vehicles and Insurer portals screens exist only when the
+  // automation features are
   // on (FQF_INSURER_PORTALS=1); each of them also hides itself when they are off.
   const [automation, setAutomation] = useState(false);
   const [view, setView] = useState<ViewId>('overview');
@@ -81,7 +83,7 @@ export function App(): React.JSX.Element {
   // page's content, or null when the build has none.
   const renderHome = (dev: ReactNode) => {
     const available: ViewId[] = ['overview'];
-    if (automation) available.push('clients', 'vehicles', 'insurers');
+    if (automation) available.push('clients', 'travellers', 'vehicles', 'insurers');
     if (dev) available.push('development');
     const shown = available.includes(view) ? view : 'overview';
     return (
@@ -99,6 +101,9 @@ export function App(): React.JSX.Element {
           <>
             <div className="page" hidden={shown !== 'clients'}>
               <ClientsPanel />
+            </div>
+            <div className="page" hidden={shown !== 'travellers'}>
+              <TravellersPanel />
             </div>
             <div className="page" hidden={shown !== 'vehicles'}>
               <VehiclesPanel />

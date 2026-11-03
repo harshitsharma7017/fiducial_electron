@@ -10,6 +10,7 @@ import {
   runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
+  runUiicOmpProposal,
   runUiicTravelProposal,
 } from '../../src/main/quotes/run-uiic-health';
 import {
@@ -28,6 +29,7 @@ export {
   runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
+  runUiicOmpProposal,
   runUiicTravelProposal,
   setSessionPolicy,
 };

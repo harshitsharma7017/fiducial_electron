@@ -9,6 +9,8 @@
 //   a proposal.
 // - Overseas Travel e-proposal (plan: uiic-travel-proposal.ts): fills the trip, proposer, insured
 //   and intermediary, presses View Premium and reads the premium if shown, and stops.
+// - Overseas Mediclaim e-proposals (B&H, SCHENGEN, Studies; plan: uiic-omp-proposal.ts): fill the
+//   trip, choose the plan, fill the proposer and insured, read the premium, and stop.
 import type { WebContents } from 'electron';
 import type { PortalPage } from '../insurers/portal-host';
 import type { ClientInput } from '../../shared/contracts/client';
@@ -22,7 +24,9 @@ import {
 } from './uiic-health-proposal';
 import { planUiicMotorQuote } from './uiic-motor';
 import { planUiicTravelProposal } from './uiic-travel-proposal';
-import type { TravelTrip } from '../../shared/contracts/travel';
+import { planUiicOmpProposal, UIIC_OMP_FORMS } from './uiic-omp-proposal';
+import type { OmpTrip, TravelTrip } from '../../shared/contracts/travel';
+import type { Traveller } from '../../shared/contracts/traveller';
 
 const AGENT_SOURCE = quotePageAgent.toString();
 const WORLD_ID = 1803;
@@ -76,16 +80,28 @@ async function runInCalculator(deps: {
   /** The calculator's page: its path, or a pattern for a page whose path was not recorded. */
   calculatorPath: string | RegExp;
   steps: PlanStep[];
-}): Promise<{ result: QuoteRunResult | null; last: PageOpResult | null; notes: string[] }> {
+}): Promise<{
+  result: QuoteRunResult | null;
+  last: PageOpResult | null;
+  notes: string[];
+  /** The values kept by steps marked `keep`. */
+  kept: Record<string, string>;
+}> {
   const main = deps.windows()[0];
   if (!main || main.isDestroyed()) {
-    return { result: refused('Open United India and sign in first.'), last: null, notes: [] };
+    return {
+      result: refused('Open United India and sign in first.'),
+      last: null,
+      notes: [],
+      kept: {},
+    };
   }
   if (pathOf(main.webContents.getURL()) !== HOME_PATH) {
     return {
       result: refused("Go to United India's home page (after signing in), then try again."),
       last: null,
       notes: [],
+      kept: {},
     };
   }
   const failed = (step: string, message: string): QuoteRunResult => ({
@@ -105,6 +121,7 @@ async function runInCalculator(deps: {
       ),
       last: null,
       notes: [],
+      kept: {},
     };
   }
   const wanted = deps.calculatorPath;
@@ -131,12 +148,14 @@ async function runInCalculator(deps: {
       ),
       last: null,
       notes: [],
+      kept: {},
     };
   }
 
   let last: PageOpResult | null = null;
   /** United India's messages the run closed and went on (closeErrors steps). */
   const notes: string[] = [];
+  const kept: Record<string, string> = {};
   for (const step of deps.steps) {
     const result = await exec(calculator.webContents, step.op);
     let errors = await exec(calculator.webContents, { op: 'errors' });
@@ -160,28 +179,37 @@ async function runInCalculator(deps: {
     }
     if (errors.errors) {
       calculator.focus();
-      return { result: failed(step.label, `United India says: ${errors.errors}`), last, notes };
+      return {
+        result: failed(step.label, `United India says: ${errors.errors}`),
+        last,
+        notes,
+        kept,
+      };
     }
     if (!result.ok && step.optional) {
       if (step.ifMissed) notes.push(step.ifMissed);
       continue;
     }
     last = result;
+    if (last.ok && step.keep && last.value) kept[step.keep] = last.value;
     if (!last.ok) {
       calculator.focus();
       return {
         result: failed(
           step.label,
-          `Stopped at "${step.label}" (${last.detail ?? 'unknown'}). The calculator may have changed; finish this quote by hand.`,
+          /^only-\d+$/.test(last.detail ?? '')
+            ? `United India offers ${last.detail!.slice(5)} choices here for this trip: pick a lower one, or choose it by hand.`
+            : `Stopped at "${step.label}" (${last.detail ?? 'unknown'}). The calculator may have changed; finish this quote by hand.`,
         ),
         last,
         notes,
+        kept,
       };
     }
   }
   calculator.focus();
   // The same message may come from more than one step (each section opened lists it again).
-  return { result: null, last, notes: [...new Set(notes)] };
+  return { result: null, last, notes: [...new Set(notes)], kept };
 }
 
 export async function runUiicHealthQuote(deps: {
@@ -263,15 +291,19 @@ export async function runUiicHealthProposal(deps: {
 
 export async function runUiicTravelProposal(deps: {
   windows: () => PortalPage[];
-  client: ClientInput;
-  /** Entered for this run; the passport number is never returned or logged. */
+  /** The travel client: proposer and insured. */
+  traveller: Traveller;
+  /** Entered for this run. */
   trip: TravelTrip;
-  /** The client's Aadhaar number, read from the vault just now; never returned or logged. */
+  /** The traveller's Aadhaar and passport numbers, read from the vault just now; never returned
+   * or logged. */
   aadhaar: string | null;
+  passportNumber: string | null;
   today: Date;
 }): Promise<QuoteRunResult> {
-  const plan = planUiicTravelProposal(deps.client, deps.trip, {
+  const plan = planUiicTravelProposal(deps.traveller, deps.trip, {
     aadhaar: deps.aadhaar,
+    passportNumber: deps.passportNumber,
     today: deps.today,
   });
   if (!plan.ok) return refused('This trip cannot be filled in automatically.', plan.problems);
@@ -293,6 +325,46 @@ export async function runUiicTravelProposal(deps: {
       : 'Overseas Travel proposal filled; United India did not show the premium yet (see its messages below). Fill in what is listed below, press View Premium, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.',
     problems: [],
     ...(amount ? { premium: { label, amount } } : {}),
+    toDo: [...plan.byHand, ...notes],
+  };
+}
+
+export async function runUiicOmpProposal(deps: {
+  windows: () => PortalPage[];
+  /** The travel client: proposer and insured. */
+  traveller: Traveller;
+  /** Entered for this run. */
+  trip: OmpTrip;
+  /** The traveller's Aadhaar and passport numbers, read from the vault just now; never returned
+   * or logged. */
+  aadhaar: string | null;
+  passportNumber: string | null;
+  today: Date;
+}): Promise<QuoteRunResult> {
+  const form = UIIC_OMP_FORMS[deps.trip.form];
+  const plan = planUiicOmpProposal(deps.traveller, deps.trip, {
+    aadhaar: deps.aadhaar,
+    passportNumber: deps.passportNumber,
+    today: deps.today,
+  });
+  if (!plan.ok) return refused('This trip cannot be filled in automatically.', plan.problems);
+  const { result, notes, kept } = await runInCalculator({
+    windows: deps.windows,
+    tile: form.tile,
+    calculatorPath: form.path,
+    steps: plan.steps,
+  });
+  if (result) return result;
+  const amount = kept.premium && Number(kept.premium.replace(/,/g, '')) > 0 ? kept.premium : null;
+  const chosen = kept.plan ? `plan ${kept.plan}` : 'the plan';
+  return {
+    outcome: 'ready',
+    step: null,
+    message: amount
+      ? `${form.name} proposal filled with ${chosen}. United India's total premium: ${amount}. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`
+      : `${form.name} proposal filled with ${chosen}; United India did not show the premium (see its messages below). Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`,
+    problems: [],
+    ...(amount ? { premium: { label: `Total premium, ${chosen}`, amount } } : {}),
     toDo: [...plan.byHand, ...notes],
   };
 }

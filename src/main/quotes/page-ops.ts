@@ -77,8 +77,16 @@ export type PageOp =
   | { op: 'setField'; selector: string; value: string; within?: string }
   /** Ticks or unticks a checkbox (or picks a radio) by selector; re-checked like select. */
   | { op: 'check'; selector: string; checked: boolean; within?: string }
-  /** Reads a box's value once it has one (for example a premium the page works out). */
-  | { op: 'readValue'; selector: string; timeoutMs: number }
+  /**
+   * Reads a box's value once it has one (for example a premium the page works out). `last`: the
+   * last visible match (when the page repeats an id, the total comes after the net amount).
+   */
+  | { op: 'readValue'; selector: string; timeoutMs: number; last?: boolean }
+  /**
+   * Picks the `index`-th (from 1) visible radio named `name`, once they are shown, and returns its
+   * value (for example the plans a form offers, lowest first).
+   */
+  | { op: 'pickNth'; name: string; index: number; timeoutMs: number }
   /** Reads the first data row of the pop-up's table: its label and the cell under `column`. */
   | { op: 'readTable'; within: string; column: string; timeoutMs: number }
   | {
@@ -100,7 +108,7 @@ export interface PageOpResult {
   detail?: string;
   /** For "errors": the text of a visible ERRORS pop-up. */
   errors?: string;
-  /** For "readTable": the cell read, and the row's label; for "readValue": the value. */
+  /** For "readTable": the cell read, and the row's label; "readValue", "pickNth": the value. */
   value?: string;
   label?: string;
 }
@@ -659,11 +667,31 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
     }
     case 'readValue': {
       const value = await until(() => {
-        const el = first(document, command.selector) as HTMLInputElement | null;
+        const el = (
+          command.last
+            ? Array.from(document.querySelectorAll(command.selector)).filter(visible).at(-1)
+            : first(document, command.selector)
+        ) as HTMLInputElement | null | undefined;
         const v = el?.value?.trim() ?? '';
         return v ? v : null;
       }, command.timeoutMs);
       return value ? { ok: true, value } : { ok: false, detail: 'empty' };
+    }
+    case 'pickNth': {
+      const radios = (): HTMLInputElement[] =>
+        Array.from(document.querySelectorAll('input[type="radio"]')).filter(
+          (r): r is HTMLInputElement =>
+            r instanceof HTMLInputElement && r.name === command.name && visible(r),
+        );
+      const shown = await until(() => (radios().length > 0 ? radios() : null), command.timeoutMs);
+      if (!shown) return { ok: false, detail: 'not-found' };
+      const radio = shown[command.index - 1];
+      if (!radio) return { ok: false, detail: `only-${shown.length}` };
+      if (!radio.checked) radio.click();
+      await sleep(500);
+      return radio.checked
+        ? { ok: true, value: radio.value }
+        : { ok: false, detail: 'reset-by-page' };
     }
     case 'errors': {
       const box = Array.from(document.querySelectorAll(DIALOGS)).find(

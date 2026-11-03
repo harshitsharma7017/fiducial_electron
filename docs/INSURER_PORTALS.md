@@ -105,11 +105,12 @@ Nothing is ever saved. **Not yet run on the live portal.**
 
 ## United India: Overseas Travel Insurance e-proposal (filled, premium read, never saved)
 
-Automated as recorded on 3 November 2026 (`/CustomerAppLive/data/ProposalOTIhome.html`). A client
-has an **Overseas Travel proposal** button. The advisor enters the trip for that run: destination,
-sum insured, start date, days, and optionally the insured's occupation and passport number. The trip
-and passport number are used for that proposal only: never saved, logged or returned. The insured is
-the client's proposer ("Self"). From the signed-in home page the app:
+Automated as recorded on 3 November 2026 (`/CustomerAppLive/data/ProposalOTIhome.html`). A travel client
+(docs/CLIENTS.md; kept apart from health clients) has an **Overseas Travel proposal** button. The
+advisor enters the trip for that run: destination, sum insured, start date and days. The trip is used
+for that proposal only, never saved. The traveller is the proposer and insured ("Self"); their
+occupation and passport come from the travel client, the passport number read from the secret vault
+for that run only, never logged or returned. From the signed-in home page the app:
 1. Opens the **Overseas Travel Insurance E-Proposal Form** (a tab), chooses **Filled by: agent**,
    then a **New proposal**.
 2. **I. General Information:**
@@ -126,7 +127,9 @@ the client's proposer ("Self"). From the signed-in home page the app:
      number.
 4. **III. Insured Information:**
    - Relationship **Self**: United India copies the title and name.
-   - Occupation, date of birth (calendar), marital status and passport number.
+   - Occupation, date of birth (calendar), marital status, and the passport: number, issuing
+     authority, issue and expiry dates (calendars), whichever the travel client holds. A passport that
+     expires before the trip starts is refused before anything is filled.
    - The nominee. Relations the form does not list (in-laws, brother, sister) become **Others**.
 5. **IX. Declaration from Intermediary:** the intermediary's place of signing. The hidden "filled by
    customer" form has a box with the same id; the visible one is filled.
@@ -151,6 +154,51 @@ Premium). Checked for:
 - a sparse client: what it lacks is listed.
 
 Nothing is ever saved. **Not yet run on the live portal.**
+
+## United India: Overseas Mediclaim e-proposals, B&H, SCHENGEN and Studies (filled, premium read, never saved)
+
+Automated as recorded for **B&H** on 3 November 2026 (`/CustomerAppLive/data/ProposalOMPBHhome.html`,
+models under `OMPBHProposalFormData`). The advisor says **SCHENGEN** and **Studies** have the same
+fields; they were not recorded. Their tiles' names come from the recorded home page. The app accepts
+any of United India's proposal pages for them and finds fields by the end of their model names or by
+id, so it does not depend on B&H's prefix.
+
+A travel client has a button for each form: **Overseas Mediclaim B&H proposal**, **… SCHENGEN
+proposal** and **… Studies proposal**. The advisor enters the trip for that run: destination, start
+date, days and the plan's place in United India's list. None of this is saved. The traveller is the
+proposer and insured ("Self"), with their date of birth (United India prices the plans by age),
+occupation and passport from the travel client.
+From the signed-in home page the app:
+1. Opens the form's tile (a tab) and chooses **Filled by: agent** (and **New**, if offered).
+2. **I. General Information:** destination, travel days, travel start date and the insured's date of
+   birth (calendars). Then it presses **Click here to choose plan**:
+   - United India lists the plans for that trip and age by code (A-1, A-2… with their premiums);
+   - the app picks the one in the advisor's place, lowest first;
+   - if fewer are offered, the run stops and says how many there are.
+3. **II. Proposer Information:** as on the Overseas Travel form. The village box is `#villageCode`.
+4. **III. Insured Information:**
+   - **Self**, with the title and name filled. The form may already have copied them.
+   - Occupation, marital status, nationality (Indian), the passport (as on Overseas Travel) and the
+     nominee.
+5. **X. Premium Details:** reads the total premium. The page repeats the id, and the total comes
+   after the net premium. The result names the plan chosen, for example "plan A-2".
+6. **Stops.** IX. Declaration from Intermediary has nothing to type here: its place is the
+   proposer's city and the signature is an upload. The app never touches:
+   - IV. Medical History, V. Assignment and VIII. Medical Examination;
+   - signatures and documents;
+   - the payment mode.
+
+It never presses Save As Draft or Submit.
+
+**Verified:** against local copies of the three forms built from the B&H recording. SCHENGEN and
+Studies use made-up model prefixes and page names. Checked for:
+- B&H and SCHENGEN with a full client: every field filled, the 2nd plan chosen, the total premium
+  read;
+- Studies, including USA, the 4th plan;
+- a sparse client: what it lacks is listed;
+- a plan place not offered: the run stops at the plan.
+
+Nothing is ever saved. **Not yet run on the live portal**, and SCHENGEN and Studies not recorded.
 
 ## What it does
 

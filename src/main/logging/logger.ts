@@ -36,6 +36,8 @@ export const LOG_EVENTS = [
   'client.saved',
   'vehicle.saved',
   'vehicle.deleted',
+  'traveller.saved',
+  'traveller.deleted',
   'client.deleted',
   'storage.open-failed',
   'storage.write-failed',

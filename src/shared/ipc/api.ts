@@ -10,9 +10,12 @@ import type {
   QuoteRunResultView,
   SaveClientRequest,
   SaveLoginRequest,
+  SaveTravellerRequest,
+  TravellerView,
 } from './contract';
 import type { AppResult } from './result';
 import type { VehicleInputRaw, VehicleRecord, VehicleSummary } from '../contracts/vehicle';
+import type { TravellerSummary } from '../contracts/traveller';
 
 export interface FqfApi {
   app: {
@@ -34,7 +37,7 @@ export interface FqfApi {
   };
   quotes: {
     /** Fills the insurer's quote form for a saved client (United India health so far). */
-    /** Motor: for a saved vehicle; health and the Family Medicare e-proposal: for a client. */
+    /** Motor: for a saved vehicle; health: for a client; travel: for a travel client. */
     run(request: QuoteRunRequest): Promise<AppResult<QuoteRunResultView>>;
   };
   clients: {
@@ -58,6 +61,14 @@ export interface FqfApi {
       height: number;
     }): Promise<AppResult<{ set: true }>>;
   };
+  /** Travel clients, for travel e-proposals (kept apart from health clients). */
+  travellers: {
+    list(): Promise<AppResult<{ travellers: TravellerSummary[] }>>;
+    /** The travel client, and of its Aadhaar and passport numbers only the last four. */
+    get(id: string): Promise<AppResult<TravellerView>>;
+    save(request: SaveTravellerRequest): Promise<AppResult<{ id: string }>>;
+    delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
+  };
   /** Saved vehicles, for motor quotes (kept on their own, not part of a client). */
   vehicles: {
     list(): Promise<AppResult<{ vehicles: VehicleSummary[] }>>;
@@ -73,5 +84,6 @@ export const API_SHAPE = {
   quotes: ['run'],
   clients: ['list', 'get', 'save', 'delete'],
   portals: ['tabs', 'show', 'close', 'setBounds'],
+  travellers: ['list', 'get', 'save', 'delete'],
   vehicles: ['list', 'get', 'save', 'delete'],
 } as const satisfies { [K in keyof FqfApi]: readonly (keyof FqfApi[K])[] };

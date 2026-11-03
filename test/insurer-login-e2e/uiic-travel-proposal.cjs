@@ -88,6 +88,9 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Proposal F
     <input id="insuredAge" disabled ng-model="OTIProposalFormData.insuredAge">
     <select id="insuredMaritalStatus" ng-model="OTIProposalFormData.insuredMaritalStatus"><option value="">Select</option><option value="Married">Married</option><option value="Single">Unmarried</option></select>
     <input id="insuredPassportNo" ng-model="OTIProposalFormData.insuredPassportNo">
+    <input id="insuredPassportIssuingAuth" ng-model="OTIProposalFormData.insuredPassportIssuingAuth">
+    ${dateBox('insuredPassportIssueDate')}
+    ${dateBox('insuredPassportExpDate')}
     <input id="insuredNomineeName" ng-model="OTIProposalFormData.insuredNomineeName">
     <select id="insuredNomineeRelation" ng-model="OTIProposalFormData.insuredNomineeRelation"><option value="">Select</option><option>Spouse</option><option>Son</option><option>Daughter</option><option>Father</option><option>Mother</option><option>Others</option></select>
   </div>

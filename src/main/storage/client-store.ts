@@ -10,6 +10,8 @@
 // - Clients are kept until the advisor deletes them (retention period Q-B06 still open).
 // - Saved vehicles (for motor quotes) are kept in the same database, in their own table, not as
 //   part of a client (decision of 3 November 2026).
+// - Travel clients (for travel e-proposals) likewise, in their own table: kept apart from health
+//   clients (decision of 3 November 2026).
 // - Nothing here logs; errors carry codes only, never client data.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
@@ -31,6 +33,12 @@ import {
   type VehicleSummary,
 } from '../../shared/contracts/vehicle';
 import type { CoverType } from '../../shared/contracts/coverage';
+import {
+  travellerSchema,
+  type Traveller,
+  type TravellerRecord,
+  type TravellerSummary,
+} from '../../shared/contracts/traveller';
 import { VaultOpenError, type VaultOpener } from '../secrets/vault-opener';
 import { openDurable, type DurableStore } from './durable-db';
 import { openEncrypted } from './encrypted-db';
@@ -38,7 +46,7 @@ import type { StoreProblem } from './store-problems';
 
 const KEY_ENTRY = 'database-key';
 const KEY_HEX = /^[0-9a-f]{64}$/;
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 /** Why the store could not be used. `code` is safe to show; `reason` is for logs and support. */
 export class ClientStoreError extends Error {
@@ -64,6 +72,14 @@ export interface ClientStore {
     /** Creates a vehicle (id null) or replaces an existing one. Returns the saved record. */
     save(id: string | null, input: VehicleInput): VehicleRecord;
     /** Removes the vehicle. Returns whether it existed. */
+    delete(id: string): boolean;
+  };
+  travellers: {
+    list(): TravellerSummary[];
+    get(id: string): TravellerRecord | null;
+    /** Creates a travel client (id null) or replaces an existing one. Returns the saved record. */
+    save(id: string | null, input: Traveller): TravellerRecord;
+    /** Removes the travel client. Returns whether it existed. */
     delete(id: string): boolean;
   };
   /** Clients the last upgrade removed (vehicle-only clients, version 5): their Aadhaar entries
@@ -211,6 +227,22 @@ function migrate(
       return gone;
     }).value;
   }
+  // Version 6 (3 November 2026): travel clients, kept apart from health clients (validated JSON).
+  // Existing clients stay health clients.
+  if (version < 6) {
+    store.commit((d) => {
+      d.exec(`
+        CREATE TABLE traveller (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          traveller_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      d.pragma('user_version = 6');
+    });
+  }
   return removed;
 }
 
@@ -226,6 +258,14 @@ interface ClientRow {
   cover_type: string | null;
   sum_insured_paise: number | null;
   tenure_years: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface TravellerRow {
+  id: string;
+  name: string;
+  traveller_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -327,6 +367,16 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
       name: row.name,
       vehicle: JSON.parse(row.vehicle_json) as unknown,
     }),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+
+  const getTravellerRow = (id: string): TravellerRow | undefined =>
+    db.prepare('SELECT * FROM traveller WHERE id = ?').get(id) as TravellerRow | undefined;
+  const toTravellerRecord = (row: TravellerRow): TravellerRecord => ({
+    id: row.id,
+    // Re-validated on the way out, like clients.
+    traveller: travellerSchema.parse(JSON.parse(row.traveller_json)),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -484,6 +534,64 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
       },
       delete: (id) =>
         write((d) => d.prepare('DELETE FROM vehicle WHERE id = ?').run(id).changes > 0),
+    },
+
+    travellers: {
+      list: () =>
+        (
+          db
+            .prepare(
+              'SELECT id, name, traveller_json, updated_at FROM traveller ORDER BY updated_at DESC, name',
+            )
+            .all() as TravellerRow[]
+        ).map((r) => {
+          const t = travellerSchema.parse(JSON.parse(r.traveller_json));
+          return {
+            id: r.id,
+            name: r.name,
+            pincode: t.pincode,
+            dateOfBirth: t.dateOfBirth,
+            updatedAt: r.updated_at,
+          };
+        }),
+      get: (id) => {
+        const row = getTravellerRow(id);
+        return row ? toTravellerRecord(row) : null;
+      },
+      save: (id, raw) => {
+        const input = travellerSchema.parse(raw);
+        const at = now().toISOString();
+        const existing = id === null ? undefined : getTravellerRow(id);
+        if (id !== null && !existing) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');
+        const travellerId = existing?.id ?? newId();
+        const values = {
+          id: travellerId,
+          name: input.customer.name,
+          traveller_json: JSON.stringify(input),
+          created_at: existing?.created_at ?? at,
+          updated_at: at,
+        };
+        write((d) =>
+          existing
+            ? d
+                .prepare(
+                  `UPDATE traveller SET name = @name, traveller_json = @traveller_json,
+                     updated_at = @updated_at WHERE id = @id`,
+                )
+                .run(values)
+            : d
+                .prepare(
+                  `INSERT INTO traveller (id, name, traveller_json, created_at, updated_at)
+                   VALUES (@id, @name, @traveller_json, @created_at, @updated_at)`,
+                )
+                .run(values),
+        );
+        const saved = getTravellerRow(travellerId);
+        if (!saved) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');
+        return toTravellerRecord(saved);
+      },
+      delete: (id) =>
+        write((d) => d.prepare('DELETE FROM traveller WHERE id = ?').run(id).changes > 0),
     },
 
     removedByUpgrade,

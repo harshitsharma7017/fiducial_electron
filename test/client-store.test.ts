@@ -14,7 +14,12 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { aadhaarEntryName, createAadhaarVault } from '../src/main/clients/aadhaar-vault';
+import {
+  aadhaarEntryName,
+  createAadhaarVault,
+  createPassportVault,
+  passportEntryName,
+} from '../src/main/clients/aadhaar-vault';
 import { createClientService } from '../src/main/clients/service';
 import { createDispatcher } from '../src/main/ipc/dispatcher';
 import { createHandlers } from '../src/main/ipc/handlers';
@@ -356,6 +361,7 @@ describe('the client service and IPC channels', () => {
       enabled,
       open: opener ?? (() => open(p)),
       aadhaar: createAadhaarVault(createVaultOpener(p.vaultDir, backend)),
+      passport: createPassportVault(createVaultOpener(p.vaultDir, backend)),
       logger,
     });
     const insurers = createInsurerService({
@@ -478,6 +484,100 @@ describe('the client service and IPC channels', () => {
       ok: false,
       error: { code: 'VALIDATION_FAILED' },
     });
+    clients.close();
+  });
+
+  // Travel clients, kept apart from health clients; passport and Aadhaar numbers in the vault.
+  const TRAVELLER = {
+    customer: { name: 'Synthetic Traveller', phone: '9876543210' },
+    pincode: '560001',
+    dateOfBirth: '1986-04-12',
+    gender: 'female',
+    maritalStatus: 'married',
+    occupation: 'Salaried',
+    proposal: { pan: 'ABCDE1234F', nomineeRelationship: 'spouse' },
+    passport: { issuingAuthority: 'Passport Office, Bengaluru', expiryDate: '2031-06-30' },
+  };
+
+  it('saves, lists, reads and deletes travel clients, apart from health clients', async () => {
+    const { call, clients } = setup(true);
+    const healthId = idOf(await call('clients:save', { client: HOLDER }));
+    const id = idOf(
+      await call('travellers:save', {
+        traveller: TRAVELLER,
+        passport: 'z 1234567',
+        aadhaar: AADHAAR,
+      }),
+    );
+    expect(await call('travellers:list', {})).toEqual({
+      ok: true,
+      data: {
+        travellers: [
+          {
+            id,
+            name: 'Synthetic Traveller',
+            pincode: '560001',
+            dateOfBirth: '1986-04-12',
+            updatedAt: expect.any(String) as string,
+          },
+        ],
+      },
+    });
+    expect(await call('travellers:get', { id })).toMatchObject({
+      ok: true,
+      data: { id, traveller: TRAVELLER, aadhaarLastFour: '7058', passportLastFour: '4567' },
+    });
+    // Each list has only its own: the travel client is not a health client, nor the reverse.
+    expect((await clients.list()).clients.map((c) => c.id)).toEqual([healthId]);
+    expect(await call('travellers:get', { id: healthId })).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_FAILED' },
+    });
+    expect(await call('clients:get', { id })).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_FAILED' },
+    });
+    // Updating keeps the numbers unless sent; deleting removes them with the travel client.
+    await call('travellers:save', { id, traveller: { ...TRAVELLER, pincode: '400001' } });
+    expect(await clients.passportFor(id)).toBe('Z1234567');
+    expect(await call('travellers:delete', { id })).toEqual({ ok: true, data: { deleted: true } });
+    expect(await clients.passportFor(id)).toBeNull();
+    expect(await clients.aadhaarFor(id)).toBeNull();
+    clients.close();
+  });
+
+  it('keeps the passport number in the vault only, never in the database, the log or a reply', async () => {
+    const { clients, call, records, p } = setup(true);
+    const id = idOf(await call('travellers:save', { traveller: TRAVELLER, passport: 'Z1234567' }));
+    expect(existsSync(join(p.vaultDir, `${passportEntryName(id)}.fqse`))).toBe(true);
+    expect(allBytes(p.dir).includes(Buffer.from('Z1234567', 'utf8'))).toBe(false);
+    expect(JSON.stringify([await call('travellers:get', { id }), records])).not.toContain(
+      'Z1234567',
+    );
+    await call('travellers:save', { id, traveller: TRAVELLER, passport: null });
+    expect(await clients.passportLastFour(id)).toBeNull();
+    clients.close();
+  });
+
+  it('rejects malformed travel clients and passport numbers, without echoing them', async () => {
+    const { call, clients, records } = setup(true);
+    for (const request of [
+      { traveller: TRAVELLER, passport: 'Z-12' },
+      { traveller: { ...TRAVELLER, dateOfBirth: undefined } },
+      { traveller: { ...TRAVELLER, dateOfBirth: '2099-01-01' } },
+      {
+        traveller: {
+          ...TRAVELLER,
+          passport: { issueDate: '2031-01-01', expiryDate: '2030-01-01' },
+        },
+      },
+      { traveller: { ...TRAVELLER, members: [{ relationship: 'self', age: 40 }] } },
+    ]) {
+      const result = await call('travellers:save', request);
+      expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } });
+      expect(JSON.stringify([result, records])).not.toContain('Z-12');
+    }
+    expect(await clients.listTravellers()).toEqual([]);
     clients.close();
   });
 
@@ -783,6 +883,9 @@ describe('saved vehicles, kept on their own (schema version 5)', () => {
     const again = await open(p);
     expect(again.removedByUpgrade).toEqual([]);
     expect(again.vehicles.list()).toHaveLength(2);
+    // Version 6: the clients stay health clients; the travel client list starts empty.
+    expect(again.travellers.list()).toEqual([]);
+    expect(again.list()).toHaveLength(2);
     again.close();
   });
 });

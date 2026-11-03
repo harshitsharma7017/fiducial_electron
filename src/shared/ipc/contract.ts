@@ -15,7 +15,12 @@ import {
   vehicleSummarySchema,
 } from '../contracts/vehicle';
 import { insurerIdSchema } from '../contracts/insurer';
-import { travelTripSchema } from '../contracts/travel';
+import { ompTripSchema, passportNumberSchema, travelTripSchema } from '../contracts/travel';
+import {
+  travellerRecordSchema,
+  travellerSchema,
+  travellerSummarySchema,
+} from '../contracts/traveller';
 import { FILL_OUTCOMES } from '../insurers/fill-outcomes';
 import {
   hasControlCharacter,
@@ -141,6 +146,32 @@ export type ClientView = z.infer<typeof clientViewSchema>;
 
 export type SaveClientRequest = z.input<typeof saveClientRequestSchema>;
 
+export const saveTravellerRequestSchema = z
+  .object({
+    /** Absent for a new travel client. */
+    id: entityIdSchema.optional(),
+    traveller: travellerSchema,
+    /** Kept apart in the secret vault: absent keeps what is saved, null removes it. */
+    aadhaar: z.union([aadhaarSchema, z.null()]).optional(),
+    passport: z.union([passportNumberSchema, z.null()]).optional(),
+  })
+  .strict();
+export type SaveTravellerRequest = z.input<typeof saveTravellerRequestSchema>;
+
+/** A travel client as the renderer sees it: of its Aadhaar and passport numbers, only their last
+ * four characters (or null if none is saved). */
+export const travellerViewSchema = travellerRecordSchema.extend({
+  aadhaarLastFour: z
+    .string()
+    .regex(/^\d{4}$/)
+    .nullable(),
+  passportLastFour: z
+    .string()
+    .regex(/^[A-Z0-9]{4}$/)
+    .nullable(),
+});
+export type TravellerView = z.infer<typeof travellerViewSchema>;
+
 export const quoteRunResultSchema = z
   .object({
     outcome: z.enum(['ready', 'refused', 'failed']),
@@ -161,8 +192,9 @@ export type QuoteRunResultView = z.infer<typeof quoteRunResultSchema>;
 
 /**
  * A quote run: motor quotes are for a saved vehicle; health quotes and the health e-proposals
- * (Family Medicare, Individual Health, Arogya Sanjeevani, Super Top-up, Overseas Travel: filled,
- * never saved or submitted) are for a saved client.
+ * (Family Medicare, Individual Health, Arogya Sanjeevani, Super Top-up) are for a health client;
+ * the travel e-proposals (Overseas Travel, Overseas Mediclaim) for a travel client. E-proposals
+ * are filled, never saved or submitted.
  */
 export const quoteRunRequestSchema = z.discriminatedUnion('product', [
   z
@@ -177,13 +209,22 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       goodHealthConfirmed: z.boolean(),
     })
     .strict(),
-  // Overseas Travel Insurance e-proposal: the trip is entered for this run, never saved.
+  // Travel e-proposals are for a travel client; the trip is entered for this run, never saved.
   z
     .object({
       product: z.literal('travel-proposal'),
-      clientId: entityIdSchema,
+      travellerId: entityIdSchema,
       insurerId: insurerIdSchema,
       trip: travelTripSchema,
+    })
+    .strict(),
+  // Overseas Mediclaim e-proposals (B&H, SCHENGEN, Studies): the trip is entered for this run.
+  z
+    .object({
+      product: z.literal('omp-proposal'),
+      travellerId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      trip: ompTripSchema,
     })
     .strict(),
 ]);
@@ -307,6 +348,22 @@ export const ipcContract = {
     response: z.object({ id: entityIdSchema }).strict(),
   },
   [IPC_CHANNELS.vehiclesDelete]: {
+    request: clientOnly,
+    response: z.object({ deleted: z.boolean() }).strict(),
+  },
+  [IPC_CHANNELS.travellersList]: {
+    request: z.object({}).strict(),
+    response: z.object({ travellers: z.array(travellerSummarySchema).max(10_000) }).strict(),
+  },
+  [IPC_CHANNELS.travellersGet]: {
+    request: clientOnly,
+    response: travellerViewSchema,
+  },
+  [IPC_CHANNELS.travellersSave]: {
+    request: saveTravellerRequestSchema,
+    response: z.object({ id: entityIdSchema }).strict(),
+  },
+  [IPC_CHANNELS.travellersDelete]: {
     request: clientOnly,
     response: z.object({ deleted: z.boolean() }).strict(),
   },

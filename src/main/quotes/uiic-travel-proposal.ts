@@ -1,4 +1,4 @@
-// United India's Overseas Travel Insurance e-proposal: what the app fills for a saved client and a
+// United India's Overseas Travel Insurance e-proposal: what the app fills for a travel client and a
 // trip entered for this run, step by step.
 //
 // From the advisor's recording of 3 November 2026 (ProposalOTIhome.html; every field's model is
@@ -14,15 +14,18 @@
 //   the gender from it), name, PIN code and its lookup (state, district, village), address,
 //   landline, mobile, e-mail, e-insurance account, Aadhaar (when saved), PAN and CKYC numbers.
 // - III. Insured Information: the insured is the proposer ("Self": United India copies the title
-//   and name), with occupation, date of birth (calendar), marital status, passport number and the
-//   nominee.
+//   and name), with occupation, date of birth (calendar), marital status, passport (number, issuing
+//   authority, issue and expiry dates) and the nominee.
+// For a travel client (../../shared/contracts/traveller.ts): the traveller is the proposer and
+// insured; their passport number comes from the secret vault for this run only.
 // - IX. Declaration from Intermediary: the intermediary's place of signing.
 // - VIII. Premium Details: View Premium, and the total premium read.
 // Never filled by the app: IV. Medical History and V. Declaration (the client's own answers and
 // consent), the signatures and documents (uploads), the payment mode, and anything the client's
 // record or the trip does not hold. They are listed for the advisor.
-import type { ClientInput, NomineeRelationship } from '../../shared/contracts/client';
+import { ageOn, type NomineeRelationship } from '../../shared/contracts/client';
 import type { TravelTrip } from '../../shared/contracts/travel';
+import type { Traveller } from '../../shared/contracts/traveller';
 import type { PageOp } from './page-ops';
 import type { PlanStep } from './uiic-health';
 
@@ -49,7 +52,7 @@ const PLAN: Record<TravelTrip['destination'], Partial<Record<TravelTrip['sumInsu
 };
 
 /** Nominee Relation: the form lists fewer than the client record holds; the rest are "Others". */
-const NOMINEE: Record<NomineeRelationship, string> = {
+export const TRAVEL_NOMINEE: Record<NomineeRelationship, string> = {
   spouse: 'Spouse',
   son: 'Son',
   daughter: 'Daughter',
@@ -62,10 +65,75 @@ const NOMINEE: Record<NomineeRelationship, string> = {
 };
 
 /** "Customer High Risk Type" values, as on United India's other proposal forms. */
-const HIGH_RISK_TYPE = { hni: '1', pep: '2', 'nri-hni': '3', 'trust-ngo': '4' } as const;
+export const HIGH_RISK_TYPE = { hni: '1', pep: '2', 'nri-hni': '3', 'trust-ngo': '4' } as const;
 
-const iso = (d: Date): string =>
+export const iso = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/**
+ * The traveller's title, from which United India works out the gender. Widowed or divorced women,
+ * and a traveller without a gender, are left to the advisor (null).
+ */
+export function travelTitle(traveller: Traveller, today: Date): string | null {
+  if (traveller.gender === 'male')
+    return ageOn(traveller.dateOfBirth, today) < 18 ? 'Master' : 'Mr';
+  if (traveller.gender === 'transgender') return 'Others';
+  if (traveller.gender === 'female') {
+    if (traveller.maritalStatus === 'married') return 'Mrs';
+    if (traveller.maritalStatus === 'unmarried') return 'Miss';
+  }
+  return null;
+}
+
+/** Marital status as the travel forms list it: Married or Unmarried ("Single"); else null. */
+export const travelMarital = (traveller: Traveller): string | null =>
+  traveller.maritalStatus === 'married'
+    ? 'Married'
+    : traveller.maritalStatus === 'unmarried'
+      ? 'Single'
+      : null;
+
+/**
+ * The passport steps of section III, the same on every travel form: the number (from the vault)
+ * and, when saved, the issuing authority and the issue and expiry dates (calendars; left to the
+ * advisor, who is told, if the page does not take them).
+ */
+export function passportSteps(
+  traveller: Traveller,
+  passportNumber: string | null | undefined,
+  add: (label: string, op: PageOp, extra?: Partial<PlanStep>) => void,
+  byHand: string[],
+): void {
+  if (passportNumber) {
+    add('Passport number', {
+      op: 'setField',
+      selector: '#insuredPassportNo',
+      value: passportNumber,
+    });
+  } else byHand.push('passport number');
+  const p = traveller.passport ?? {};
+  if (p.issuingAuthority) {
+    add(
+      'Passport issuing authority',
+      { op: 'setField', selector: '#insuredPassportIssuingAuth', value: p.issuingAuthority },
+      { optional: true, ifMissed: 'passport issuing authority: fill it in by hand' },
+    );
+  }
+  if (p.issueDate) {
+    add(
+      'Passport issue date',
+      { op: 'pickDate', input: 'input#insuredPassportIssueDate', date: p.issueDate },
+      { optional: true, ifMissed: 'passport issue date: choose it by hand' },
+    );
+  }
+  if (p.expiryDate) {
+    add(
+      'Passport expiry date',
+      { op: 'pickDate', input: 'input#insuredPassportExpDate', date: p.expiryDate },
+      { optional: true, ifMissed: 'passport expiry date: choose it by hand' },
+    );
+  }
+}
 
 export type TravelProposalPlan =
   | { ok: true; steps: PlanStep[]; /** Left for the advisor to fill by hand. */ byHand: string[] }
@@ -80,20 +148,21 @@ export const TRAVEL_ALWAYS_BY_HAND = [
 ];
 
 export function planUiicTravelProposal(
-  client: ClientInput,
+  traveller: Traveller,
   trip: TravelTrip,
-  options: { aadhaar?: string | null; today: Date },
+  options: { aadhaar?: string | null; passportNumber?: string | null; today: Date },
 ): TravelProposalPlan {
-  const self = client.members.find((m) => m.relationship === 'self');
   const problems: string[] = [];
-  if (!self)
-    problems.push('Add the proposer ("self") with their date of birth and gender to this client.');
   if (trip.startDate < iso(options.today)) problems.push('The travel start date has passed.');
+  const passportExpiry = traveller.passport?.expiryDate;
+  if (passportExpiry && passportExpiry < trip.startDate) {
+    problems.push("The traveller's passport expires before the trip starts.");
+  }
   const plan = PLAN[trip.destination][trip.sumInsured];
   if (!plan) problems.push('Worldwide excluding USA and Canada goes up to 250000.');
-  if (!self || !plan || problems.length > 0) return { ok: false, problems };
+  if (!plan || problems.length > 0) return { ok: false, problems };
 
-  const p = client.proposal ?? {};
+  const p = traveller.proposal ?? {};
   const steps: PlanStep[] = [];
   const byHand: string[] = [];
   const add = (label: string, op: PageOp, extra: Partial<PlanStep> = {}) =>
@@ -165,35 +234,20 @@ export function planUiicTravelProposal(
       value: HIGH_RISK_TYPE[p.highRiskType],
     });
   } else if (p.highRiskCustomer) byHand.push('customer high risk type');
-  // The title gives United India the gender. Widowed or divorced women, and a proposer without a
-  // gender, are left to the advisor.
-  const title =
-    self.gender === 'male'
-      ? self.age < 18
-        ? 'Master'
-        : 'Mr'
-      : self.gender === 'female'
-        ? client.proposerMaritalStatus === 'married'
-          ? 'Mrs'
-          : client.proposerMaritalStatus === 'unmarried'
-            ? 'Miss'
-            : null
-        : self.gender === 'transgender'
-          ? 'Others'
-          : null;
+  const title = travelTitle(traveller, options.today);
   if (title) add('Title', { op: 'setField', selector: '#proposerTitle', value: title });
   else byHand.push('title (Mr., Mrs., Miss…)');
   add("Proposer's name", {
     op: 'setField',
     selector: '#proposerName',
-    value: client.customer.name,
+    value: traveller.customer.name,
   });
   add(
     'Customer type',
     { op: 'setField', selector: '#customerType', value: 'Individual' },
     { optional: true },
   );
-  add('PIN code', { op: 'setField', selector: '#proposerPINCode', value: client.pincode });
+  add('PIN code', { op: 'setField', selector: '#proposerPINCode', value: traveller.pincode });
   add('PIN code lookup', { op: 'pause', ms: 2000 });
   const place = (label: string, selector: string, value: string | undefined) => {
     if (!value) return;
@@ -219,8 +273,8 @@ export function planUiicTravelProposal(
   fill('Address', '#proposerAddress', p.address, 'address');
   optional('Landline STD code', '#proposerSTDCode', p.landlineStdCode);
   optional('Landline number', '#proposerResidenceTelNo', p.landlineNumber);
-  fill("Proposer's mobile", '#proposerMobileNo', client.customer.phone, 'mobile number');
-  fill("Proposer's e-mail", '#proposerEmail', client.customer.email, 'e-mail');
+  fill("Proposer's mobile", '#proposerMobileNo', traveller.customer.phone, 'mobile number');
+  fill("Proposer's e-mail", '#proposerEmail', traveller.customer.email, 'e-mail');
   optional('E-insurance account number', '#eInsuranceAccNo', p.eInsuranceAccountNumber);
   // Aadhaar and PAN are optional on this form: filled when known, never listed as missing.
   optional('Aadhaar number', '#aadharNo', options.aadhaar ?? undefined);
@@ -234,31 +288,24 @@ export function planUiicTravelProposal(
     selector: '#insuredRelation',
     value: 'Self',
   });
-  fill("Insured's occupation", '#insuredOccupation', trip.occupation, "insured's occupation");
-  if (self.dateOfBirth) {
-    add("Insured's date of birth", {
-      op: 'pickDate',
-      input: 'input#insuredDOB',
-      date: self.dateOfBirth,
-    });
-  } else byHand.push("insured's date of birth");
-  // Marital status: Married or Unmarried (value "Single"); widowed or divorced is left to the advisor.
-  const marital =
-    client.proposerMaritalStatus === 'married'
-      ? 'Married'
-      : client.proposerMaritalStatus === 'unmarried'
-        ? 'Single'
-        : null;
+  fill("Insured's occupation", '#insuredOccupation', traveller.occupation, "insured's occupation");
+  add("Insured's date of birth", {
+    op: 'pickDate',
+    input: 'input#insuredDOB',
+    date: traveller.dateOfBirth,
+  });
+  // Widowed or divorced is left to the advisor.
+  const marital = travelMarital(traveller);
   if (marital) {
     add('Marital status', { op: 'setField', selector: '#insuredMaritalStatus', value: marital });
   } else byHand.push('marital status');
-  fill('Passport number', '#insuredPassportNo', trip.passportNumber, 'passport number');
+  passportSteps(traveller, options.passportNumber, add, byHand);
   fill("Nominee's name", '#insuredNomineeName', p.nomineeName, "nominee's name");
   if (p.nomineeRelationship) {
     add('Nominee relation', {
       op: 'setField',
       selector: '#insuredNomineeRelation',
-      value: NOMINEE[p.nomineeRelationship],
+      value: TRAVEL_NOMINEE[p.nomineeRelationship],
     });
   } else byHand.push('nominee relation');
 

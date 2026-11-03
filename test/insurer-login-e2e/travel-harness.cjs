@@ -1,5 +1,5 @@
-// Runs the United India Overseas Travel e-proposal automation (bundled real code) against the local
-// copy of the form, and checks what was filled, the premium read, what is left to the advisor,
+// Runs the United India Overseas Travel e-proposal automation (bundled real code) for travel
+// clients against the local copy of the form, and checks what was filled, the premium read, what is left to the advisor,
 // that the client's own answers were not touched, and that nothing was saved. Exits 0 only if
 // every check passes. Started by run-motor.mjs travel.
 const http = require('node:http');
@@ -24,11 +24,19 @@ const server = http.createServer((req, res) => {
   res.end(html ?? 'not found');
 });
 
+// A travel client (the proposer and insured), as saved.
 const FULL = {
   customer: { name: 'Synthetic Traveller', phone: '9876543210', email: 'traveller@example.test' },
   pincode: '560001',
-  proposerMaritalStatus: 'married',
-  members: [{ relationship: 'self', age: 40, dateOfBirth: '1986-04-12', gender: 'female' }],
+  dateOfBirth: '1986-04-12',
+  gender: 'female',
+  maritalStatus: 'married',
+  occupation: 'Salaried',
+  passport: {
+    issuingAuthority: 'Passport Office, Bengaluru',
+    issueDate: '2020-01-15',
+    expiryDate: '2030-01-14',
+  },
   proposal: {
     pan: 'ABCDE1234F',
     address: '12 Synthetic Street',
@@ -50,15 +58,14 @@ const TRIP = {
   sumInsured: '100000',
   startDate: '2026-11-20',
   days: 10,
-  occupation: 'Salaried',
-  passportNumber: 'Z1234567',
 };
 const SIGNATURE = 'United India says: * Please Upload Signature of Proposer.';
 
 const CASES = [
   {
     name: 'full client and trip: every field filled, premium read, answers untouched; not saved',
-    client: FULL,
+    traveller: FULL,
+    passportNumber: 'Z1234567',
     trip: TRIP,
     aadhaar: '999941057058',
     expect: {
@@ -93,6 +100,9 @@ const CASES = [
       dob: '12/04/1986',
       marital: 'Married',
       passport: 'Z1234567',
+      issuingAuthority: 'Passport Office, Bengaluru',
+      issued: '15/01/2020',
+      expires: '14/01/2030',
       nomineeName: 'Synthetic Nominee',
       nomineeRelation: 'Spouse',
       place: 'Bengaluru',
@@ -114,13 +124,8 @@ const CASES = [
   },
   {
     name: 'excluding USA and Canada, no passport: plan A3, no premium, United India’s reason listed',
-    client: FULL,
-    trip: {
-      ...TRIP,
-      destination: 'worldwide-excluding-usa-canada',
-      sumInsured: '250000',
-      passportNumber: undefined,
-    },
+    traveller: FULL,
+    trip: { ...TRIP, destination: 'worldwide-excluding-usa-canada', sumInsured: '250000' },
     expect: {
       destination: 'Worldwide Excluding USA Or CANADA',
       plan: 'PLAN A3',
@@ -134,12 +139,14 @@ const CASES = [
   },
   {
     name: 'sparse client: what the record lacks is left to the advisor, the rest filled',
-    client: {
+    traveller: {
       customer: { name: 'Synthetic Sparse' },
       pincode: '110001',
-      members: [{ relationship: 'self', age: 70, dateOfBirth: '1956-01-31', gender: 'male' }],
+      dateOfBirth: '1956-01-31',
+      gender: 'male',
     },
-    trip: { ...TRIP, occupation: undefined },
+    passportNumber: 'Z7654321',
+    trip: TRIP,
     expect: {
       title: 'Mr',
       name: 'Synthetic Sparse',
@@ -194,9 +201,10 @@ app.whenReady().then(async () => {
     ];
     const result = await runUiicTravelProposal({
       windows,
-      client: c.client,
-      trip: Object.fromEntries(Object.entries(c.trip).filter(([, v]) => v !== undefined)),
+      traveller: c.traveller,
+      trip: c.trip,
       aadhaar: c.aadhaar ?? null,
+      passportNumber: c.passportNumber ?? null,
       today: new Date(2026, 10, 3),
     });
     const form = windows().find((w) => w.webContents.getURL().includes('ProposalOTIhome.html'));
@@ -218,7 +226,9 @@ app.whenReady().then(async () => {
           aadhaar: v('#aadharNo'), pan: v('#panNo'), ckyc: v('#CKYCNo'),
           relation: v('#insuredRelation'), insuredTitle: v('#Select2'), insuredName: v('#insuredName'),
           occupation: v('#insuredOccupation'), dob: v('#insuredDOB'), marital: v('#insuredMaritalStatus'),
-          passport: v('#insuredPassportNo'), nomineeName: v('#insuredNomineeName'),
+          passport: v('#insuredPassportNo'), issuingAuthority: v('#insuredPassportIssuingAuth'),
+          issued: v('#insuredPassportIssueDate'), expires: v('#insuredPassportExpDate'),
+          nomineeName: v('#insuredNomineeName'),
           nomineeRelation: v('#insuredNomineeRelation'), place: v('#intmSignPlace'),
           customerPlace: document.querySelector('#customerPart #intmSignPlace').value,
           preExisting: r('hasPreExistingDis'), payMode: r('premiumpaymodes'), totalPremium: v('#totalPremium'),

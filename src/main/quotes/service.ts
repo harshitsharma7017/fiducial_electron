@@ -1,5 +1,6 @@
 // Quote runs behind the IPC channel. Off unless the automation features are switched on. United
-// India only so far (health and motor calculators, the health and Overseas Travel e-proposals);
+// India only so far (health and motor calculators, the health, Overseas Travel and Overseas
+// Mediclaim e-proposals);
 // other insurers
 // are refused with a reason. Motor quotes are for a saved vehicle, the others for a saved client.
 import type { ClientService } from '../clients/service';
@@ -11,6 +12,7 @@ import {
   runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
+  runUiicOmpProposal,
   runUiicTravelProposal,
   type QuoteRunResult,
 } from './run-uiic-health';
@@ -30,7 +32,10 @@ export interface QuoteService {
 
 export function createQuoteService(deps: {
   enabled: boolean;
-  clients: Pick<ClientService, 'get' | 'aadhaarFor' | 'getVehicle'>;
+  clients: Pick<
+    ClientService,
+    'get' | 'aadhaarFor' | 'getVehicle' | 'getTraveller' | 'passportFor'
+  >;
   /** The insurer's open pages: its portal first, then its pop-ups. */
   windowsOf: (insurerId: string) => PortalPage[];
   logger: Logger;
@@ -57,14 +62,19 @@ export function createQuoteService(deps: {
           problems: [],
         };
       }
-      // Read before the run starts: an unknown client or vehicle is refused at once.
+      // Read before the run starts: an unknown client, travel client or vehicle is refused at once.
       const subject =
         request.product === 'motor'
           ? {
               kind: 'vehicle' as const,
               vehicle: (await deps.clients.getVehicle(request.vehicleId)).saved.vehicle,
             }
-          : { kind: 'client' as const, record: await deps.clients.get(request.clientId) };
+          : request.product === 'travel-proposal' || request.product === 'omp-proposal'
+            ? {
+                kind: 'traveller' as const,
+                record: await deps.clients.getTraveller(request.travellerId),
+              }
+            : { kind: 'client' as const, record: await deps.clients.get(request.clientId) };
       running = true;
       try {
         const today = (deps.now ?? (() => new Date()))();
@@ -72,15 +82,28 @@ export function createQuoteService(deps: {
         let result: QuoteRunResult;
         if (subject.kind === 'vehicle') {
           result = await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
-        } else if (request.product === 'travel-proposal') {
-          result = await runUiicTravelProposal({
+        } else if (subject.kind === 'traveller') {
+          const travel = {
             windows,
-            client: subject.record.client,
-            trip: request.trip,
+            traveller: subject.record.traveller,
             aadhaar: await deps.clients.aadhaarFor(subject.record.id),
+            passportNumber: await deps.clients.passportFor(subject.record.id),
             today,
-          });
-        } else if (request.product !== 'health' && request.product !== 'motor') {
+          };
+          result =
+            request.product === 'omp-proposal'
+              ? await runUiicOmpProposal({ ...travel, trip: request.trip })
+              : request.product === 'travel-proposal'
+                ? await runUiicTravelProposal({ ...travel, trip: request.trip })
+                : (() => {
+                    throw new AppException('VALIDATION_FAILED');
+                  })();
+        } else if (
+          request.product !== 'health' &&
+          request.product !== 'motor' &&
+          request.product !== 'travel-proposal' &&
+          request.product !== 'omp-proposal'
+        ) {
           result = await runUiicHealthProposal({
             windows,
             form: PROPOSAL_FORM[request.product],

@@ -10,6 +10,7 @@ import {
   Lock,
   PanelLeftClose,
   PanelLeftOpen,
+  Plane,
   ShieldCheck,
   Users,
   type LucideIcon,
@@ -18,7 +19,8 @@ import { useState, type ReactNode } from 'react';
 import { PortalArea, PortalTabStrip, showAppScreens, usePortalTabs } from '../insurers/PortalTabs';
 import { ThemeSwitcher } from '../theme/ThemeSwitcher';
 
-export type ViewId = 'overview' | 'clients' | 'vehicles' | 'insurers' | 'development';
+export type ViewId =
+  'overview' | 'clients' | 'travellers' | 'vehicles' | 'insurers' | 'development';
 
 interface NavItem {
   id: ViewId;
@@ -38,7 +40,8 @@ const DEVELOPMENT_ITEM: NavItem = {
 
 const NAV: NavItem[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard, automation: false },
-  { id: 'clients', label: 'Clients', icon: Users, automation: true },
+  { id: 'clients', label: 'Health clients', icon: Users, automation: true },
+  { id: 'travellers', label: 'Travel clients', icon: Plane, automation: true },
   { id: 'vehicles', label: 'Vehicles', icon: Car, automation: true },
   { id: 'insurers', label: 'Insurer portals', icon: Building2, automation: true },
 ];

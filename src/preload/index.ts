@@ -11,9 +11,11 @@ import type {
   PortalTabsView,
   InsurerPortalList,
   QuoteRunResultView,
+  TravellerView,
 } from '../shared/ipc/contract';
 import type { AppResult } from '../shared/ipc/result';
 import type { VehicleRecord, VehicleSummary } from '../shared/contracts/vehicle';
+import type { TravellerSummary } from '../shared/contracts/traveller';
 
 const api: FqfApi = {
   app: {
@@ -73,6 +75,22 @@ const api: FqfApi = {
     setBounds: (bounds) =>
       ipcRenderer.invoke(IPC_CHANNELS.portalsSetBounds, bounds) as Promise<
         AppResult<{ set: true }>
+      >,
+  },
+  travellers: {
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.travellersList, {}) as Promise<
+        AppResult<{ travellers: TravellerSummary[] }>
+      >,
+    get: (id) =>
+      ipcRenderer.invoke(IPC_CHANNELS.travellersGet, { id }) as Promise<AppResult<TravellerView>>,
+    save: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.travellersSave, request) as Promise<
+        AppResult<{ id: string }>
+      >,
+    delete: (id) =>
+      ipcRenderer.invoke(IPC_CHANNELS.travellersDelete, { id }) as Promise<
+        AppResult<{ deleted: boolean }>
       >,
   },
   vehicles: {

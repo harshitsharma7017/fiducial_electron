@@ -37,6 +37,12 @@ const insurerStubs: Omit<IpcHandlers, 'app:get-info'> = {
   },
   'vehicles:save': () => ({ id: 'x' }),
   'vehicles:delete': () => ({ deleted: false }),
+  'travellers:list': () => ({ travellers: [] }),
+  'travellers:get': () => {
+    throw new AppException('VALIDATION_FAILED');
+  },
+  'travellers:save': () => ({ id: 'x' }),
+  'travellers:delete': () => ({ deleted: false }),
   'portals:tabs': () => ({ version: 1, tabs: [], active: null }),
   'portals:show': () => ({ shown: true }),
   'portals:close': () => ({ closed: true }),

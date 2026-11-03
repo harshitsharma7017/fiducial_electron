@@ -12,8 +12,13 @@ import {
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
 import type { VehicleInput, VehicleRecord, VehicleSummary } from '../../shared/contracts/vehicle';
+import type {
+  Traveller,
+  TravellerRecord,
+  TravellerSummary,
+} from '../../shared/contracts/traveller';
 import { ClientStoreError, type ClientStore } from '../storage/client-store';
-import type { AadhaarVault } from './aadhaar-vault';
+import type { AadhaarVault, PassportVault } from './aadhaar-vault';
 
 export interface ClientList {
   enabled: boolean;
@@ -37,6 +42,21 @@ export interface ClientService {
   getVehicle(id: string): Promise<VehicleRecord>;
   saveVehicle(id: string | null, input: VehicleInput): Promise<string>;
   deleteVehicle(id: string): Promise<boolean>;
+  /** Travel clients (for travel e-proposals), kept apart from health clients. */
+  listTravellers(): Promise<TravellerSummary[]>;
+  getTraveller(id: string): Promise<TravellerRecord>;
+  /** `aadhaar` / `passport`: a number sets, null removes, absent keeps (kept in the vault). */
+  saveTraveller(
+    id: string | null,
+    input: Traveller,
+    numbers?: { aadhaar?: string | null; passport?: string | null },
+  ): Promise<string>;
+  /** Removes the travel client with its Aadhaar and passport numbers. */
+  deleteTraveller(id: string): Promise<boolean>;
+  /** The last four characters of the travel client's passport number, or null. */
+  passportLastFour(id: string): Promise<string | null>;
+  /** Main process only (filling an insurer's form): the whole passport number, or null. */
+  passportFor(id: string): Promise<string | null>;
   close(): void;
 }
 
@@ -45,6 +65,8 @@ export function createClientService(deps: {
   open: () => Promise<ClientStore>;
   /** Where Aadhaar numbers are kept (absent: none can be saved). */
   aadhaar?: AadhaarVault;
+  /** Where travel clients' passport numbers are kept (absent: none can be saved). */
+  passport?: PassportVault;
   logger: Logger;
   now?: () => Date;
 }): ClientService {
@@ -178,6 +200,59 @@ export function createClientService(deps: {
       const deleted = guard(() => s.vehicles.delete(id));
       if (deleted) deps.logger.info('vehicle.deleted');
       return deleted;
+    },
+
+    listTravellers: async () => {
+      const s = await requireStore();
+      return guard(() => s.travellers.list());
+    },
+
+    getTraveller: async (id) => {
+      const s = await requireStore();
+      const record = guard(() => s.travellers.get(id));
+      if (!record) throw new AppException('VALIDATION_FAILED');
+      return record;
+    },
+
+    saveTraveller: async (id, input, numbers = {}) => {
+      const s = await requireStore();
+      const today = (deps.now ?? (() => new Date()))();
+      if (hasFutureDateOfBirth({ members: [{ dateOfBirth: input.dateOfBirth }] }, today)) {
+        throw new AppException('VALIDATION_FAILED');
+      }
+      if ((numbers.aadhaar && !deps.aadhaar) || (numbers.passport && !deps.passport)) {
+        throw new AppException('UNSUPPORTED_FLOW');
+      }
+      if (id !== null && !guard(() => s.travellers.get(id))) {
+        throw new AppException('VALIDATION_FAILED');
+      }
+      const saved = guard(() => s.travellers.save(id, input));
+      deps.logger.info('traveller.saved');
+      if (numbers.aadhaar) await deps.aadhaar!.set(saved.id, numbers.aadhaar);
+      else if (numbers.aadhaar === null) await deps.aadhaar?.clear(saved.id);
+      if (numbers.passport) await deps.passport!.set(saved.id, numbers.passport);
+      else if (numbers.passport === null) await deps.passport?.clear(saved.id);
+      return saved.id;
+    },
+
+    deleteTraveller: async (id) => {
+      const s = await requireStore();
+      const deleted = guard(() => s.travellers.delete(id));
+      // The numbers go with the travel client (also if it was already gone).
+      await deps.aadhaar?.clear(id);
+      await deps.passport?.clear(id);
+      if (deleted) deps.logger.info('traveller.deleted');
+      return deleted;
+    },
+
+    passportLastFour: async (id) => {
+      await requireStore();
+      return deps.passport ? deps.passport.lastFour(id) : null;
+    },
+
+    passportFor: async (id) => {
+      await requireStore();
+      return deps.passport ? deps.passport.read(id) : null;
     },
 
     close: () => {

@@ -51,6 +51,8 @@ export interface PlanStep {
   closeErrors?: boolean;
   /** For an optional step: what the advisor is told if the page could not take it. */
   ifMissed?: string;
+  /** Keeps the value the step returns (a premium, a plan's code) under this name for the result. */
+  keep?: string;
 }
 
 export type UiicHealthPlan = { ok: true; steps: PlanStep[] } | { ok: false; problems: string[] };

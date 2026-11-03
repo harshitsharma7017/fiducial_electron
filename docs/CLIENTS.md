@@ -12,7 +12,7 @@ advisor deletes.
 
 | Part              | Fields                                                                 |
 | ----------------- | ---------------------------------------------------------------------- |
-| Client            | name; mobile, email, notes (optional)                                  |
+| Health client     | name; mobile, email, notes (optional)                                  |
 | Where             | pincode                                                                |
 | Members (1 to 12) | relationship and age only: no names, gender or date of birth (C-05)    |
 | Quote details     | cover type (floater or individual), sum insured, policy term (optional) |
@@ -54,6 +54,34 @@ Decision of 3 November 2026: vehicles are **not part of a client**. They have th
   it all applies or none of it does.
 
 Clients again need at least one member.
+
+## Travel clients (kept apart from health clients)
+
+Decision of 3 November 2026: travel clients are **separate records** from health clients, with
+their own list (**Travel clients** screen; the client screen is now **Health clients**). Travel
+e-proposals (Overseas Travel, Overseas Mediclaim B&H, SCHENGEN, Studies) run from a travel client;
+health quotes and health e-proposals from a health client. The same person needing both is entered
+in each.
+
+- **What:** one traveller, who is the proposer and insured:
+  - name, mobile, e-mail, notes, pincode;
+  - date of birth (required: the forms price plans by age), gender, marital status;
+  - occupation, as the travel forms list it (self-employed, unemployed, salaried, service,
+    professional);
+  - proposal details as for health clients (PAN, address, state, city, village, high risk, landline,
+    CKYC and e-insurance numbers, nominee, intermediary's place), without the health occupation list;
+  - passport: issuing authority, issue and expiry dates (the expiry after the issue).
+- **The passport number is kept apart (decision of 3 November 2026),** like the Aadhaar number: in
+  the secret vault, one entry per travel client named by a one-way hash of its id
+  (`passport.<hash>`). Letters and digits, 6 to 12. The screens only learn its last four
+  characters; only the main process reads it, to fill an insurer's form. It is never logged, and is
+  removed with **Remove** or when the travel client is deleted. A travel client may also have an
+  Aadhaar number, kept the same way as a health client's.
+- **Where:** the same encrypted database, in its own `traveller` table (validated JSON). Kept until
+  the advisor deletes it.
+- **Upgrade (schema version 6):** adds the empty travel client table. Every existing client stays a
+  health client; nothing is moved or removed.
+- **The trip is not saved:** destination, dates, days and plan are entered for each proposal.
 
 ## How it is stored
 

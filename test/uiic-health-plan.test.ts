@@ -166,6 +166,8 @@ describe('the quote service', () => {
         get: () => Promise.resolve(record),
         aadhaarFor: () => Promise.resolve(null),
         getVehicle: () => Promise.reject(new Error('not used')),
+        getTraveller: () => Promise.reject(new Error('not used')),
+        passportFor: () => Promise.resolve(null),
       },
       windowsOf: () => windows as never,
       logger: createLogger([]),
