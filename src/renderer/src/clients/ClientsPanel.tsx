@@ -895,6 +895,8 @@ function ProposalFields(props: {
 const PROPOSAL_FORMS = [
   { product: 'fm-proposal', name: 'Family Medicare' },
   { product: 'ihp-proposal', name: 'Individual Health' },
+  { product: 'as-proposal', name: 'Arogya Sanjeevani' },
+  { product: 'stu-proposal', name: 'Super Top-up' },
 ] as const;
 
 /** Fills one of United India's health e-proposals (sections I-II) for a saved client. */

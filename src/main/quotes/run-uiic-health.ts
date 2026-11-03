@@ -3,7 +3,8 @@
 // each step of the plan, and after every step checks for United India's ERRORS pop-up.
 // - Health (plan: uiic-health.ts): stops at the "User Details" pop-up for the advisor.
 // - Motor (plan: uiic-motor.ts): reads the premium from "Premium Details" and returns it.
-// - Family Medicare and Individual Health e-proposals (plan: uiic-health-proposal.ts): fill
+// - Health e-proposals (Family Medicare, Individual Health, Arogya Sanjeevani, Super Top-up; plan:
+//   uiic-health-proposal.ts): fill
 //   sections I-II and stop; the advisor fills the rest and saves it. The app never saves or submits
 //   a proposal.
 import type { WebContents } from 'electron';
@@ -68,7 +69,8 @@ const refused = (message: string, problems: string[] = []): QuoteRunResult => ({
 async function runInCalculator(deps: {
   windows: () => PortalPage[];
   tile: string;
-  calculatorPath: string;
+  /** The calculator's page: its path, or a pattern for a page whose path was not recorded. */
+  calculatorPath: string | RegExp;
   steps: PlanStep[];
 }): Promise<{ result: QuoteRunResult | null; last: PageOpResult | null; notes: string[] }> {
   const main = deps.windows()[0];
@@ -101,21 +103,28 @@ async function runInCalculator(deps: {
       notes: [],
     };
   }
+  const wanted = deps.calculatorPath;
+  const isCalculator = (path: string): boolean =>
+    typeof wanted === 'string' ? path === wanted : wanted.test(path);
+  const newPages = (): PortalPage[] =>
+    deps.windows().filter((w) => !before.has(w.webContents.id) && !w.isDestroyed());
   let calculator: PortalPage | undefined;
   for (let waited = 0; waited < 20_000 && !calculator; waited += 300) {
     await new Promise((resolve) => setTimeout(resolve, 300));
-    calculator = deps
-      .windows()
-      .find(
-        (w) =>
-          !before.has(w.webContents.id) &&
-          !w.isDestroyed() &&
-          pathOf(w.webContents.getURL()) === deps.calculatorPath,
-      );
+    calculator = newPages().find((w) => isCalculator(pathOf(w.webContents.getURL())));
   }
   if (!calculator) {
+    // Say where the tile went instead, if it opened a page: the form may have moved.
+    const elsewhere = newPages()
+      .map((w) => pathOf(w.webContents.getURL()))
+      .find((path) => path && path !== 'blank');
     return {
-      result: failed('Open the calculator', 'The calculator did not open.'),
+      result: failed(
+        'Open the calculator',
+        elsewhere
+          ? `The calculator did not open: the tile opened ${elsewhere}, which the app does not know.`
+          : 'The calculator did not open.',
+      ),
       last: null,
       notes: [],
     };

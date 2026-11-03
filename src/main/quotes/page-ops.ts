@@ -67,7 +67,12 @@ export type PageOp =
       rowKey?: RowKey;
     }
   | { op: 'clickButton'; text: string; within?: string; timeoutMs: number }
-  | { op: 'clickLink'; text: string }
+  /**
+   * Clicks the visible link with this text. `numbered`: the text after a section number ("X. ",
+   * "XII. "), for a form whose numbering is not known; the last such link (the proposal's own
+   * section, after any short form above it).
+   */
+  | { op: 'clickLink'; text: string; numbered?: boolean }
   /** Chooses an option (by value or visible text) or fills a box; re-checked like select. */
   | { op: 'setField'; selector: string; value: string; within?: string }
   /** Ticks or unticks a checkbox (or picks a radio) by selector; re-checked like select. */
@@ -323,9 +328,16 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       return { ok: true };
     }
     case 'clickLink': {
-      const link = Array.from(document.querySelectorAll('a')).find(
-        (a) => visible(a) && text(a) === command.text,
+      const matches = (a: Element): boolean => {
+        const t = text(a);
+        return command.numbered
+          ? /^[IVXL]+\.\s*/.test(t) && t.replace(/^[IVXL]+\.\s*/, '') === command.text
+          : t === command.text;
+      };
+      const links = Array.from(document.querySelectorAll('a')).filter(
+        (a) => visible(a) && matches(a),
       );
+      const link = command.numbered ? links.at(-1) : links[0];
       if (!link) return { ok: false, detail: 'not-found' };
       link.click();
       return { ok: true };

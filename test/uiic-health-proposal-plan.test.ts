@@ -213,4 +213,21 @@ describe('planUiicHealthProposal', () => {
     expect(ihp.byHand).toEqual(fm.byHand);
     expect(JSON.stringify(ihp.steps)).not.toMatch(/Save As Draft|Submit|saveDraft/);
   });
+
+  it('finds the intermediary section by name on the forms not recorded (Arogya Sanjeevani, Super Top-up)', () => {
+    const proposal = { ...FULL.proposal, intermediaryPlace: 'Bengaluru' };
+    const ihp = plan({ proposal }, '999941057058', 'individual-health');
+    for (const form of ['arogya-sanjeevani', 'super-top-up'] as const) {
+      const other = plan({ proposal }, '999941057058', form);
+      const open = other.steps.find((s) => s.label === 'Open Declaration from Intermediary');
+      expect(open).toMatchObject({
+        op: { op: 'clickLink', text: 'Declaration from Intermediary', numbered: true },
+        closeErrors: true,
+      });
+      // Otherwise the same steps as Individual Health.
+      const rest = (r: typeof ihp) =>
+        JSON.stringify(r.steps.filter((s) => s.label !== 'Open Declaration from Intermediary'));
+      expect(rest(other)).toBe(rest(ihp));
+    }
+  });
 });

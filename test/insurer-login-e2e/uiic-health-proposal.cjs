@@ -50,6 +50,23 @@ const FORMS = {
     transgender: 'proposerGender',
     intermediary: 'X. Declaration from Intermediary',
   },
+  // Not recorded: said by the advisor to be the same as Individual Health. Their pages' names here
+  // are made up (the app accepts any Proposal…home.html), and their intermediary's sections are
+  // numbered differently on purpose (the app finds it by name).
+  'arogya-sanjeevani': {
+    title: 'Arogya Sanjeevani Policy',
+    ids: { customer: 'proposalfilledBy', agent: 'Radio7', newer: 'Radio4', fetch: 'Radio5' },
+    female: 'proposerGender',
+    transgender: 'proposerGender',
+    intermediary: 'XII. Declaration from Intermediary',
+  },
+  'super-top-up': {
+    title: 'Super Top-up Policy',
+    ids: { customer: 'proposalfilledBy', agent: 'Radio7', newer: 'Radio4', fetch: 'Radio5' },
+    female: 'proposerGender',
+    transgender: 'proposerGender',
+    intermediary: 'X. Declaration from Intermediary',
+  },
 };
 
 const formPage = ({
@@ -210,10 +227,14 @@ const formPage = ({
 
 const home = `<!doctype html><html><head><meta charset="utf-8"><title>UIIC - Intermediary Portal Home</title></head><body>
   <div><a href="/CustomerAppLive/data/ProposalFMhome.html#/ProposalFormMainBody" target="_blank">Family Medicare E-Proposal Form</a></div>
-  <div><a href="/CustomerAppLive/data/ProposalIHPhome.html#/ProposalFormMainBody" target="_blank">Individual Health E-Proposal Form</a></div></body></html>`;
+  <div><a href="/CustomerAppLive/data/ProposalIHPhome.html#/ProposalFormMainBody" target="_blank">Individual Health E-Proposal Form</a></div>
+  <div><a href="/CustomerAppLive/data/ProposalASPhome.html#/ProposalFormMainBody" target="_blank">Arogya Sanjeevani E-Proposal Form</a></div>
+  <div><a href="/CustomerAppLive/data/ProposalSTUhome.html#/ProposalFormMainBody" target="_blank">Super Top-up Policy E-Proposal Form</a></div></body></html>`;
 
 module.exports = {
   '/GCWebPortal/login/HomeAction.do': home,
   '/CustomerAppLive/data/ProposalFMhome.html': formPage(FORMS['family-medicare']),
   '/CustomerAppLive/data/ProposalIHPhome.html': formPage(FORMS['individual-health']),
+  '/CustomerAppLive/data/ProposalASPhome.html': formPage(FORMS['arogya-sanjeevani']),
+  '/CustomerAppLive/data/ProposalSTUhome.html': formPage(FORMS['super-top-up']),
 };

@@ -1,9 +1,13 @@
 // United India's health e-proposals: what the app fills for a saved client, step by step.
 //
-// Two forms, the same first sections (field ids, models and pop-ups as recorded):
+// Four forms, the same first sections (field ids, models and pop-ups as recorded):
 // - Family Medicare (recording of 3 November 2026, ProposalFMhome.html);
 // - Individual Health (recording of 3 November 2026, ProposalIHPhome.html), where the
-//   intermediary's declaration is section X instead of XI.
+//   intermediary's declaration is section X instead of XI;
+// - Arogya Sanjeevani and Super Top-up: not recorded. The advisor says their forms are the same as
+//   Individual Health's (3 November 2026). Their tiles' names are as recorded on the home page, but
+//   not their pages' addresses or section numbers: the page is any of United India's proposal
+//   pages (Proposal…home.html) and the intermediary's section is found by its name.
 // Sections I and II only (the advisor records the other sections later). The app fills and stops:
 // it never presses Save As Draft or Submit, and the advisor checks the whole form before saving it
 // (decision of 3 November 2026).
@@ -47,12 +51,24 @@ const UIIC_HIGH_RISK_TYPE: Record<HighRiskType, string> = {
   'trust-ngo': '4',
 };
 
-export type UiicProposalForm = 'family-medicare' | 'individual-health';
+export type UiicProposalForm =
+  'family-medicare' | 'individual-health' | 'arogya-sanjeevani' | 'super-top-up';
 
-/** What differs between the forms, as recorded. */
+/** United India's proposal pages, for a form whose own page was not recorded. */
+const ANY_PROPOSAL_PAGE = /^\/CustomerAppLive\/data\/Proposal[A-Za-z]+home\.html$/;
+
+/** What differs between the forms. */
 export const UIIC_PROPOSAL_FORMS: Record<
   UiicProposalForm,
-  { name: string; tile: string; path: string; intermediarySection: string }
+  {
+    name: string;
+    /** The home page tile, as recorded. */
+    tile: string;
+    /** The form's page: as recorded, or any proposal page. */
+    path: string | RegExp;
+    /** The intermediary's section as recorded, or null to find it by name whatever its number. */
+    intermediarySection: string | null;
+  }
 > = {
   'family-medicare': {
     name: 'Family Medicare',
@@ -65,6 +81,18 @@ export const UIIC_PROPOSAL_FORMS: Record<
     tile: 'Individual Health E-Proposal Form',
     path: '/CustomerAppLive/data/ProposalIHPhome.html',
     intermediarySection: 'X. Declaration from Intermediary',
+  },
+  'arogya-sanjeevani': {
+    name: 'Arogya Sanjeevani',
+    tile: 'Arogya Sanjeevani E-Proposal Form',
+    path: ANY_PROPOSAL_PAGE,
+    intermediarySection: null,
+  },
+  'super-top-up': {
+    name: 'Super Top-up',
+    tile: 'Super Top-up Policy E-Proposal Form',
+    path: ANY_PROPOSAL_PAGE,
+    intermediarySection: null,
   },
 };
 
@@ -231,7 +259,9 @@ export function planUiicHealthProposal(
   if (p.intermediaryPlace) {
     add(
       'Open Declaration from Intermediary',
-      { op: 'clickLink', text: form.intermediarySection },
+      form.intermediarySection
+        ? { op: 'clickLink', text: form.intermediarySection }
+        : { op: 'clickLink', text: 'Declaration from Intermediary', numbered: true },
       { closeErrors: true },
     );
     add('Declaration shown', { op: 'pause', ms: 800 }, { closeErrors: true });
