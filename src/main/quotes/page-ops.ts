@@ -68,10 +68,16 @@ export type PageOp =
     }
   | { op: 'clickButton'; text: string; within?: string; timeoutMs: number }
   | { op: 'clickLink'; text: string }
+  /** Chooses an option (by value or visible text) or fills a box; re-checked like select. */
+  | { op: 'setField'; selector: string; value: string; within?: string }
+  /** Ticks or unticks a checkbox (or picks a radio) by selector; re-checked like select. */
+  | { op: 'check'; selector: string; checked: boolean; within?: string }
+  /** Reads the first data row of the pop-up's table: its label and the cell under `column`. */
+  | { op: 'readTable'; within: string; column: string; timeoutMs: number }
   | {
       op: 'pickDate';
-      /** The button that opens the calendar. */
-      trigger: string;
+      /** What opens the calendar; if absent, a button or icon next to the date box. */
+      trigger?: string;
       /** The box the chosen date appears in, as dd/mm/yyyy. */
       input: string;
       /** YYYY-MM-DD. */
@@ -87,6 +93,9 @@ export interface PageOpResult {
   detail?: string;
   /** For "errors": the text of a visible ERRORS pop-up. */
   errors?: string;
+  /** For "readTable": the cell read, and the row's label. */
+  value?: string;
+  label?: string;
 }
 
 export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
@@ -323,11 +332,6 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
     }
     case 'pickDate': {
       const [y, m, d] = command.date.split('-').map(Number) as [number, number, number];
-      const expected = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
-      const root = rootFor(command);
-      const trigger = root ? first(root, command.trigger) : null;
-      if (!trigger) return { ok: false, detail: 'trigger-not-found' };
-      trigger.click();
       const MONTHS = [
         'January',
         'February',
@@ -342,35 +346,162 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         'November',
         'December',
       ];
+      // The date as the box may show it: dd/mm/yyyy, dd-mm-yyyy, yyyy-mm-dd, dd-Mon-yyyy, or (as
+      // some calendars set it by default) mm/dd/yyyy: we chose the day ourselves, so those numbers
+      // in that order can only be our date.
+      const sameDate = (value: string): boolean => {
+        const v = value.trim().toLowerCase();
+        const dd = String(d).padStart(2, '0');
+        const mm = String(m).padStart(2, '0');
+        const digits = v.replace(/[^0-9]+/g, '-');
+        if ([`${dd}-${mm}-${y}`, `${y}-${mm}-${dd}`, `${mm}-${dd}-${y}`].includes(digits))
+          return true;
+        const mon = MONTHS[m - 1]!.toLowerCase().slice(0, 3);
+        return (
+          v.includes(String(y)) && v.includes(mon) && new RegExp(`(^|\\D)0?${d}(\\D|$)`).test(v)
+        );
+      };
+      const root = rootFor(command);
+      if (!root) return { ok: false, detail: 'scope-not-shown' };
+      const box = () => first(root, command.input) as HTMLInputElement | null;
+      // Already showing that date (United India fills the risk start date with today itself).
+      if (sameDate(box()?.value ?? '')) return { ok: true, detail: 'already-set' };
+      // A full press: some calendars act on mousedown, others on click.
+      const press = (el: Element): void => {
+        const at = { bubbles: true, cancelable: true, view: window, button: 0 };
+        el.dispatchEvent(new PointerEvent('pointerdown', at));
+        el.dispatchEvent(new MouseEvent('mousedown', at));
+        el.dispatchEvent(new PointerEvent('pointerup', at));
+        el.dispatchEvent(new MouseEvent('mouseup', at));
+        (el as HTMLElement).click();
+      };
+      // For support: an element in a few words (tag, class, text).
+      const describe = (el: Element | null | undefined): string =>
+        el
+          ? `${el.tagName.toLowerCase()}${el.getAttribute('class') ? '.' + el.getAttribute('class')!.trim().split(/\s+/).join('.') : ''}"${text(el).slice(0, 20)}"`
+          : 'none';
+      // What opens the calendar: the given trigger, else something right next to the date box
+      // (in its own group) that looks like a calendar opener: a calendar/date icon, an input-group
+      // add-on, or a button without text. Never a button with text (that could be anything, such
+      // as the form's own submit). Else the box itself.
+      let trigger: HTMLElement | null = command.trigger ? first(root, command.trigger) : null;
+      if (!trigger) {
+        const input = first(root, command.input);
+        if (!input) return { ok: false, detail: 'trigger-not-found' };
+        const looksLikeOpener = (el: Element): boolean => {
+          const marks = [
+            el.getAttribute('class'),
+            ...Array.from(el.querySelectorAll('[class]')).map((c) => c.getAttribute('class')),
+          ].join(' ');
+          return (
+            /calendar|date|input-group-addon|input-group-btn/i.test(marks) ||
+            (el.tagName === 'BUTTON' && text(el) === '')
+          );
+        };
+        for (
+          let near = input.parentElement, level = 0;
+          near && !trigger && level < 2;
+          level += 1, near = near.parentElement
+        ) {
+          trigger =
+            (Array.from(
+              near.querySelectorAll(
+                'button, [ng-click], .input-group-addon, .input-group-btn, i, span',
+              ),
+            ).find(
+              (el) => el !== input && !el.contains(input) && visible(el) && looksLikeOpener(el),
+            ) as HTMLElement | undefined) ?? null;
+        }
+        trigger ??= input;
+      }
+      if (!trigger) return { ok: false, detail: 'trigger-not-found' };
+      press(trigger);
       const TITLE = new RegExp(`(${MONTHS.join('|')}) (\\d{4})`);
-      // The calendar: the smallest container around the « button that holds the month-year
-      // title and the day grid or the Cancel/OK buttons. (On United India the title shares the
-      // header row with « ‹ › », so the title alone does not reach the grid.)
+      const EXACT_TITLE = new RegExp(`^(${MONTHS.join('|')}) (\\d{4})$`);
+      // The calendar: the smallest container that holds the month-year title and the day grid or
+      // the Cancel/OK buttons. Found from its « button (United India health: the title shares the
+      // header row with « ‹ › ») or from the title itself (calendars without «).
       const isWholeCalendar = (node: Element): boolean =>
         TITLE.test(node.textContent ?? '') &&
         (node.querySelector('table, [role="grid"], [role="gridcell"]') !== null ||
           buttonWithText(node, 'OK') !== null ||
           buttonWithText(node, 'Cancel') !== null);
-      const picker = await until(() => {
-        let node: Element | null = buttonWithText(document, '«');
+      const climb = (start: Element | null): HTMLElement | null => {
+        let node = start;
         while (node && node !== document.body && !isWholeCalendar(node)) node = node.parentElement;
         return node && node !== document.body ? (node as HTMLElement) : null;
+      };
+      const picker = await until(() => {
+        const fromArrows = climb(buttonWithText(document, '«'));
+        if (fromArrows) return fromArrows;
+        const title = Array.from(
+          document.querySelectorAll('button, strong, th, span, h1, h2, h3, h4, h5, div'),
+        )
+          .filter((el) => visible(el) && el.children.length <= 1 && EXACT_TITLE.test(text(el)))
+          .map((el) => climb(el))
+          .find((c) => c !== null);
+        return title ?? null;
       }, 5000);
-      if (!picker) return { ok: false, detail: 'calendar-not-shown' };
+      if (!picker)
+        return { ok: false, detail: `calendar-not-shown (opened with ${describe(trigger)})` };
       const shown = (): { year: number; month: number } | null => {
         const match = TITLE.exec(picker.textContent ?? '');
         return match ? { year: Number(match[2]), month: MONTHS.indexOf(match[1]!) + 1 } : null;
+      };
+      // Previous / next: by text (« ‹ › », < >, Prev / Next), else by an icon or label that says so.
+      const navButton = (dir: 'prev' | 'next'): HTMLElement | null => {
+        const texts = dir === 'prev' ? ['‹', '<', 'Prev', 'Previous'] : ['›', '>', 'Next'];
+        for (const t of texts) {
+          const b = buttonWithText(picker, t);
+          if (b) return b;
+        }
+        const hint = dir === 'prev' ? /prev|left/i : /next|right/i;
+        const own = (b: Element): string =>
+          ['class', 'aria-label', 'title', 'role'].map((a) => b.getAttribute(a) ?? '').join(' ');
+        const marked = (b: Element): boolean => {
+          if (!visible(b) || EXACT_TITLE.test(text(b))) return false;
+          const marks = [own(b), ...Array.from(b.querySelectorAll('[class]')).map(own)].join(' ');
+          return hint.test(marks);
+        };
+        // A button (or link) that says so; else any element that says so itself, such as gijgo's
+        // <div role="prev"><i class="gj-icon chevron-left">; a header cell around one only last
+        // (a click on the cell does not reach the button inside).
+        const button = Array.from(picker.querySelectorAll('button, a, [ng-click]')).find(marked);
+        if (button) return button as HTMLElement;
+        const element = Array.from(picker.querySelectorAll('*')).find(
+          (b) =>
+            b.tagName !== 'TH' && visible(b) && !EXACT_TITLE.test(text(b)) && hint.test(own(b)),
+        );
+        if (element) return element as HTMLElement;
+        return (
+          (Array.from(picker.querySelectorAll('th')).find(marked) as HTMLElement | undefined) ??
+          null
+        );
       };
       for (let i = 0; ; i += 1) {
         const now = shown();
         if (!now) return { ok: false, detail: 'calendar-title-not-found' };
         if (now.year === y && now.month === m) break;
-        if (i >= 400) return { ok: false, detail: 'calendar-did-not-reach-date' };
-        const label = now.year > y ? '«' : now.year < y ? '»' : now.month > m ? '‹' : '›';
-        const nav = buttonWithText(picker, label);
-        if (!nav) return { ok: false, detail: 'calendar-navigation-missing' };
-        nav.click();
-        await sleep(60);
+        if (i >= 1200) return { ok: false, detail: 'calendar-did-not-reach-date' };
+        // Whole years with « » when the calendar has them; otherwise month by month.
+        const yearButton = now.year !== y ? buttonWithText(picker, now.year > y ? '«' : '»') : null;
+        const nav =
+          yearButton ?? navButton(now.year * 12 + now.month > y * 12 + m ? 'prev' : 'next');
+        if (!nav) {
+          const header = Array.from(picker.querySelectorAll('*'))
+            .slice(0, 8)
+            .map(
+              (el) =>
+                `${el.tagName.toLowerCase()}[${['class', 'role'].map((a) => el.getAttribute(a) ?? '').join('|')}]`,
+            )
+            .join(' ');
+          return {
+            ok: false,
+            detail: `calendar-navigation-missing (calendar starts: ${header.slice(0, 200)})`,
+          };
+        }
+        press(nav);
+        await sleep(yearButton ? 60 : 40);
       }
       // The day: an element of the calendar whose text is exactly the day number and that is not
       // greyed out (days of the neighbouring months are).
@@ -393,23 +524,119 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           [String(d), String(d).padStart(2, '0')].includes(text(el)) &&
           !greyed(el),
       );
-      const day =
+      const cell =
         days.find((el) => el.tagName === 'BUTTON') ??
         days.find((el) => el.tagName === 'TD') ??
         days[0];
-      if (!day) return { ok: false, detail: 'day-not-found' };
-      (day as HTMLElement).click();
-      const box = () => first(root ?? document, command.input) as HTMLInputElement | null;
-      let set = await until(() => (box()?.value === expected ? true : null), 2500);
+      // Pressed on the number itself (the innermost element showing it): the press then reaches
+      // every element around it too. gijgo listens on the <div> inside the cell, not on the cell.
+      let day = cell;
+      for (let inner = day; inner;) {
+        day = inner;
+        inner = days.find((el) => el !== day && day!.contains(el));
+      }
+      if (!day)
+        return {
+          ok: false,
+          detail: `day-not-found (calendar shows ${shown()?.month}/${shown()?.year})`,
+        };
+      press(day);
+      let set = await until(() => (sameDate(box()?.value ?? '') ? true : null), 2500);
       if (!set) {
-        // Some calendars need OK after the day.
-        const ok = buttonWithText(picker, 'OK');
+        // Some calendars need OK (or Done) after the day.
+        const ok =
+          buttonWithText(picker, 'OK') ??
+          buttonWithText(picker, 'Ok') ??
+          buttonWithText(picker, 'Done');
         if (ok && visible(ok)) {
           ok.click();
-          set = await until(() => (box()?.value === expected ? true : null), 2500);
+          set = await until(() => (sameDate(box()?.value ?? '') ? true : null), 2500);
         }
       }
-      return set ? { ok: true } : { ok: false, detail: 'date-not-set' };
+      return set
+        ? { ok: true }
+        : {
+            ok: false,
+            detail: `date-not-set: box shows "${box()?.value ?? ''}", clicked ${describe(day)} in ${describe(picker).slice(0, 60)}, opened with ${describe(trigger)}`,
+          };
+    }
+    case 'setField': {
+      // A dropdown (option by value, AngularJS "string:" value, or visible text) or a box.
+      const find = (): HTMLSelectElement | HTMLInputElement | null => {
+        const root = scope(command.within);
+        const el = root ? first(root, command.selector) : null;
+        return el instanceof HTMLSelectElement || el instanceof HTMLInputElement ? el : null;
+      };
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const el = find();
+        if (!el) return { ok: false, detail: attempt === 0 ? 'not-found' : 'reset-by-page' };
+        let want = command.value;
+        if (el instanceof HTMLSelectElement) {
+          const option = Array.from(el.options).find(
+            (o) =>
+              o.value === command.value ||
+              o.value === `string:${command.value}` ||
+              o.value === `number:${command.value}` ||
+              o.text.trim() === command.value,
+          );
+          if (!option) return { ok: false, detail: 'option-missing' };
+          want = option.value;
+          el.focus();
+          el.value = want;
+        } else {
+          el.focus();
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+          if (setter?.set) setter.set.call(el, want);
+          else el.value = want;
+          fire(el, 'input');
+          fire(el, 'keyup');
+        }
+        fire(el, 'change');
+        el.blur();
+        await sleep(700);
+        if (find()?.value === want) return { ok: true };
+      }
+      return { ok: false, detail: 'reset-by-page' };
+    }
+    case 'check': {
+      const find = (): HTMLInputElement | null => {
+        const root = scope(command.within);
+        const el = root ? first(root, command.selector) : null;
+        return el instanceof HTMLInputElement ? el : null;
+      };
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const el = find();
+        if (!el) return { ok: false, detail: attempt === 0 ? 'not-found' : 'reset-by-page' };
+        if (el.checked !== command.checked) el.click();
+        await sleep(500);
+        if (find()?.checked === command.checked) return { ok: true };
+      }
+      return { ok: false, detail: 'reset-by-page' };
+    }
+    case 'readTable': {
+      // The first data row of the table in the pop-up: the label and the cell under the header
+      // that contains `column` (for example "Premium").
+      const found = await until(() => {
+        const root = scope(command.within);
+        const table = root ? (first(root, 'table') as HTMLTableElement | null) : null;
+        if (!table) return null;
+        const rows = Array.from(table.rows).filter((r) => visible(r));
+        const header = rows.find((r) =>
+          Array.from(r.cells).some((c) =>
+            text(c).toLowerCase().includes(command.column.toLowerCase()),
+          ),
+        );
+        if (!header) return null;
+        const index = Array.from(header.cells).findIndex((c) =>
+          text(c).toLowerCase().includes(command.column.toLowerCase()),
+        );
+        const data = rows.slice(rows.indexOf(header) + 1).find((r) => r.cells.length > index);
+        const value = data ? text(data.cells[index]!) : '';
+        return value ? { label: text(data!.cells[0]!), value } : null;
+      }, command.timeoutMs);
+      return found
+        ? { ok: true, value: found.value, label: found.label }
+        : { ok: false, detail: 'table-not-found' };
     }
     case 'errors': {
       const box = Array.from(document.querySelectorAll(DIALOGS)).find(

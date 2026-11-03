@@ -34,6 +34,7 @@ export interface FqfApi {
     run(request: {
       clientId: string;
       insurerId: string;
+      product: 'health' | 'motor';
       goodHealthConfirmed: boolean;
     }): Promise<AppResult<QuoteRunResultView>>;
   };

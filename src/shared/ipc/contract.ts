@@ -122,6 +122,11 @@ export const quoteRunResultSchema = z
     step: z.string().max(120).nullable(),
     message: z.string().max(1200),
     problems: z.array(z.string().max(400)).max(20),
+    /** The premium read from the insurer's page (motor). */
+    premium: z
+      .object({ label: z.string().max(200), amount: z.string().max(40) })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -173,7 +178,8 @@ export const ipcContract = {
       .object({
         clientId: entityIdSchema,
         insurerId: insurerIdSchema,
-        /** The advisor confirms, for this quote, every member's good health declaration. */
+        product: z.enum(['health', 'motor']),
+        /** Health: the advisor confirms, for this quote, every member's good health declaration. */
         goodHealthConfirmed: z.boolean(),
       })
       .strict(),

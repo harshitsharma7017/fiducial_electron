@@ -162,6 +162,7 @@ describe('the client store', () => {
         name: `Synthetic Client ${MARK}`,
         pincode: '560001',
         memberCount: 3,
+        hasVehicle: false,
         hasPreferences: true,
         updatedAt: '2026-11-02T10:00:00.000Z',
       },
@@ -561,6 +562,58 @@ describe('date of birth, gender and marital status (schema version 2)', () => {
       dateOfBirth: '1976-01-20',
       gender: 'female',
     });
+    store.close();
+  });
+});
+
+describe('vehicles for motor quotes (schema version 3)', () => {
+  const CAR = {
+    vehicleClass: 'private-car',
+    condition: 'pre-owned',
+    registrationDate: '2021-06-15',
+    zone: 'A',
+    idvRupees: 450000,
+    odDiscountPercent: 10,
+    cubicCapacityCc: 1197,
+    batteryOperated: false,
+    claimLastYear: false,
+    previousNcbPercent: 25,
+  };
+
+  it('saves a vehicle-only client (no health members) and reads it back', async () => {
+    const store = await open(place());
+    const saved = store.save(null, {
+      customer: { name: 'Synthetic Car Owner' },
+      pincode: '560001',
+      members: [],
+      vehicle: CAR,
+    } as never);
+    expect(store.get(saved.id)?.client).toEqual({
+      customer: { name: 'Synthetic Car Owner' },
+      pincode: '560001',
+      members: [],
+      vehicle: CAR,
+    });
+    expect(store.list()[0]).toMatchObject({ memberCount: 0, hasVehicle: true });
+    expect(quoteRequestFor(saved.client)).toBeNull();
+    store.close();
+  });
+
+  it('needs members or a vehicle, and rejects invalid vehicle details', async () => {
+    const store = await open(place());
+    const base = { customer: { name: 'X' }, pincode: '560001' };
+    expect(() => store.save(null, { ...base, members: [] })).toThrow();
+    for (const bad of [
+      { ...CAR, vehicleClass: 'spaceship' },
+      { ...CAR, zone: 'D' },
+      { ...CAR, idvRupees: 0 },
+      { ...CAR, previousNcbPercent: 30 },
+      { ...CAR, registrationDate: '2021-02-30' },
+      { ...CAR, extra: true },
+    ]) {
+      expect(() => store.save(null, { ...base, members: [], vehicle: bad } as never)).toThrow();
+    }
+    expect(store.list()).toEqual([]);
     store.close();
   });
 });

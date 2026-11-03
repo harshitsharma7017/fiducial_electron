@@ -29,6 +29,32 @@ const PASS = 'Synthetic-Pw-9f3a';
 const PASS_WITH_SYMBOLS = 'Synth@Pass#9! x';
 
 app.on('window-all-closed', () => {});
+app.on('render-process-gone', (_e, wc, details) =>
+  console.log(
+    `      renderer gone: ${details.reason} (exit ${details.exitCode}) url=${wc.getURL().slice(-60)}`,
+  ),
+);
+app.on('web-contents-created', (_e, wc) => {
+  wc.on('did-start-navigation', (d) => {
+    if (process.env.FQF_E2E_TRACE)
+      console.log(
+        `      nav ${wc.id} main=${d.isMainFrame} same=${d.isSameDocument} ${String(d.url).slice(-50)}`,
+      );
+  });
+  wc.on('destroyed', () => {
+    if (process.env.FQF_E2E_TRACE) console.log(`      destroyed ${wc.id}`);
+  });
+});
+app.on('child-process-gone', (_e, details) =>
+  console.log(`      process gone: ${details.type} ${details.reason} (exit ${details.exitCode})`),
+);
+// A harness error must fail the run, never leave it waiting.
+for (const event of ['unhandledRejection', 'uncaughtException']) {
+  process.on(event, (err) => {
+    console.log(`FAIL  harness error: ${err && err.message ? err.message : String(err)}`);
+    app.exit(1);
+  });
+}
 
 const CASES = [
   {
@@ -387,6 +413,9 @@ app.whenReady().then(async () => {
       problems.push('sum insured options missing');
     if (fields.find((f) => f.id === 'nm')?.label !== 'Proposer name')
       problems.push('field label missing');
+    const amounts = rec.pages.flatMap((p) => p.snapshot.money.map((m) => m.text));
+    if (!amounts.includes('10,462.00') || !amounts.includes('12345'))
+      problems.push(`plain premiums missing: ${JSON.stringify(amounts)}`);
     if (!rec.pages.some((p) => p.snapshot.money.some((m) => m.text.includes('12,345'))))
       problems.push('premium location missing');
     if (
@@ -549,8 +578,12 @@ app.whenReady().then(async () => {
     const calc = windows().find((w) =>
       w.webContents.getURL().includes('HealthPolicyNewQuote.html'),
     );
-    const state = calc
-      ? await calc.webContents.executeJavaScript(`(() => {
+    if (result.outcome !== 'ready') console.log(`      result: ${JSON.stringify(result)}`);
+    const state =
+      calc && !calc.isDestroyed()
+        ? await calc.webContents
+            .executeJavaScript(
+              `(() => {
           const M = 'healthPolicyData.HealthPolicyFormBean';
           const v = (s) => document.querySelector(s)?.value;
           const shown = (id) => !document.getElementById(id).classList.contains('hidden');
@@ -565,8 +598,10 @@ app.whenReady().then(async () => {
             children: [...document.querySelectorAll('#savedChildren input')].map((i) => i.value),
             userDetails: shown('userDetails'), checkPremium: window.__checkPremium === true,
           };
-        })()`)
-      : null;
+        })()`,
+            )
+            .catch((e) => ({ readError: String(e.message) }))
+        : null;
     const problems = [];
     if (result.outcome !== 'ready')
       problems.push(`outcome ${result.outcome} at ${result.step}: ${result.message}`);
@@ -601,6 +636,7 @@ app.whenReady().then(async () => {
     // United India's own ERRORS pop-up stops the run, with its message.
     const low = {
       ...couple,
+      members: couple.members.slice(0, 2), // the couple is enough to reach Get Quote
       preferences: { coverType: 'floater', sumInsuredPaise: 50000_00, tenureYears: 1 },
     };
     const refused = await runUiicHealthQuote({ windows, client: low, goodHealth: true, today });

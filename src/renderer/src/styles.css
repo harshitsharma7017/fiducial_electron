@@ -176,3 +176,7 @@ body {
 .member-row {
   flex-wrap: wrap;
 }
+
+.premium {
+  font-size: 1.1rem;
+}

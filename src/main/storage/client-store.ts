@@ -29,7 +29,7 @@ import type { StoreProblem } from './store-problems';
 
 const KEY_ENTRY = 'database-key';
 const KEY_HEX = /^[0-9a-f]{64}$/;
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /** Why the store could not be used. `code` is safe to show; `reason` is for logs and support. */
 export class ClientStoreError extends Error {
@@ -124,15 +124,25 @@ function migrate(db: Database.Database, store: DurableStore): void {
     `);
       d.pragma('user_version = 1');
     });
+  // Each step runs only on a database older than it, so any older version is brought up to date.
   // Version 2 (2 November 2026): date of birth and gender per member, proposer marital status.
-  store.commit((d) => {
-    d.exec(`
-      ALTER TABLE client ADD COLUMN proposer_marital_status TEXT;
-      ALTER TABLE client_member ADD COLUMN date_of_birth TEXT;
-      ALTER TABLE client_member ADD COLUMN gender TEXT;
-    `);
-    d.pragma('user_version = 2');
-  });
+  if (version < 2) {
+    store.commit((d) => {
+      d.exec(`
+        ALTER TABLE client ADD COLUMN proposer_marital_status TEXT;
+        ALTER TABLE client_member ADD COLUMN date_of_birth TEXT;
+        ALTER TABLE client_member ADD COLUMN gender TEXT;
+      `);
+      d.pragma('user_version = 2');
+    });
+  }
+  // Version 3 (2 November 2026): the client's vehicle, for motor quotes (validated JSON).
+  if (version < 3) {
+    store.commit((d) => {
+      d.exec('ALTER TABLE client ADD COLUMN vehicle_json TEXT;');
+      d.pragma('user_version = 3');
+    });
+  }
 }
 
 interface ClientRow {
@@ -143,6 +153,7 @@ interface ClientRow {
   notes: string | null;
   pincode: string;
   proposer_marital_status: string | null;
+  vehicle_json: string | null;
   cover_type: string | null;
   sum_insured_paise: number | null;
   tenure_years: number | null;
@@ -212,6 +223,7 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
       ...(row.proposer_marital_status !== null
         ? { proposerMaritalStatus: row.proposer_marital_status as MaritalStatus }
         : {}),
+      ...(row.vehicle_json !== null ? { vehicle: JSON.parse(row.vehicle_json) as unknown } : {}),
       ...(row.cover_type !== null && row.sum_insured_paise !== null && row.tenure_years !== null
         ? {
             preferences: {
@@ -241,7 +253,7 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
       (
         db
           .prepare(
-            `SELECT c.id, c.name, c.pincode, c.cover_type, c.updated_at,
+            `SELECT c.id, c.name, c.pincode, c.cover_type, c.updated_at, c.vehicle_json,
                     (SELECT count(*) FROM client_member m WHERE m.client_id = c.id) AS members
              FROM client c ORDER BY c.updated_at DESC, c.name`,
           )
@@ -251,6 +263,7 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
           pincode: string;
           cover_type: string | null;
           updated_at: string;
+          vehicle_json: string | null;
           members: number;
         }[]
       ).map((r) => ({
@@ -258,6 +271,7 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
         name: r.name,
         pincode: r.pincode,
         memberCount: r.members,
+        hasVehicle: r.vehicle_json !== null,
         hasPreferences: r.cover_type !== null,
         updatedAt: r.updated_at,
       })),
@@ -284,6 +298,7 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
           notes: c.notes ?? null,
           pincode: input.pincode,
           proposer_marital_status: input.proposerMaritalStatus ?? null,
+          vehicle_json: input.vehicle ? JSON.stringify(input.vehicle) : null,
           cover_type: p?.coverType ?? null,
           sum_insured_paise: p?.sumInsuredPaise ?? null,
           tenure_years: p?.tenureYears ?? null,
@@ -294,6 +309,7 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
           d.prepare(
             `UPDATE client SET name = @name, phone = @phone, email = @email, notes = @notes,
                pincode = @pincode, proposer_marital_status = @proposer_marital_status,
+               vehicle_json = @vehicle_json,
                cover_type = @cover_type, sum_insured_paise = @sum_insured_paise,
                tenure_years = @tenure_years, updated_at = @updated_at WHERE id = @id`,
           ).run(values);
@@ -301,9 +317,10 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
         } else {
           d.prepare(
             `INSERT INTO client (id, name, phone, email, notes, pincode, proposer_marital_status,
-               cover_type, sum_insured_paise, tenure_years, created_at, updated_at)
+               vehicle_json, cover_type, sum_insured_paise, tenure_years, created_at, updated_at)
              VALUES (@id, @name, @phone, @email, @notes, @pincode, @proposer_marital_status,
-               @cover_type, @sum_insured_paise, @tenure_years, @created_at, @updated_at)`,
+               @vehicle_json, @cover_type, @sum_insured_paise, @tenure_years, @created_at,
+               @updated_at)`,
           ).run(values);
         }
         const member = d.prepare(

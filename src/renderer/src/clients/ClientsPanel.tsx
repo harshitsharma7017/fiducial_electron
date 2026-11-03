@@ -12,6 +12,13 @@ import {
 } from '../../../shared/contracts/client';
 import { RELATIONSHIPS, type Relationship } from '../../../shared/contracts/customer';
 import type { ClientListResponse, QuoteRunResultView } from '../../../shared/ipc/contract';
+import {
+  EMPTY_VEHICLE,
+  VehicleFields,
+  vehicleFromRecord,
+  vehicleToInput,
+  type VehicleDraft,
+} from './VehicleFields';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
 
 const RELATIONSHIP_LABELS: Record<Relationship, string> = {
@@ -50,6 +57,8 @@ interface Draft {
   maritalStatus: MaritalStatus | '';
   members: MemberDraft[];
   withPreferences: boolean;
+  withVehicle: boolean;
+  vehicle: VehicleDraft;
   coverType: 'individual' | 'floater';
   sumInsuredRupees: string;
   tenureYears: string;
@@ -65,6 +74,8 @@ const EMPTY: Draft = {
   maritalStatus: '',
   members: [{ relationship: 'self', age: '', dateOfBirth: '', gender: '' }],
   withPreferences: true,
+  withVehicle: false,
+  vehicle: EMPTY_VEHICLE,
   coverType: 'floater',
   sumInsuredRupees: '',
   tenureYears: '1',
@@ -84,12 +95,15 @@ function toInput(d: Draft): ClientInputRaw {
     },
     pincode: d.pincode,
     ...(d.maritalStatus ? { proposerMaritalStatus: d.maritalStatus } : {}),
-    members: d.members.map((m) => ({
-      relationship: m.relationship,
-      age: Number(m.age),
-      ...(m.dateOfBirth ? { dateOfBirth: m.dateOfBirth } : {}),
-      ...(m.gender ? { gender: m.gender } : {}),
-    })),
+    // A vehicle-only client may leave the member rows empty: those rows are not saved.
+    members: d.members
+      .filter((m) => !d.withVehicle || m.age.trim() !== '')
+      .map((m) => ({
+        relationship: m.relationship,
+        age: Number(m.age),
+        ...(m.dateOfBirth ? { dateOfBirth: m.dateOfBirth } : {}),
+        ...(m.gender ? { gender: m.gender } : {}),
+      })),
     ...(d.withPreferences
       ? {
           preferences: {
@@ -99,6 +113,7 @@ function toInput(d: Draft): ClientInputRaw {
           },
         }
       : {}),
+    ...(d.withVehicle ? { vehicle: vehicleToInput(d.vehicle) as never } : {}),
   };
 }
 
@@ -155,6 +170,8 @@ export function ClientsPanel(): React.JSX.Element | null {
         gender: m.gender ?? '',
       })),
       withPreferences: !!client.preferences,
+      withVehicle: !!client.vehicle,
+      vehicle: client.vehicle ? vehicleFromRecord(client.vehicle) : EMPTY_VEHICLE,
       coverType: client.preferences?.coverType ?? 'floater',
       sumInsuredRupees: client.preferences
         ? String(client.preferences.sumInsuredPaise / PAISE_PER_RUPEE)
@@ -222,7 +239,17 @@ export function ClientsPanel(): React.JSX.Element | null {
                   <span className={c.hasPreferences ? 'badge saved' : 'badge'}>
                     {c.hasPreferences ? 'Ready to quote' : 'Quote details missing'}
                   </span>
-                  {c.hasPreferences && (
+                  {c.hasVehicle && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQuoting(quoting === `motor:${c.id}` ? null : `motor:${c.id}`)
+                      }
+                    >
+                      Motor quote
+                    </button>
+                  )}
+                  {c.hasPreferences && c.memberCount > 0 && (
                     <button
                       type="button"
                       onClick={() => setQuoting(quoting === c.id ? null : c.id)}
@@ -250,6 +277,7 @@ export function ClientsPanel(): React.JSX.Element | null {
                 </div>
               </div>
               {quoting === c.id && <QuotePanel clientId={c.id} />}
+              {quoting === `motor:${c.id}` && <MotorQuotePanel clientId={c.id} />}
             </li>
           ))}
         </ul>
@@ -371,7 +399,7 @@ function ClientForm(props: {
               inputMode="numeric"
               placeholder="Age"
               maxLength={3}
-              required
+              required={!d.withVehicle}
               readOnly={!!m.dateOfBirth}
             />
             <select
@@ -384,7 +412,7 @@ function ClientForm(props: {
               <option value="female">Female</option>
               <option value="transgender">Transgender</option>
             </select>
-            {d.members.length > 1 && (
+            {(d.members.length > 1 || d.withVehicle) && (
               <button
                 type="button"
                 onClick={() => set({ members: d.members.filter((_, j) => j !== i) })}
@@ -426,6 +454,17 @@ function ClientForm(props: {
           </button>
         )}
       </fieldset>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={d.withVehicle}
+          onChange={(e) => set({ withVehicle: e.target.checked })}
+        />
+        Add a vehicle (for motor quotes)
+      </label>
+      {d.withVehicle && (
+        <VehicleFields value={d.vehicle} onChange={(vehicle) => set({ vehicle })} />
+      )}
       <label className="check">
         <input
           type="checkbox"
@@ -523,7 +562,12 @@ function QuotePanel(props: { clientId: string }): React.JSX.Element {
     setBusy(true);
     setResult(null);
     const r = await window.fqf.quotes
-      .run({ clientId: props.clientId, insurerId: 'united-india', goodHealthConfirmed: goodHealth })
+      .run({
+        clientId: props.clientId,
+        insurerId: 'united-india',
+        product: 'health',
+        goodHealthConfirmed: goodHealth,
+      })
       .catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
@@ -558,6 +602,65 @@ function QuotePanel(props: { clientId: string }): React.JSX.Element {
       )}
       {result && 'outcome' in result && (
         <div role="status">
+          <p className={result.outcome === 'ready' ? undefined : 'error'}>
+            {result.step ? `${result.step}: ` : ''}
+            {result.message}
+          </p>
+          {result.problems.length > 0 && (
+            <ul>
+              {result.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Gets United India's motor premium for a saved client's vehicle. */
+function MotorQuotePanel(props: { clientId: string }): React.JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    const r = await window.fqf.quotes
+      .run({
+        clientId: props.clientId,
+        insurerId: 'united-india',
+        product: 'motor',
+        goodHealthConfirmed: false,
+      })
+      .catch(() => null);
+    setBusy(false);
+    setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
+  };
+  return (
+    <div className="quote-panel">
+      <p className="insurer-note">
+        <strong>United India, motor (Package Policy).</strong> Sign in to United India and leave it
+        on its home page. The app opens the Motor Premium Calculator, fills it for this vehicle and
+        reads the premium.
+      </p>
+      <div className="insurer-actions">
+        <button type="button" disabled={busy} onClick={() => void run()}>
+          {busy ? 'Getting the premium…' : 'Get United India motor premium'}
+        </button>
+      </div>
+      {result && 'error' in result && (
+        <p className="error" role="alert">
+          {result.error}
+        </p>
+      )}
+      {result && 'outcome' in result && (
+        <div role="status">
+          {result.premium && (
+            <p className="premium">
+              Premium (including GST): <strong>₹{result.premium.amount}</strong>
+            </p>
+          )}
           <p className={result.outcome === 'ready' ? undefined : 'error'}>
             {result.step ? `${result.step}: ` : ''}
             {result.message}

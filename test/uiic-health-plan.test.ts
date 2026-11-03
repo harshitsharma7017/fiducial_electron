@@ -167,7 +167,12 @@ describe('the quote service', () => {
       logger: createLogger([]),
       now: () => TODAY,
     });
-  const request = { clientId: 'c1', insurerId: 'united-india', goodHealthConfirmed: true };
+  const request = {
+    clientId: 'c1',
+    insurerId: 'united-india',
+    product: 'health' as const,
+    goodHealthConfirmed: true,
+  };
 
   it('is off unless the automation features are switched on', async () => {
     await expect(service(false).run(request)).rejects.toMatchObject({ code: 'UNSUPPORTED_FLOW' });

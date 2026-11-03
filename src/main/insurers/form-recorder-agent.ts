@@ -186,16 +186,33 @@ export function formRecorderAgent(): RecorderDrain {
       .map((h) => clip((h as HTMLElement).innerText, 120) ?? '')
       .filter(Boolean)
       .slice(0, 40);
+    // Amounts: text with a currency sign, or a plain number (3 digits or more, optionally with
+    // separators and decimals) whose row or label talks about a premium (portals often show
+    // "Total Premium | 12,345.00" without a sign). Read-only boxes count too: some portals show
+    // the premium in one. Long ID-like numbers are masked later by the redaction.
     const money: RecordedSnapshot['money'] = [];
+    const CURRENCY = /(₹|\bRs\.?|\bINR)\s*[\d,]+/i;
+    const AMOUNT =
+      /^[^\d]{0,6}\d{1,3}(?:[,\s]?\d{2,3})*(?:\.\d{1,2})?[^\d]{0,6}$|^\d{3,}(?:\.\d{1,2})?$/;
+    const PREMIUM_WORDS = /premium|total|net|gst|tax|od\b|tp\b|idv|payable|amount|cover/i;
     for (const el of Array.from(document.querySelectorAll('body *'))) {
-      if (money.length >= 40) break;
-      if (el.children.length > 0 || !visible(el)) continue;
-      const text = (el as HTMLElement).innerText ?? '';
-      if (text.length > 80 || !/(₹|\bRs\.?|\bINR)\s*[\d,]+/i.test(text)) continue;
+      if (money.length >= 60) break;
+      if (!visible(el)) continue;
+      const isBox = el instanceof HTMLInputElement && (el.readOnly || el.disabled);
+      if (el.children.length > 0 && !isBox) continue;
+      const text = (isBox ? el.value : ((el as HTMLElement).innerText ?? '')).trim();
+      if (!text || text.length > 80) continue;
+      const row = el.closest('tr, li, .row, .form-group, div') ?? el.parentElement;
+      const context = clip(row?.textContent ?? '', 160) ?? '';
+      const label = isBox ? (labelOf(el) ?? '') : '';
+      const looksLikeAmount =
+        CURRENCY.test(text) || (AMOUNT.test(text) && /\d{3}/.test(text.replace(/[,\s]/g, '')));
+      if (!looksLikeAmount) continue;
+      if (!CURRENCY.test(text) && !PREMIUM_WORDS.test(`${context} ${label}`)) continue;
       money.push({
         path: cssPath(el),
         text: clip(text, 80) ?? '',
-        context: clip(el.parentElement?.parentElement?.innerText ?? '', 160) ?? '',
+        context: clip(`${label} ${context}`, 160) ?? '',
       });
     }
     const messages: string[] = [];

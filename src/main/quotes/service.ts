@@ -4,12 +4,13 @@ import type { BrowserWindow } from 'electron';
 import type { ClientService } from '../clients/service';
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
-import { runUiicHealthQuote, type QuoteRunResult } from './run-uiic-health';
+import { runUiicHealthQuote, runUiicMotorQuote, type QuoteRunResult } from './run-uiic-health';
 
 export interface QuoteService {
   run(request: {
     clientId: string;
     insurerId: string;
+    product: 'health' | 'motor';
     goodHealthConfirmed: boolean;
   }): Promise<QuoteRunResult>;
 }
@@ -23,7 +24,7 @@ export function createQuoteService(deps: {
 }): QuoteService {
   let running = false;
   return {
-    run: async ({ clientId, insurerId, goodHealthConfirmed }) => {
+    run: async ({ clientId, insurerId, product, goodHealthConfirmed }) => {
       if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
       if (insurerId !== 'united-india') {
         return {
@@ -44,12 +45,17 @@ export function createQuoteService(deps: {
       const record = await deps.clients.get(clientId);
       running = true;
       try {
-        const result = await runUiicHealthQuote({
-          windows: () => deps.windowsOf(insurerId),
-          client: record.client,
-          goodHealth: goodHealthConfirmed,
-          today: (deps.now ?? (() => new Date()))(),
-        });
+        const today = (deps.now ?? (() => new Date()))();
+        const windows = () => deps.windowsOf(insurerId);
+        const result =
+          product === 'motor'
+            ? await runUiicMotorQuote({ windows, client: record.client, today })
+            : await runUiicHealthQuote({
+                windows,
+                client: record.client,
+                goodHealth: goodHealthConfirmed,
+                today,
+              });
         deps.logger.log(result.outcome === 'failed' ? 'warn' : 'info', 'quote.run', {
           insurer: insurerId,
           quoteOutcome: result.outcome,

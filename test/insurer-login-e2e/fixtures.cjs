@@ -137,7 +137,8 @@ module.exports = {
          const data = await r.json();
          document.getElementById('q').style.display = 'none';
          history.pushState({}, '', '/quote#/result');
-         document.getElementById('result').innerHTML = '<h3>Your premium</h3><div class="plan">Health Plus<span class="amt">' + data.premium + '</span></div>';
+         document.getElementById('result').innerHTML = '<h3>Your premium</h3><div class="plan">Health Plus<span class="amt">' + data.premium + '</span></div>' +
+           '<table><tr><td>Net Premium</td><td>10,462.00</td></tr></table><label for="tp">Total Payable</label><input id="tp" readonly value="12345">';
        });
      </script>`,
   ),
