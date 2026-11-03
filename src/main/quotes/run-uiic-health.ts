@@ -3,15 +3,20 @@
 // each step of the plan, and after every step checks for United India's ERRORS pop-up.
 // - Health (plan: uiic-health.ts): stops at the "User Details" pop-up for the advisor.
 // - Motor (plan: uiic-motor.ts): reads the premium from "Premium Details" and returns it.
-// - Family Medicare e-proposal (plan: uiic-fm-proposal.ts): fills sections I-II and stops; the
-//   advisor fills the rest and saves it. The app never saves or submits a proposal.
+// - Family Medicare and Individual Health e-proposals (plan: uiic-health-proposal.ts): fill
+//   sections I-II and stop; the advisor fills the rest and saves it. The app never saves or submits
+//   a proposal.
 import type { WebContents } from 'electron';
 import type { PortalPage } from '../insurers/portal-host';
 import type { ClientInput } from '../../shared/contracts/client';
 import type { Vehicle } from '../../shared/contracts/vehicle';
 import { quotePageAgent, type PageOp, type PageOpResult } from './page-ops';
 import { planUiicHealthQuote, type PlanStep } from './uiic-health';
-import { planUiicFamilyMedicareProposal } from './uiic-fm-proposal';
+import {
+  planUiicHealthProposal,
+  UIIC_PROPOSAL_FORMS,
+  type UiicProposalForm,
+} from './uiic-health-proposal';
 import { planUiicMotorQuote } from './uiic-motor';
 
 const AGENT_SOURCE = quotePageAgent.toString();
@@ -217,26 +222,27 @@ export async function runUiicMotorQuote(deps: {
   };
 }
 
-export async function runUiicFamilyMedicareProposal(deps: {
+export async function runUiicHealthProposal(deps: {
   windows: () => PortalPage[];
+  form: UiicProposalForm;
   client: ClientInput;
   /** The client's Aadhaar number, read from the vault just now; never returned or logged. */
   aadhaar: string | null;
 }): Promise<QuoteRunResult> {
-  const plan = planUiicFamilyMedicareProposal(deps.client, { aadhaar: deps.aadhaar });
+  const form = UIIC_PROPOSAL_FORMS[deps.form];
+  const plan = planUiicHealthProposal(deps.client, { form: deps.form, aadhaar: deps.aadhaar });
   if (!plan.ok) return refused('This client cannot be filled in automatically yet.', plan.problems);
   const { result, notes } = await runInCalculator({
     windows: deps.windows,
-    tile: 'Family Medicare E-Proposal Form',
-    calculatorPath: '/CustomerAppLive/data/ProposalFMhome.html',
+    tile: form.tile,
+    calculatorPath: form.path,
     steps: plan.steps,
   });
   if (result) return result;
   return {
     outcome: 'ready',
     step: null,
-    message:
-      'Family Medicare proposal: the proposer details and nominee relationship are filled. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.',
+    message: `${form.name} proposal: the proposer details and nominee relationship are filled. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`,
     problems: [],
     toDo: [...plan.byHand, ...notes],
   };

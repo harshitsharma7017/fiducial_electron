@@ -1,16 +1,14 @@
-// Runs the United India Family Medicare e-proposal automation (bundled real code) against the
-// local copy of the form, and checks what was filled, what is left to the advisor, and that
-// nothing was saved. Exits 0 only if every check passes. Started by run-motor.mjs fm-proposal.
+// Runs the United India health e-proposal automation (bundled real code) against local copies of
+// the Family Medicare and Individual Health forms, and checks what was filled, what is left to the
+// advisor, and that nothing was saved. Exits 0 only if every check passes. Started by
+// run-motor.mjs proposals.
 const http = require('node:http');
 const { app, BrowserWindow, session } = require('electron');
-const FIXTURES = require('./uiic-fm-proposal.cjs');
+const FIXTURES = require('./uiic-health-proposal.cjs');
 
-const {
-  installNavigationPolicy,
-  createLogger,
-  runUiicFamilyMedicareProposal,
-  setSessionPolicy,
-} = require(process.env.FQF_LOGIN_E2E_BUNDLE);
+const { installNavigationPolicy, createLogger, runUiicHealthProposal, setSessionPolicy } = require(
+  process.env.FQF_LOGIN_E2E_BUNDLE,
+);
 
 app.on('window-all-closed', () => {});
 for (const event of ['unhandledRejection', 'uncaughtException']) {
@@ -159,6 +157,18 @@ CASES.push(
   },
 );
 
+// Individual Health: the same sections I and II on its own page, with other radio ids and its
+// intermediary's section numbered X (recording of 3 November 2026).
+const FORMS = [
+  { form: 'family-medicare', name: 'Family Medicare', page: 'ProposalFMhome.html', cases: CASES },
+  {
+    form: 'individual-health',
+    name: 'Individual Health',
+    page: 'ProposalIHPhome.html',
+    cases: [CASES[0], CASES[1], CASES[2]],
+  },
+];
+
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 app.whenReady().then(async () => {
@@ -167,36 +177,43 @@ app.whenReady().then(async () => {
   installNavigationPolicy(createLogger([]));
   let failures = 0;
 
-  for (const c of CASES) {
-    const ses = session.fromPartition(`uiic-fm-${Math.random()}`);
-    setSessionPolicy(ses, {
-      navigate: (url) => url.startsWith(origin + '/'),
-      popup: (url) =>
-        url.startsWith(origin + '/')
-          ? { show: true, webPreferences: { session: ses, sandbox: true, contextIsolation: true } }
-          : null,
-    });
-    const home = new BrowserWindow({
-      show: true,
-      webPreferences: { session: ses, sandbox: true, contextIsolation: true },
-    });
-    await home.loadURL(origin + '/GCWebPortal/login/HomeAction.do');
-    const windows = () => [
-      home,
-      ...BrowserWindow.getAllWindows().filter(
-        (w) => w !== home && !w.isDestroyed() && w.webContents.session === ses,
-      ),
-    ];
-    const result = await runUiicFamilyMedicareProposal({
-      windows,
-      client: c.client,
-      aadhaar: c.aadhaar ?? null,
-    });
-    const form = windows().find((w) => w.webContents.getURL().includes('ProposalFMhome.html'));
-    const state = form
-      ? await form.webContents
-          .executeJavaScript(
-            `(() => {
+  let total = 0;
+  for (const { form: formId, name, page, cases } of FORMS)
+    for (const c of cases) {
+      total += 1;
+      const ses = session.fromPartition(`uiic-fm-${Math.random()}`);
+      setSessionPolicy(ses, {
+        navigate: (url) => url.startsWith(origin + '/'),
+        popup: (url) =>
+          url.startsWith(origin + '/')
+            ? {
+                show: true,
+                webPreferences: { session: ses, sandbox: true, contextIsolation: true },
+              }
+            : null,
+      });
+      const home = new BrowserWindow({
+        show: true,
+        webPreferences: { session: ses, sandbox: true, contextIsolation: true },
+      });
+      await home.loadURL(origin + '/GCWebPortal/login/HomeAction.do');
+      const windows = () => [
+        home,
+        ...BrowserWindow.getAllWindows().filter(
+          (w) => w !== home && !w.isDestroyed() && w.webContents.session === ses,
+        ),
+      ];
+      const result = await runUiicHealthProposal({
+        windows,
+        form: formId,
+        client: c.client,
+        aadhaar: c.aadhaar ?? null,
+      });
+      const form = windows().find((w) => w.webContents.getURL().includes(page));
+      const state = form
+        ? await form.webContents
+            .executeJavaScript(
+              `(() => {
         const v = (s) => document.querySelector(s)?.value;
         const r = (n) => document.querySelector('input[name="' + n + '"]:checked')?.value ?? null;
         return {
@@ -211,33 +228,33 @@ app.whenReady().then(async () => {
           errorsShown: !document.getElementById('errors').classList.contains('hidden'), saved: window.__saved,
         };
       })()`,
-          )
-          .catch((e) => ({ readError: e.message }))
-      : null;
-    for (const w of windows()) w.destroy();
+            )
+            .catch((e) => ({ readError: e.message }))
+        : null;
+      for (const w of windows()) w.destroy();
 
-    const problems = [];
-    if (result.outcome !== 'ready')
-      problems.push(
-        `outcome ${result.outcome} at ${result.step}: ${result.message} ${JSON.stringify(result.problems)}`,
+      const problems = [];
+      if (result.outcome !== 'ready')
+        problems.push(
+          `outcome ${result.outcome} at ${result.step}: ${result.message} ${JSON.stringify(result.problems)}`,
+        );
+      for (const [k, v] of Object.entries(c.expect))
+        if (!state || !same(state[k], v))
+          problems.push(`${k}: ${JSON.stringify(state?.[k])} (expected ${JSON.stringify(v)})`);
+      if (c.exactToDo && !same(result.toDo, c.exactToDo))
+        problems.push(
+          `to do ${JSON.stringify(result.toDo)} (expected ${JSON.stringify(c.exactToDo)})`,
+        );
+      for (const item of c.toDo)
+        if (!(result.toDo ?? []).some((t) => t.startsWith(item)))
+          problems.push(`to do lacks "${item}": ${JSON.stringify(result.toDo)}`);
+      console.log(
+        `${problems.length ? 'FAIL' : 'pass'}  United India ${name}: ${c.name}${problems.length ? `\n      ${problems.join('\n      ')}` : ''}`,
       );
-    for (const [k, v] of Object.entries(c.expect))
-      if (!state || !same(state[k], v))
-        problems.push(`${k}: ${JSON.stringify(state?.[k])} (expected ${JSON.stringify(v)})`);
-    if (c.exactToDo && !same(result.toDo, c.exactToDo))
-      problems.push(
-        `to do ${JSON.stringify(result.toDo)} (expected ${JSON.stringify(c.exactToDo)})`,
-      );
-    for (const item of c.toDo)
-      if (!(result.toDo ?? []).some((t) => t.startsWith(item)))
-        problems.push(`to do lacks "${item}": ${JSON.stringify(result.toDo)}`);
-    console.log(
-      `${problems.length ? 'FAIL' : 'pass'}  United India Family Medicare: ${c.name}${problems.length ? `\n      ${problems.join('\n      ')}` : ''}`,
-    );
-    failures += problems.length ? 1 : 0;
-  }
+      failures += problems.length ? 1 : 0;
+    }
 
-  console.log(`\n${CASES.length - failures} of ${CASES.length} proposal checks passed`);
+  console.log(`\n${total - failures} of ${total} proposal checks passed`);
   server.close();
   app.exit(failures ? 1 : 0);
 });

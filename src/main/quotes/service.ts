@@ -1,5 +1,6 @@
 // Quote runs behind the IPC channel. Off unless the automation features are switched on. United
-// India only so far (health and motor calculators, the Family Medicare e-proposal); other insurers
+// India only so far (health and motor calculators, the Family Medicare and Individual Health
+// e-proposals); other insurers
 // are refused with a reason. Motor quotes are for a saved vehicle, the others for a saved client.
 import type { ClientService } from '../clients/service';
 import type { PortalPage } from '../insurers/portal-host';
@@ -7,7 +8,7 @@ import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
 import type { QuoteRunRequest } from '../../shared/ipc/contract';
 import {
-  runUiicFamilyMedicareProposal,
+  runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
   type QuoteRunResult,
@@ -61,9 +62,10 @@ export function createQuoteService(deps: {
         let result: QuoteRunResult;
         if (subject.kind === 'vehicle') {
           result = await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
-        } else if (request.product === 'fm-proposal') {
-          result = await runUiicFamilyMedicareProposal({
+        } else if (request.product === 'fm-proposal' || request.product === 'ihp-proposal') {
+          result = await runUiicHealthProposal({
             windows,
+            form: request.product === 'fm-proposal' ? 'family-medicare' : 'individual-health',
             client: subject.record.client,
             aadhaar: await deps.clients.aadhaarFor(subject.record.id),
           });

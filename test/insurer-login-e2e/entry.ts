@@ -7,7 +7,7 @@ import { insurerLoginAgent } from '../../src/main/insurers/login-agent';
 import { createLogger } from '../../src/main/logging/logger';
 import { createPortalHost } from '../../src/main/insurers/portal-host';
 import {
-  runUiicFamilyMedicareProposal,
+  runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
 } from '../../src/main/quotes/run-uiic-health';
@@ -24,7 +24,7 @@ export {
   installNavigationPolicy,
   keyboardFill,
   keyboardTargetFor,
-  runUiicFamilyMedicareProposal,
+  runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
   setSessionPolicy,

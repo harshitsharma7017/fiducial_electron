@@ -1,5 +1,9 @@
-// A local copy of United India's Family Medicare e-proposal, built from the advisor's recording of
-// 3 November 2026 (field ids, AngularJS models, option lists and pop-up texts as recorded):
+// Local copies of United India's health e-proposals, built from the advisor's recordings of
+// 3 November 2026 (field ids, AngularJS models, option lists and pop-up texts as recorded): Family
+// Medicare and Individual Health share sections I and II; they differ in the page, the ids of the
+// "filled by" and New / Fetch radios (Radio4 is "agent" on one and "New" on the other), the
+// gender radios' ids (all "proposerGender" on Individual Health) and the intermediary's section
+// (XI on Family Medicare, X on Individual Health):
 // - the "Important Instructions" pop-up on opening;
 // - "Proposal filled by" customer / agent. Customer shows a short form to send the proposal to the
 //   client (Is High Risk Customer?, name, mobile, e-mail, Send To Customer); agent shows New /
@@ -31,7 +35,30 @@ const NOMINEES = [
   'Sister',
 ];
 
-const page = `<!doctype html><html><head><meta charset="utf-8"><title>Family Medicare Policy</title>
+const FORMS = {
+  'family-medicare': {
+    title: 'Family Medicare Policy',
+    ids: { customer: 'Radio3', agent: 'Radio4', newer: 'Radio5', fetch: 'Radio7' },
+    female: 'proposerGenderFemale',
+    transgender: 'proposerGenderTransgender',
+    intermediary: 'XI. Declaration from Intermediary',
+  },
+  'individual-health': {
+    title: 'Individual Health Policy',
+    ids: { customer: 'proposalfilledBy', agent: 'Radio7', newer: 'Radio4', fetch: 'Radio5' },
+    female: 'proposerGender',
+    transgender: 'proposerGender',
+    intermediary: 'X. Declaration from Intermediary',
+  },
+};
+
+const formPage = ({
+  title,
+  ids,
+  female,
+  transgender,
+  intermediary,
+}) => `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
 <style>.hidden{display:none}.modal-content{border:1px solid #888;padding:8px;margin:8px;background:#fff}td{padding:2px}</style></head><body>
 <div id="instructions" class="modal hidden"><div class="modal-content">
   <h4>Important Instructions**</h4><p>Please Be ready with the following documents to fill up the electronic proposal Form.</p>
@@ -41,8 +68,8 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Family Med
   <h4>ERRORS</h4><p id="errText"></p><button type="button" name="choosePlan" id="errClose">Close</button>
 </div></div>
 
-<label><input type="radio" id="Radio3" name="proposalfilledBy" ng-model="formData.proposalFilledBy" value="customer"> Customer</label>
-<label><input type="radio" id="Radio4" name="proposalfilledBy" ng-model="formData.proposalFilledBy" value="agent"> Agent</label>
+<label><input type="radio" id="${ids.customer}" name="proposalfilledBy" ng-model="formData.proposalFilledBy" value="customer"> Customer</label>
+<label><input type="radio" id="${ids.agent}" name="proposalfilledBy" ng-model="formData.proposalFilledBy" value="agent"> Agent</label>
 <div id="customerPart" class="hidden">
 <h4>I. Proposer Details</h4>
 <select id="Text1" name="High Customer" ng-model="formData.ynHighRisk"><option value="">Select</option><option value="Yes">Yes</option><option value="No">No</option></select>
@@ -55,8 +82,8 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Family Med
 <button type="button">Send To Customer</button>
 </div>
 <div id="agentPart" class="hidden">
-<label><input type="radio" id="Radio5" name="chooseProposal" ng-model="formData.chooseProposal" value="new"> New</label>
-<label><input type="radio" id="Radio7" name="chooseProposal" ng-model="formData.chooseProposal" value="fetchdata"> Fetch details</label>
+<label><input type="radio" id="${ids.newer}" name="chooseProposal" ng-model="formData.chooseProposal" value="new"> New</label>
+<label><input type="radio" id="${ids.fetch}" name="chooseProposal" ng-model="formData.chooseProposal" value="fetchdata"> Fetch details</label>
 </div>
 
 <div id="proposal" class="hidden">
@@ -68,8 +95,8 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Family Med
     <input id="proposerName" name="proposerName" ng-model="formData.proposerName">
     <table><tr><td><div><div><button type="button" class="cal"></button></div></div><input id="proposerDOB" name="proposerDOB" readonly ng-model="ngModel"></td></tr></table>
     <label><input type="radio" id="proposerGender" name="gender" ng-model="formData.proposerGender" value="Male"> Male</label>
-    <label><input type="radio" id="proposerGenderFemale" name="gender" ng-model="formData.proposerGender" value="Female"> Female</label>
-    <label><input type="radio" id="proposerGenderTransgender" name="gender" ng-model="formData.proposerGender" value="Transgender"> Transgender</label>
+    <label><input type="radio" id="${female}" name="gender" ng-model="formData.proposerGender" value="Female"> Female</label>
+    <label><input type="radio" id="${transgender}" name="gender" ng-model="formData.proposerGender" value="Transgender"> Transgender</label>
     <label><input type="radio" id="proposerMaritalStatus" name="maritalStatus" ng-model="formData.proposerMaritalStatus" value="Single"> Single</label>
     <label><input type="radio" id="proposerMaritalStatusMarried" name="maritalStatus" ng-model="formData.proposerMaritalStatus" value="Married"> Married</label>
     <select id="OCCUPATION_CODE" name="occupation" ng-model="formData.CommonCustomerBean.occupation"><option value="">Select</option>${OCCUPATIONS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
@@ -95,7 +122,8 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Family Med
     <input id="nomineeContactNo" ng-model="formData.nomineeContactNo">
   </div>
   <a href="#">III. Coverage Details</a>
-  <a href="#" id="tab11">XI. Declaration from Intermediary</a>
+  <a href="#">IX. Vernacular Declaration</a>
+  <a href="#" id="tab11">${intermediary}</a>
   <div id="sec11" class="hidden">
     <input id="IntermediaryDeclarationDate" readonly ng-model="formData.IntmSignDate">
     <input id="IntermediaryDeclarationPlace" ng-model="formData.IntmSignPlace">
@@ -113,9 +141,10 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Family Med
   $('#sec1 select[ng-model="formData.ynHighRisk"]').addEventListener('change', (e) => show('mainHighRiskType', e.target.value === 'Yes'));
   $('select[name="High Customer"]').addEventListener('change', (e) => show('highRiskType', e.target.value === 'Yes'));
   document.querySelectorAll('input[type=radio]').forEach((r) => r.addEventListener('change', () => {
-    show('customerPart', $('#Radio3').checked);
-    show('agentPart', $('#Radio4').checked);
-    if ($('#Radio4').checked && $('#Radio5').checked) setTimeout(() => show('proposal', true), 300);
+    const chosen = (name) => $('input[name="' + name + '"]:checked')?.value;
+    show('customerPart', chosen('proposalfilledBy') === 'customer');
+    show('agentPart', chosen('proposalfilledBy') === 'agent');
+    if (chosen('proposalfilledBy') === 'agent' && chosen('chooseProposal') === 'new') setTimeout(() => show('proposal', true), 300);
   }));
   // The PIN code lookup fills city and state.
   $('#proposerPINCode').addEventListener('change', (e) => setTimeout(() => {
@@ -135,7 +164,7 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Family Med
     show('sec2', true);
     if (missing.length) { $('#errText').textContent = missing.join(' '); show('errors', true); }
   });
-  // Opening section XI: United India lists what the sections before it lack (here the coverage).
+  // Opening the intermediary's section: United India lists what the sections before it lack (here the coverage).
   $('#tab11').addEventListener('click', (e) => {
     e.preventDefault();
     show('sec11', true);
@@ -180,9 +209,11 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Family Med
 </script></body></html>`;
 
 const home = `<!doctype html><html><head><meta charset="utf-8"><title>UIIC - Intermediary Portal Home</title></head><body>
-  <div><a href="/CustomerAppLive/data/ProposalFMhome.html#/ProposalFormMainBody" target="_blank">Family Medicare E-Proposal Form</a></div></body></html>`;
+  <div><a href="/CustomerAppLive/data/ProposalFMhome.html#/ProposalFormMainBody" target="_blank">Family Medicare E-Proposal Form</a></div>
+  <div><a href="/CustomerAppLive/data/ProposalIHPhome.html#/ProposalFormMainBody" target="_blank">Individual Health E-Proposal Form</a></div></body></html>`;
 
 module.exports = {
   '/GCWebPortal/login/HomeAction.do': home,
-  '/CustomerAppLive/data/ProposalFMhome.html': page,
+  '/CustomerAppLive/data/ProposalFMhome.html': formPage(FORMS['family-medicare']),
+  '/CustomerAppLive/data/ProposalIHPhome.html': formPage(FORMS['individual-health']),
 };

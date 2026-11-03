@@ -52,11 +52,14 @@ calendar, pop-ups, and the child rows' shared radio name): the full flow for a c
 children, and a stop on United India's error message. **Not yet run on
 the live portal.**
 
-## United India: Family Medicare e-proposal (filled, never saved)
+## United India: Family Medicare and Individual Health e-proposals (filled, never saved)
 
-Automated as recorded on 3 November 2026: sections I, II and XI only. The advisor records the other
-sections later. From the signed-in home page the app:
-1. Opens the **Family Medicare E-Proposal Form** (a pop-up) and closes **Important Instructions**.
+Both automated as recorded on 3 November 2026. They share sections I and II; only the intermediary's
+declaration differs, section XI on Family Medicare and section X on Individual Health. The app
+fills sections I, II and the intermediary's declaration; the advisor records the other sections
+later. A client has a button for each form. From the signed-in home page the app:
+1. Opens the **Family Medicare E-Proposal Form** or the **Individual Health E-Proposal Form** (a
+   pop-up, shown as a tab) and closes **Important Instructions**.
 2. Chooses **Filled by: agent**, then a **New** proposal. "Filled by customer" opens a short form
    that sends the proposal to the client; the app never uses it.
 3. **I. Proposer Details:**
@@ -71,7 +74,8 @@ sections later. From the signed-in home page the app:
 4. **II. Nomination:** the nominee's name, relationship, address and contact number. Opening the
    section may make United India show its ERRORS pop-up for what section I still lacks. The app
    closes the pop-up once it has faded out, keeps the message (each one once), and goes on.
-5. **XI. Declaration from Intermediary:** the intermediary's place of signing, opened the same way.
+5. **Declaration from Intermediary** (XI or X): the intermediary's place of signing, opened the
+   same way.
 6. **Stops.** The result lists what the advisor still fills by hand, with United India's messages:
    - anything the client record lacks (Aadhaar, the high-risk type, state, city or village, and
      so on);
@@ -79,8 +83,10 @@ sections later. From the signed-in home page the app:
 
 It never presses Save As Draft or Submit.
 
-**Verified:** against a local copy of the form built from the recording (same ids, duplicate ids,
-models, option lists, calendar and ERRORS pop-up). Checked for:
+**Verified:** against local copies of both forms built from the recordings (same ids, duplicate
+ids, models, option lists, calendar and ERRORS pop-up). The two forms give the same ids to
+different radios, so the app picks them by value. Checked for (Family Medicare all, Individual
+Health the first three):
 - a full client with Aadhaar: every field is filled, and only United India's message about section
   III is left;
 - a sparse client: what it lacks is listed;

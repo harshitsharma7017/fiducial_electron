@@ -1,7 +1,8 @@
 // One United India automation against its local copy, in Electron. Contacts no insurer: every
 // page is served from 127.0.0.1.
 // Usage: node test/insurer-login-e2e/run-motor.mjs            (motor calculator)
-//        node test/insurer-login-e2e/run-motor.mjs fm-proposal (Family Medicare e-proposal)
+//        node test/insurer-login-e2e/run-motor.mjs proposals   (Family Medicare and Individual
+//                                                              Health e-proposals)
 //        node test/insurer-login-e2e/run-motor.mjs tabs        (insurer pages as tabs of one window)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -36,7 +37,7 @@ delete env.ELECTRON_RUN_AS_NODE;
 delete env.NODE_OPTIONS;
 const harness =
   {
-    'fm-proposal': 'fm-proposal-harness.cjs',
+    proposals: 'proposal-harness.cjs',
     tabs: 'tabs-harness.cjs',
   }[process.argv[2]] ?? 'motor-harness.cjs';
 const child = spawn(electron, [join(HERE, harness)], { env, stdio: 'inherit' });

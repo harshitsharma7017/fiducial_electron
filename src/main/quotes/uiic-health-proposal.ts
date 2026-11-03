@@ -1,8 +1,12 @@
-// United India's Family Medicare e-proposal: what the app fills for a saved client, step by step.
+// United India's health e-proposals: what the app fills for a saved client, step by step.
 //
-// From the advisor's recording of 3 November 2026 (sections I and II only; the advisor records the
-// other sections later). The app fills and stops: it never presses Save As Draft or Submit, and the
-// advisor checks the whole form before saving it (decision of 3 November 2026).
+// Two forms, the same first sections (field ids, models and pop-ups as recorded):
+// - Family Medicare (recording of 3 November 2026, ProposalFMhome.html);
+// - Individual Health (recording of 3 November 2026, ProposalIHPhome.html), where the
+//   intermediary's declaration is section X instead of XI.
+// Sections I and II only (the advisor records the other sections later). The app fills and stops:
+// it never presses Save As Draft or Submit, and the advisor checks the whole form before saving it
+// (decision of 3 November 2026).
 // - Opening: the "Important Instructions" pop-up is closed.
 // - Proposal filled by the agent, then a new proposal (not "fetch details"). ("Filled by customer"
 //   shows a short form that sends the proposal to the client instead: never used here.)
@@ -10,7 +14,7 @@
 //   status, occupation, PAN, e-insurance account number, PIN code, village, address, landline,
 //   mobile, e-mail and CKYC number.
 // - II. Nomination: the nominee's name, relationship, address and contact number.
-// - XI. Declaration from Intermediary: the intermediary's place of signing.
+// - Declaration from Intermediary (XI or X): the intermediary's place of signing.
 // The Aadhaar number is filled when the client has one saved (kept apart in the secret vault and
 // passed in for this run only). Never filled by the app: anything the client's record does not
 // hold. They are listed for the advisor, with United India's own messages about missing
@@ -43,14 +47,36 @@ const UIIC_HIGH_RISK_TYPE: Record<HighRiskType, string> = {
   'trust-ngo': '4',
 };
 
-export type FmProposalPlan =
+export type UiicProposalForm = 'family-medicare' | 'individual-health';
+
+/** What differs between the forms, as recorded. */
+export const UIIC_PROPOSAL_FORMS: Record<
+  UiicProposalForm,
+  { name: string; tile: string; path: string; intermediarySection: string }
+> = {
+  'family-medicare': {
+    name: 'Family Medicare',
+    tile: 'Family Medicare E-Proposal Form',
+    path: '/CustomerAppLive/data/ProposalFMhome.html',
+    intermediarySection: 'XI. Declaration from Intermediary',
+  },
+  'individual-health': {
+    name: 'Individual Health',
+    tile: 'Individual Health E-Proposal Form',
+    path: '/CustomerAppLive/data/ProposalIHPhome.html',
+    intermediarySection: 'X. Declaration from Intermediary',
+  },
+};
+
+export type HealthProposalPlan =
   | { ok: true; steps: PlanStep[]; /** Left for the advisor to fill by hand. */ byHand: string[] }
   | { ok: false; problems: string[] };
 
-export function planUiicFamilyMedicareProposal(
+export function planUiicHealthProposal(
   client: ClientInput,
-  options: { aadhaar?: string | null } = {},
-): FmProposalPlan {
+  options: { form: UiicProposalForm; aadhaar?: string | null },
+): HealthProposalPlan {
+  const form = UIIC_PROPOSAL_FORMS[options.form];
   const self = client.members.find((m) => m.relationship === 'self');
   if (!self) {
     return {
@@ -200,12 +226,12 @@ export function planUiicFamilyMedicareProposal(
   fill("Nominee's address", '#nomineeAddress', p.nomineeAddress, "nominee's address");
   optional("Nominee's contact number", '#nomineeContactNo', p.nomineeContact);
 
-  // XI. Declaration from Intermediary: opened the same way (United India may list what the
-  // sections before it lack).
+  // Declaration from Intermediary: opened the same way (United India may list what the sections
+  // before it lack).
   if (p.intermediaryPlace) {
     add(
       'Open Declaration from Intermediary',
-      { op: 'clickLink', text: 'XI. Declaration from Intermediary' },
+      { op: 'clickLink', text: form.intermediarySection },
       { closeErrors: true },
     );
     add('Declaration shown', { op: 'pause', ms: 800 }, { closeErrors: true });

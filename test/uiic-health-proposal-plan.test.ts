@@ -1,8 +1,11 @@
-// United India Family Medicare e-proposal: what the app fills, what it leaves to the advisor, and
-// that it never saves or submits.
+// United India health e-proposals (Family Medicare, Individual Health): what the app fills, what it
+// leaves to the advisor, and that it never saves or submits.
 import { describe, expect, it } from 'vitest';
 import type { PageOp } from '../src/main/quotes/page-ops';
-import { planUiicFamilyMedicareProposal } from '../src/main/quotes/uiic-fm-proposal';
+import {
+  planUiicHealthProposal,
+  type UiicProposalForm,
+} from '../src/main/quotes/uiic-health-proposal';
 import { clientInputSchema } from '../src/shared/contracts/client';
 
 const FULL = {
@@ -19,8 +22,13 @@ const FULL = {
   },
 };
 
-function plan(change: Record<string, unknown> = {}, aadhaar: string | null = null) {
-  const result = planUiicFamilyMedicareProposal(clientInputSchema.parse({ ...FULL, ...change }), {
+function plan(
+  change: Record<string, unknown> = {},
+  aadhaar: string | null = null,
+  form: UiicProposalForm = 'family-medicare',
+) {
+  const result = planUiicHealthProposal(clientInputSchema.parse({ ...FULL, ...change }), {
+    form,
     aadhaar,
   });
   if (!result.ok) throw new Error(result.problems.join('; '));
@@ -36,7 +44,7 @@ const checks = (list: PageOp[]) =>
     .filter((o): o is Extract<PageOp, { op: 'check' }> => o.op === 'check')
     .map((o) => o.selector);
 
-describe('planUiicFamilyMedicareProposal', () => {
+describe('planUiicHealthProposal', () => {
   it('fills the first part, the proposer details and the nominee relationship', () => {
     const list = ops();
     expect(valueOf(list, '#OCCUPATION_CODE')).toBe('Software Professional');
@@ -186,6 +194,23 @@ describe('planUiicFamilyMedicareProposal', () => {
       ...FULL,
       members: [{ relationship: 'spouse', age: 38 }],
     });
-    expect(planUiicFamilyMedicareProposal(client).ok).toBe(false);
+    for (const form of ['family-medicare', 'individual-health'] as const) {
+      expect(planUiicHealthProposal(client, { form }).ok).toBe(false);
+    }
+  });
+
+  it('fills Individual Health the same way, opening its section X for the intermediary', () => {
+    const proposal = { ...FULL.proposal, intermediaryPlace: 'Bengaluru' };
+    const fm = plan({ proposal }, '999941057058');
+    const ihp = plan({ proposal }, '999941057058', 'individual-health');
+    const links = (r: typeof fm) =>
+      r.steps.flatMap((s) => (s.op.op === 'clickLink' ? [s.op.text] : []));
+    expect(links(ihp)).toEqual(['II. Nomination', 'X. Declaration from Intermediary']);
+    expect(links(fm)).toEqual(['II. Nomination', 'XI. Declaration from Intermediary']);
+    // Apart from that section's name, the same steps in the same order.
+    const rest = (r: typeof fm) => JSON.stringify(r.steps.filter((s) => s.op.op !== 'clickLink'));
+    expect(rest(ihp)).toBe(rest(fm));
+    expect(ihp.byHand).toEqual(fm.byHand);
+    expect(JSON.stringify(ihp.steps)).not.toMatch(/Save As Draft|Submit|saveDraft/);
   });
 });

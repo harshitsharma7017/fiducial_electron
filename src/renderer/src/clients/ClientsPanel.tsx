@@ -337,14 +337,20 @@ export function ClientsPanel(): React.JSX.Element | null {
                   <span className={c.hasPreferences ? 'badge saved' : 'badge'}>
                     {c.hasPreferences ? 'Ready to quote' : 'Quote details missing'}
                   </span>
-                  {c.memberCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setQuoting(quoting === `fm:${c.id}` ? null : `fm:${c.id}`)}
-                    >
-                      Family Medicare proposal
-                    </button>
-                  )}
+                  {c.memberCount > 0 &&
+                    PROPOSAL_FORMS.map((f) => (
+                      <button
+                        key={f.product}
+                        type="button"
+                        onClick={() =>
+                          setQuoting(
+                            quoting === `${f.product}:${c.id}` ? null : `${f.product}:${c.id}`,
+                          )
+                        }
+                      >
+                        {f.name} proposal
+                      </button>
+                    ))}
                   {c.hasPreferences && c.memberCount > 0 && (
                     <button
                       type="button"
@@ -373,7 +379,12 @@ export function ClientsPanel(): React.JSX.Element | null {
                 </div>
               </div>
               {quoting === c.id && <QuotePanel clientId={c.id} />}
-              {quoting === `fm:${c.id}` && <FmProposalPanel clientId={c.id} />}
+              {PROPOSAL_FORMS.map(
+                (f) =>
+                  quoting === `${f.product}:${c.id}` && (
+                    <ProposalPanel key={f.product} clientId={c.id} form={f} />
+                  ),
+              )}
             </li>
           ))}
         </ul>
@@ -880,8 +891,18 @@ function ProposalFields(props: {
   );
 }
 
-/** Fills United India's Family Medicare e-proposal (sections I-II) for a saved client. */
-function FmProposalPanel(props: { clientId: string }): React.JSX.Element {
+/** United India's health e-proposals the app fills (sections I-II), never saving them. */
+const PROPOSAL_FORMS = [
+  { product: 'fm-proposal', name: 'Family Medicare' },
+  { product: 'ihp-proposal', name: 'Individual Health' },
+] as const;
+
+/** Fills one of United India's health e-proposals (sections I-II) for a saved client. */
+function ProposalPanel(props: {
+  clientId: string;
+  form: (typeof PROPOSAL_FORMS)[number];
+}): React.JSX.Element {
+  const { form } = props;
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
   const run = async () => {
@@ -891,7 +912,7 @@ function FmProposalPanel(props: { clientId: string }): React.JSX.Element {
       .run({
         clientId: props.clientId,
         insurerId: 'united-india',
-        product: 'fm-proposal',
+        product: form.product,
         goodHealthConfirmed: false,
       })
       .catch(() => null);
@@ -903,14 +924,14 @@ function FmProposalPanel(props: { clientId: string }): React.JSX.Element {
   return (
     <div className="quote-panel">
       <p className="insurer-note">
-        <strong>United India, Family Medicare e-proposal.</strong> Sign in to United India and leave
-        it on its home page. The app opens the e-proposal form and fills the proposer details and
+        <strong>United India, {form.name} e-proposal.</strong> Sign in to United India and leave it
+        on its home page. The app opens the e-proposal form and fills the proposer details and
         nominee relationship, then stops. It never saves or submits the proposal: you complete the
         rest, check it, and press Save As Draft yourself.
       </p>
       <div className="insurer-actions">
         <button type="button" disabled={busy} onClick={() => void run()}>
-          {busy ? 'Filling United India…' : 'Fill Family Medicare proposal'}
+          {busy ? 'Filling United India…' : `Fill ${form.name} proposal`}
         </button>
       </div>
       {result && 'error' in result && (
