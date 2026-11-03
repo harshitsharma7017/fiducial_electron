@@ -1,5 +1,6 @@
 // Quote runs behind the IPC channel. Off unless the automation features are switched on. United
-// India only so far (health and motor calculators, the health e-proposals); other insurers
+// India only so far (health and motor calculators, the health and Overseas Travel e-proposals);
+// other insurers
 // are refused with a reason. Motor quotes are for a saved vehicle, the others for a saved client.
 import type { ClientService } from '../clients/service';
 import type { PortalPage } from '../insurers/portal-host';
@@ -10,6 +11,7 @@ import {
   runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
+  runUiicTravelProposal,
   type QuoteRunResult,
 } from './run-uiic-health';
 import type { UiicProposalForm } from './uiic-health-proposal';
@@ -70,6 +72,14 @@ export function createQuoteService(deps: {
         let result: QuoteRunResult;
         if (subject.kind === 'vehicle') {
           result = await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
+        } else if (request.product === 'travel-proposal') {
+          result = await runUiicTravelProposal({
+            windows,
+            client: subject.record.client,
+            trip: request.trip,
+            aadhaar: await deps.clients.aadhaarFor(subject.record.id),
+            today,
+          });
         } else if (request.product !== 'health' && request.product !== 'motor') {
           result = await runUiicHealthProposal({
             windows,

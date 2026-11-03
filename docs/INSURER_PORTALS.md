@@ -103,6 +103,55 @@ two):
 
 Nothing is ever saved. **Not yet run on the live portal.**
 
+## United India: Overseas Travel Insurance e-proposal (filled, premium read, never saved)
+
+Automated as recorded on 3 November 2026 (`/CustomerAppLive/data/ProposalOTIhome.html`). A client
+has an **Overseas Travel proposal** button. The advisor enters the trip for that run: destination,
+sum insured, start date, days, and optionally the insured's occupation and passport number. The trip
+and passport number are used for that proposal only: never saved, logged or returned. The insured is
+the client's proposer ("Self"). From the signed-in home page the app:
+1. Opens the **Overseas Travel Insurance E-Proposal Form** (a tab), chooses **Filled by: agent**,
+   then a **New proposal**.
+2. **I. General Information:**
+   - Purpose (Business & Holiday, the only one listed), then destination.
+   - Plan, by sum insured: plans B1–B4 for Worldwide, A1–A3 (up to 2,50,000) excluding USA and
+     Canada.
+   - Travel start date (calendar) and days.
+3. **II. Proposer Information:**
+   - Is High Risk Customer? and its type.
+   - Title, worked out from gender, age and marital status. United India then sets the gender. A
+     widowed or divorced woman's title is left to the advisor.
+   - Name, PIN code, and state, district and village by name after the lookup.
+   - Address, landline, mobile, e-mail, e-insurance account number, Aadhaar (when saved), PAN and CKYC
+     number.
+4. **III. Insured Information:**
+   - Relationship **Self**: United India copies the title and name.
+   - Occupation, date of birth (calendar), marital status and passport number.
+   - The nominee. Relations the form does not list (in-laws, brother, sister) become **Others**.
+5. **IX. Declaration from Intermediary:** the intermediary's place of signing. The hidden "filled by
+   customer" form has a box with the same id; the visible one is filled.
+6. **VIII. Premium Details:** presses **View Premium** and reads the total premium (including GST).
+   If United India first lists what is missing, no premium is read and its message is listed.
+7. **Stops**, showing the premium and listing what the advisor still does. The app never touches:
+   - **IV. Medical History** and **V. Declaration**: the client's own answers and consent;
+   - signatures and documents (uploads);
+   - the payment mode;
+   - anything the record or trip lacks.
+
+It never presses Save As Draft or Submit. Opening a section may show United India's ERRORS pop-up;
+it is closed and its message kept, as on the health forms.
+
+**Verified:** against a local copy of the form built from the recording (same ids and duplicate ids,
+lists loaded one after another, calendars, Self copying the proposer, ERRORS pop-ups, View
+Premium). Checked for:
+- a full client and trip: every field filled and the premium read, with the medical answers and
+  payment untouched;
+- excluding USA and Canada without a passport number: plan A3, no premium, and United India's
+  reason listed;
+- a sparse client: what it lacks is listed.
+
+Nothing is ever saved. **Not yet run on the live portal.**
+
 ## What it does
 
 The advisor saves each insurer's user ID and password once. When they open that insurer's portal

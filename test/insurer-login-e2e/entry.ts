@@ -10,6 +10,7 @@ import {
   runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
+  runUiicTravelProposal,
 } from '../../src/main/quotes/run-uiic-health';
 import {
   installNavigationPolicy,
@@ -27,5 +28,6 @@ export {
   runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
+  runUiicTravelProposal,
   setSessionPolicy,
 };

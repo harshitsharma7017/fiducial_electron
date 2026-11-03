@@ -7,6 +7,8 @@
 //   uiic-health-proposal.ts): fill
 //   sections I-II and stop; the advisor fills the rest and saves it. The app never saves or submits
 //   a proposal.
+// - Overseas Travel e-proposal (plan: uiic-travel-proposal.ts): fills the trip, proposer, insured
+//   and intermediary, presses View Premium and reads the premium if shown, and stops.
 import type { WebContents } from 'electron';
 import type { PortalPage } from '../insurers/portal-host';
 import type { ClientInput } from '../../shared/contracts/client';
@@ -19,6 +21,8 @@ import {
   type UiicProposalForm,
 } from './uiic-health-proposal';
 import { planUiicMotorQuote } from './uiic-motor';
+import { planUiicTravelProposal } from './uiic-travel-proposal';
+import type { TravelTrip } from '../../shared/contracts/travel';
 
 const AGENT_SOURCE = quotePageAgent.toString();
 const WORLD_ID = 1803;
@@ -253,6 +257,42 @@ export async function runUiicHealthProposal(deps: {
     step: null,
     message: `${form.name} proposal: the proposer details and nominee relationship are filled. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`,
     problems: [],
+    toDo: [...plan.byHand, ...notes],
+  };
+}
+
+export async function runUiicTravelProposal(deps: {
+  windows: () => PortalPage[];
+  client: ClientInput;
+  /** Entered for this run; the passport number is never returned or logged. */
+  trip: TravelTrip;
+  /** The client's Aadhaar number, read from the vault just now; never returned or logged. */
+  aadhaar: string | null;
+  today: Date;
+}): Promise<QuoteRunResult> {
+  const plan = planUiicTravelProposal(deps.client, deps.trip, {
+    aadhaar: deps.aadhaar,
+    today: deps.today,
+  });
+  if (!plan.ok) return refused('This trip cannot be filled in automatically.', plan.problems);
+  const { result, last, notes } = await runInCalculator({
+    windows: deps.windows,
+    tile: 'Overseas Travel Insurance E-Proposal Form',
+    calculatorPath: '/CustomerAppLive/data/ProposalOTIhome.html',
+    steps: plan.steps,
+  });
+  if (result) return result;
+  // The premium box may hold a placeholder (0) until View Premium works it out.
+  const amount = last?.value && Number(last.value.replace(/,/g, '')) > 0 ? last.value : null;
+  const label = 'Total Premium (including GST)';
+  return {
+    outcome: 'ready',
+    step: null,
+    message: amount
+      ? `Overseas Travel proposal filled. United India's total premium (including GST): ${amount}. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`
+      : 'Overseas Travel proposal filled; United India did not show the premium yet (see its messages below). Fill in what is listed below, press View Premium, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.',
+    problems: [],
+    ...(amount ? { premium: { label, amount } } : {}),
     toDo: [...plan.byHand, ...notes],
   };
 }

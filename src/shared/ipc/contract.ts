@@ -15,6 +15,7 @@ import {
   vehicleSummarySchema,
 } from '../contracts/vehicle';
 import { insurerIdSchema } from '../contracts/insurer';
+import { travelTripSchema } from '../contracts/travel';
 import { FILL_OUTCOMES } from '../insurers/fill-outcomes';
 import {
   hasControlCharacter,
@@ -160,8 +161,8 @@ export type QuoteRunResultView = z.infer<typeof quoteRunResultSchema>;
 
 /**
  * A quote run: motor quotes are for a saved vehicle; health quotes and the health e-proposals
- * (Family Medicare, Individual Health, Arogya Sanjeevani, Super Top-up: filled, never saved or
- * submitted) are for a saved client.
+ * (Family Medicare, Individual Health, Arogya Sanjeevani, Super Top-up, Overseas Travel: filled,
+ * never saved or submitted) are for a saved client.
  */
 export const quoteRunRequestSchema = z.discriminatedUnion('product', [
   z
@@ -174,6 +175,15 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       insurerId: insurerIdSchema,
       /** Health: the advisor confirms, for this quote, every member's good health declaration. */
       goodHealthConfirmed: z.boolean(),
+    })
+    .strict(),
+  // Overseas Travel Insurance e-proposal: the trip is entered for this run, never saved.
+  z
+    .object({
+      product: z.literal('travel-proposal'),
+      clientId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      trip: travelTripSchema,
     })
     .strict(),
 ]);

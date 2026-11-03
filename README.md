@@ -5,8 +5,9 @@ Desktop application for insurance advisors (Windows and macOS). Requirements are
 **Status (3 November 2026):** insurer portal automation behind a switch, off by default:
 - sign-in autofill for password-based insurer portals, with 12-hour sessions that survive restarts;
 - saved clients and, separately, saved vehicles, in an encrypted database;
-- United India: health and motor premium calculators, and the Family Medicare, Individual Health,
-  Arogya Sanjeevani and Super Top-up e-proposals (filled, never saved or submitted).
+- United India: health and motor premium calculators; the Family Medicare, Individual Health,
+  Arogya Sanjeevani and Super Top-up e-proposals; and the Overseas Travel e-proposal, with its
+  premium (all filled, never saved or submitted).
 
 Tested against local copies of the insurer pages; live runs are done by the advisor. Details:
 [docs/INSURER_PORTALS.md](docs/INSURER_PORTALS.md) and [docs/CLIENTS.md](docs/CLIENTS.md).

@@ -3,6 +3,7 @@
 // Usage: node test/insurer-login-e2e/run-motor.mjs            (motor calculator)
 //        node test/insurer-login-e2e/run-motor.mjs proposals   (Family Medicare and Individual
 //                                                              Health e-proposals)
+//        node test/insurer-login-e2e/run-motor.mjs travel      (Overseas Travel e-proposal)
 //        node test/insurer-login-e2e/run-motor.mjs tabs        (insurer pages as tabs of one window)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -38,6 +39,7 @@ delete env.NODE_OPTIONS;
 const harness =
   {
     proposals: 'proposal-harness.cjs',
+    travel: 'travel-harness.cjs',
     tabs: 'tabs-harness.cjs',
   }[process.argv[2]] ?? 'motor-harness.cjs';
 const child = spawn(electron, [join(HERE, harness)], { env, stdio: 'inherit' });

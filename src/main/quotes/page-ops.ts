@@ -77,6 +77,8 @@ export type PageOp =
   | { op: 'setField'; selector: string; value: string; within?: string }
   /** Ticks or unticks a checkbox (or picks a radio) by selector; re-checked like select. */
   | { op: 'check'; selector: string; checked: boolean; within?: string }
+  /** Reads a box's value once it has one (for example a premium the page works out). */
+  | { op: 'readValue'; selector: string; timeoutMs: number }
   /** Reads the first data row of the pop-up's table: its label and the cell under `column`. */
   | { op: 'readTable'; within: string; column: string; timeoutMs: number }
   | {
@@ -98,7 +100,7 @@ export interface PageOpResult {
   detail?: string;
   /** For "errors": the text of a visible ERRORS pop-up. */
   errors?: string;
-  /** For "readTable": the cell read, and the row's label. */
+  /** For "readTable": the cell read, and the row's label; for "readValue": the value. */
   value?: string;
   label?: string;
 }
@@ -654,6 +656,14 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       return found
         ? { ok: true, value: found.value, label: found.label }
         : { ok: false, detail: 'table-not-found' };
+    }
+    case 'readValue': {
+      const value = await until(() => {
+        const el = first(document, command.selector) as HTMLInputElement | null;
+        const v = el?.value?.trim() ?? '';
+        return v ? v : null;
+      }, command.timeoutMs);
+      return value ? { ok: true, value } : { ok: false, detail: 'empty' };
     }
     case 'errors': {
       const box = Array.from(document.querySelectorAll(DIALOGS)).find(

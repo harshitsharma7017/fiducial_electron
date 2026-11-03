@@ -7,6 +7,7 @@
 // ../vehicles/VehiclesPanel.tsx.
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { TravelProposalPanel } from './TravelProposalPanel';
 import {
   ageOn,
   HIGH_RISK_TYPES,
@@ -351,6 +352,16 @@ export function ClientsPanel(): React.JSX.Element | null {
                         {f.name} proposal
                       </button>
                     ))}
+                  {c.memberCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQuoting(quoting === `travel:${c.id}` ? null : `travel:${c.id}`)
+                      }
+                    >
+                      Overseas Travel proposal
+                    </button>
+                  )}
                   {c.hasPreferences && c.memberCount > 0 && (
                     <button
                       type="button"
@@ -385,6 +396,7 @@ export function ClientsPanel(): React.JSX.Element | null {
                     <ProposalPanel key={f.product} clientId={c.id} form={f} />
                   ),
               )}
+              {quoting === `travel:${c.id}` && <TravelProposalPanel clientId={c.id} />}
             </li>
           ))}
         </ul>
