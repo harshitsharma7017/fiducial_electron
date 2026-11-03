@@ -59,7 +59,8 @@ const TONE_ICON: Record<Tone, IconName> = {
 };
 
 // ---------------------------------------------------------------------------------------------
-// Entry: wraps the existing home screen and adds a development-tools launcher beneath it.
+// Entry: hands the development-tools launcher to the home screen, which shows it on its
+// Development page.
 // ---------------------------------------------------------------------------------------------
 
 // The end-to-end workflow demo (synthetic census, simulated insurers, the real M3 engine). It is
@@ -68,7 +69,11 @@ const WorkflowApp = lazy(() =>
   import('./workflow/WorkflowApp').then((module) => ({ default: module.WorkflowApp })),
 );
 
-export function DevQuoteComparison({ home }: { home: ReactNode }): React.JSX.Element {
+export function DevQuoteComparison({
+  home,
+}: {
+  home: (launcher: ReactNode) => ReactNode;
+}): React.JSX.Element {
   const [view, setView] = useState<'home' | 'comparison' | 'workflow'>('home');
   const launcherRef = useRef<HTMLButtonElement>(null);
   const workflowLauncherRef = useRef<HTMLButtonElement>(null);
@@ -118,47 +123,48 @@ export function DevQuoteComparison({ home }: { home: ReactNode }): React.JSX.Ele
 
   return (
     <>
-      {home}
-      <aside className="qc-launcher" aria-label="Development tools">
-        <section className="qc-launcher-card" aria-labelledby={headingId}>
-          <div>
-            <p className="qc-launcher-eyebrow">Development tools</p>
-            <h2 id={headingId}>Quote Comparison demo</h2>
-            <p className="qc-launcher-text">
-              Explore the comparison engine with synthetic quotes. Available in development builds
-              only.
-            </p>
-          </div>
-          <button
-            ref={launcherRef}
-            type="button"
-            className="qc-btn qc-btn-primary"
-            onClick={() => setView('comparison')}
-          >
-            Open Quote Comparison
-            <Icon name="arrow-right" />
-          </button>
-        </section>
-        <section className="qc-launcher-card" aria-labelledby={workflowHeadingId}>
-          <div>
-            <p className="qc-launcher-eyebrow">Development tools</p>
-            <h2 id={workflowHeadingId}>End-to-end workflow demo</h2>
-            <p className="qc-launcher-text">
-              Census, quote request, simulated insurer jobs, comparison and report, with synthetic
-              data. No insurer is contacted. Available in development builds only.
-            </p>
-          </div>
-          <button
-            ref={workflowLauncherRef}
-            type="button"
-            className="qc-btn qc-btn-primary"
-            onClick={() => setView('workflow')}
-          >
-            Open workflow demo
-            <Icon name="arrow-right" />
-          </button>
-        </section>
-      </aside>
+      {home(
+        <aside className="qc-launcher" aria-label="Development tools">
+          <section className="qc-launcher-card" aria-labelledby={headingId}>
+            <div>
+              <p className="qc-launcher-eyebrow">Development tools</p>
+              <h2 id={headingId}>Quote Comparison demo</h2>
+              <p className="qc-launcher-text">
+                Explore the comparison engine with synthetic quotes. Available in development builds
+                only.
+              </p>
+            </div>
+            <button
+              ref={launcherRef}
+              type="button"
+              className="qc-btn qc-btn-primary"
+              onClick={() => setView('comparison')}
+            >
+              Open Quote Comparison
+              <Icon name="arrow-right" />
+            </button>
+          </section>
+          <section className="qc-launcher-card" aria-labelledby={workflowHeadingId}>
+            <div>
+              <p className="qc-launcher-eyebrow">Development tools</p>
+              <h2 id={workflowHeadingId}>End-to-end workflow demo</h2>
+              <p className="qc-launcher-text">
+                Census, quote request, simulated insurer jobs, comparison and report, with synthetic
+                data. No insurer is contacted. Available in development builds only.
+              </p>
+            </div>
+            <button
+              ref={workflowLauncherRef}
+              type="button"
+              className="qc-btn qc-btn-primary"
+              onClick={() => setView('workflow')}
+            >
+              Open workflow demo
+              <Icon name="arrow-right" />
+            </button>
+          </section>
+        </aside>,
+      )}
     </>
   );
 }

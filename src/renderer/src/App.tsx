@@ -1,10 +1,11 @@
 // M2 shell: proves the secured window, the typed bridge and IPC end to end. Product screens
 // (new quote, results, history, settings) arrive in M6 per IMPLEMENTATION_PLAN.
-import { Suspense, lazy, useEffect, useState } from 'react';
-import type { AppInfo } from '../../shared/ipc/contract';
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
 import { ClientsPanel } from './clients/ClientsPanel';
 import { VehiclesPanel } from './vehicles/VehiclesPanel';
 import { InsurerPortals } from './insurers/InsurerPortals';
+import { AppShell, type ViewId } from './shell/AppShell';
+import { Overview, type AppStatus } from './shell/Overview';
 
 // DEVELOPMENT ONLY: the M3 Quote Comparison demo with synthetic data. It wraps the home screen
 // and adds its own launcher, so all of its text lives in the dev chunk. `import.meta.env.DEV` is
@@ -30,13 +31,8 @@ const PortalDemoGate =
       )
     : null;
 
-type Status =
-  | { state: 'loading' }
-  | { state: 'ready'; info: AppInfo }
-  | { state: 'error'; message: string; reference?: string };
-
 export function App(): React.JSX.Element {
-  const [status, setStatus] = useState<Status>({ state: 'loading' });
+  const [status, setStatus] = useState<AppStatus>({ state: 'loading' });
 
   useEffect(() => {
     let active = true;
@@ -63,55 +59,92 @@ export function App(): React.JSX.Element {
     };
   }, []);
 
-  const home = (
-    <main className="shell">
-      <h1>Fiducial Quote Fetcher</h1>
-      <p className="lead">Foundation build. Quote features are added in later milestones.</p>
-      <section aria-labelledby="about-heading" className="panel">
-        <h2 id="about-heading">About this build</h2>
-        <div role="status" aria-live="polite">
-          {status.state === 'loading' && <p>Checking the application…</p>}
-          {status.state === 'ready' && (
-            <dl className="facts">
-              <dt>Version</dt>
-              <dd>{status.info.version}</dd>
-              <dt>Platform</dt>
-              <dd>
-                {status.info.platform} ({status.info.arch})
-              </dd>
-              <dt>Electron</dt>
-              <dd>{status.info.electron}</dd>
-              <dt>Build</dt>
-              <dd>{status.info.isPackaged ? 'Installed' : 'Development'}</dd>
-            </dl>
-          )}
-          {status.state === 'error' && (
-            <p className="error">
-              {status.message}
-              {status.reference && <> Reference: {status.reference}</>}
-            </p>
-          )}
+  // The Clients, Vehicles and Insurer portals screens exist only when the automation features are
+  // on (FQF_INSURER_PORTALS=1); each of them also hides itself when they are off.
+  const [automation, setAutomation] = useState(false);
+  const [view, setView] = useState<ViewId>('overview');
+  useEffect(() => {
+    if (status.state !== 'ready') return;
+    let active = true;
+    window.fqf.insurers
+      .list()
+      .then((result) => {
+        if (active && result.ok) setAutomation(result.data.enabled);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [status.state]);
+
+  // Development builds add a Development page that holds the demo launchers. `dev` is that
+  // page's content, or null when the build has none.
+  const renderHome = (dev: ReactNode) => {
+    const available: ViewId[] = ['overview'];
+    if (automation) available.push('clients', 'vehicles', 'insurers');
+    if (dev) available.push('development');
+    const shown = available.includes(view) ? view : 'overview';
+    return (
+      <AppShell
+        view={shown}
+        onViewChange={setView}
+        automation={automation}
+        development={dev !== null}
+        version={status.state === 'ready' ? status.info.version : null}
+      >
+        <div hidden={shown !== 'overview'}>
+          <Overview active={shown === 'overview'} status={status} automation={automation} />
         </div>
-      </section>
-      {/* Shown only when the automation features are switched on (FQF_INSURER_PORTALS=1). */}
-      {status.state === 'ready' && <ClientsPanel />}
-      {status.state === 'ready' && <VehiclesPanel />}
-      {status.state === 'ready' && <InsurerPortals />}
-    </main>
-  );
-
-  const homeScreen = PortalDemoGate ? (
-    <Suspense fallback={home}>
-      <PortalDemoGate>{home}</PortalDemoGate>
-    </Suspense>
-  ) : (
-    home
-  );
-
-  if (!DevQuoteComparison) return homeScreen;
+        {status.state === 'ready' && (
+          <>
+            <div className="page" hidden={shown !== 'clients'}>
+              <ClientsPanel />
+            </div>
+            <div className="page" hidden={shown !== 'vehicles'}>
+              <VehiclesPanel />
+            </div>
+            <div className="page" hidden={shown !== 'insurers'}>
+              <InsurerPortals />
+            </div>
+          </>
+        )}
+        {dev && (
+          <div className="page" hidden={shown !== 'development'}>
+            <header className="page-header">
+              <h1>Development</h1>
+              <p className="lead">
+                Tools for development builds only. They use synthetic data and are not part of the
+                installed app.
+              </p>
+            </header>
+            {dev}
+          </div>
+        )}
+      </AppShell>
+    );
+  };
+  // Hands the dev launchers to the home screen, innermost first.
+  const withPortalDemo = (comparison: ReactNode) =>
+    PortalDemoGate ? (
+      <Suspense fallback={renderHome(comparison)}>
+        <PortalDemoGate>
+          {(portal) =>
+            renderHome(
+              <>
+                {comparison}
+                {portal}
+              </>,
+            )
+          }
+        </PortalDemoGate>
+      </Suspense>
+    ) : (
+      renderHome(comparison)
+    );
+  if (!DevQuoteComparison) return withPortalDemo(null);
   return (
-    <Suspense fallback={homeScreen}>
-      <DevQuoteComparison home={homeScreen} />
+    <Suspense fallback={withPortalDemo(null)}>
+      <DevQuoteComparison home={withPortalDemo} />
     </Suspense>
   );
 }

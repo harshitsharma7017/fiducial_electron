@@ -8,6 +8,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type { FillOutcome } from '../../../shared/insurers/fill-outcomes';
 import { SESSION_HOURS } from '../../../shared/insurers/session';
 import type { InsurerPortalList, InsurerPortalView } from '../../../shared/ipc/contract';
+import { Modal } from '../ui/Modal';
+import { endTime, InsurerAvatar, portalStatus, StatusBadge } from './branding';
 
 const FILL_MESSAGES: Record<FillOutcome, { text: string; problem: boolean }> = {
   filled: {
@@ -46,13 +48,6 @@ const FILL_MESSAGES: Record<FillOutcome, { text: string; problem: boolean }> = {
     problem: false,
   },
 };
-
-function endTime(iso: string): string {
-  const end = new Date(iso);
-  const sameDay = end.toDateString() === new Date().toDateString();
-  const time = end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  return sameDay ? time : `${time} tomorrow`;
-}
 
 /** Portals the app fills from saved sign-in details. */
 function usesLogin(portal: InsurerPortalView): boolean {
@@ -145,85 +140,46 @@ export function InsurerPortals(): React.JSX.Element | null {
           {message.text}
         </p>
       )}
-      <ul className="insurer-list">
+      <ul className="insurer-list insurer-cards">
         {load.list.portals.map((portal) => {
           const fill = portal.lastFill ? FILL_MESSAGES[portal.lastFill] : null;
           return (
-            <li key={portal.id} className="insurer-row">
+            <li key={portal.id} className="insurer-row insurer-card">
               <div className="insurer-main">
-                <div>
-                  <strong>{portal.displayName}</strong>
-                  <span className="insurer-mode">{automationText(portal)}</span>
+                <div className="insurer-identity">
+                  <InsurerAvatar name={portal.displayName} />
+                  <div>
+                    <strong>{portal.displayName}</strong>
+                    <span className="insurer-mode">{automationText(portal)}</span>
+                  </div>
                 </div>
-                <div className="insurer-actions">
+                <div className="insurer-badges">
                   {usesLogin(portal) && (
                     <span className={portal.loginSaved ? 'badge saved' : 'badge'}>
                       {portal.loginSaved ? 'Sign-in saved' : 'No sign-in saved'}
                     </span>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => void run(() => window.fqf.insurers.openPortal(portal.id))}
-                  >
-                    {portal.windowOpen ? 'Show portal' : 'Open portal'}
-                  </button>
-                  {usesLogin(portal) && !load.list.vaultError && (
-                    <button type="button" onClick={() => setEditing(portal.id)}>
-                      {portal.loginSaved ? 'Change sign-in' : 'Save sign-in'}
-                    </button>
-                  )}
-                  {portal.blockedOrigins.length > 0 && (
-                    <p className="insurer-note error">
-                      The portal tried to open {portal.blockedOrigins.join(', ')}, which is not on
-                      its allowed list, so it was blocked. Tell support if a page did not open.
-                    </p>
-                  )}
-                  {portal.recording?.active && (
-                    <p className="insurer-note" role="status">
-                      Recording the form structure ({portal.recording.pages} pages,{' '}
-                      {portal.recording.events} steps). Use a dummy client, and stop once the
-                      premium shows: before any proposal or payment. Typed values are never
-                      recorded.
-                    </p>
-                  )}
-                  {portal.recording && !portal.recording.active && portal.recording.file && (
-                    <p className="insurer-note">
-                      Recording saved: <code>{portal.recording.file}</code>
-                    </p>
-                  )}
-                  {portal.sessionEndsAt && (
-                    <button
-                      type="button"
-                      onClick={() => void run(() => window.fqf.insurers.signOut(portal.id))}
-                    >
-                      Sign out
-                    </button>
-                  )}
-                  {portal.windowOpen && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void run(() =>
-                          window.fqf.insurers.record(
-                            portal.id,
-                            portal.recording?.active ? 'stop' : 'start',
-                          ),
-                        )
-                      }
-                    >
-                      {portal.recording?.active ? 'Stop recording' : 'Record form'}
-                    </button>
-                  )}
-                  {portal.loginSaved && (
-                    <button
-                      type="button"
-                      onClick={() => void run(() => window.fqf.insurers.forgetLogin(portal.id))}
-                    >
-                      Forget sign-in
-                    </button>
-                  )}
+                  <StatusBadge status={portalStatus(portal)} />
                 </div>
               </div>
+              {portal.blockedOrigins.length > 0 && (
+                <p className="insurer-note error">
+                  The portal tried to open {portal.blockedOrigins.join(', ')}, which is not on its
+                  allowed list, so it was blocked. Tell support if a page did not open.
+                </p>
+              )}
+              {portal.recording?.active && (
+                <p className="insurer-note" role="status">
+                  Recording the form structure ({portal.recording.pages} pages,{' '}
+                  {portal.recording.events} steps). Use a dummy client, and stop once the premium
+                  shows: before any proposal or payment. Typed values are never recorded.
+                </p>
+              )}
+              {portal.recording && !portal.recording.active && portal.recording.file && (
+                <p className="insurer-note">
+                  Recording saved: <code>{portal.recording.file}</code>
+                </p>
+              )}
               {portal.sessionEndsAt && (
                 <p className="insurer-note">Session open until {endTime(portal.sessionEndsAt)}.</p>
               )}
@@ -240,16 +196,68 @@ export function InsurerPortals(): React.JSX.Element | null {
                   {portal.advisorNote}
                 </p>
               )}
-              {editing === portal.id && (
-                <LoginForm
-                  portal={portal}
-                  onDone={(text) => {
-                    setEditing(null);
-                    if (text) setMessage(text);
-                    void refresh();
-                  }}
-                />
-              )}
+              <div className="insurer-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => void run(() => window.fqf.insurers.openPortal(portal.id))}
+                >
+                  {portal.windowOpen ? 'Show portal' : 'Open portal'}
+                </button>
+                {usesLogin(portal) && !load.list.vaultError && (
+                  <button type="button" onClick={() => setEditing(portal.id)}>
+                    {portal.loginSaved ? 'Change sign-in' : 'Save sign-in'}
+                  </button>
+                )}
+                {portal.sessionEndsAt && (
+                  <button
+                    type="button"
+                    onClick={() => void run(() => window.fqf.insurers.signOut(portal.id))}
+                  >
+                    Sign out
+                  </button>
+                )}
+                {portal.windowOpen && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void run(() =>
+                        window.fqf.insurers.record(
+                          portal.id,
+                          portal.recording?.active ? 'stop' : 'start',
+                        ),
+                      )
+                    }
+                  >
+                    {portal.recording?.active ? 'Stop recording' : 'Record form'}
+                  </button>
+                )}
+                {portal.loginSaved && (
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={() => void run(() => window.fqf.insurers.forgetLogin(portal.id))}
+                  >
+                    Forget sign-in
+                  </button>
+                )}
+              </div>
+              <Modal
+                open={editing === portal.id}
+                title={`Sign-in for ${portal.displayName}`}
+                onClose={() => setEditing(null)}
+              >
+                {editing === portal.id && (
+                  <LoginForm
+                    portal={portal}
+                    onDone={(text) => {
+                      setEditing(null);
+                      if (text) setMessage(text);
+                      void refresh();
+                    }}
+                  />
+                )}
+              </Modal>
             </li>
           );
         })}

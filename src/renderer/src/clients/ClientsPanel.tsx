@@ -6,6 +6,7 @@
 // only its last four digits are ever shown. Vehicles are not part of a client: see
 // ../vehicles/VehiclesPanel.tsx.
 import { useCallback, useEffect, useState } from 'react';
+import { Modal } from '../ui/Modal';
 import {
   ageOn,
   HIGH_RISK_TYPES,
@@ -293,22 +294,32 @@ export function ClientsPanel(): React.JSX.Element | null {
           {error}
         </p>
       )}
-      {!list.storageError && !draft && (
-        <button type="button" onClick={() => setDraft({ ...EMPTY, members: [...EMPTY.members] })}>
+      {!list.storageError && (
+        <button
+          type="button"
+          className="primary"
+          onClick={() => setDraft({ ...EMPTY, members: [...EMPTY.members] })}
+        >
           Add client
         </button>
       )}
-      {draft && (
-        <ClientForm
-          draft={draft}
-          onChange={setDraft}
-          onCancel={() => setDraft(null)}
-          onSaved={() => {
-            setDraft(null);
-            void refresh();
-          }}
-        />
-      )}
+      <Modal
+        open={draft !== null}
+        title={draft?.id ? 'Edit client' : 'New client'}
+        onClose={() => setDraft(null)}
+      >
+        {draft && (
+          <ClientForm
+            draft={draft}
+            onChange={setDraft}
+            onCancel={() => setDraft(null)}
+            onSaved={() => {
+              setDraft(null);
+              void refresh();
+            }}
+          />
+        )}
+      </Modal>
       {list.clients.length > 0 && (
         <ul className="insurer-list">
           {list.clients.map((c) => (
@@ -347,7 +358,7 @@ export function ClientsPanel(): React.JSX.Element | null {
                   </button>
                   {confirmDelete === c.id ? (
                     <>
-                      <button type="button" onClick={() => void remove(c.id)}>
+                      <button type="button" className="danger" onClick={() => void remove(c.id)}>
                         Confirm delete
                       </button>
                       <button type="button" onClick={() => setConfirmDelete(null)}>
@@ -355,7 +366,7 @@ export function ClientsPanel(): React.JSX.Element | null {
                       </button>
                     </>
                   ) : (
-                    <button type="button" onClick={() => setConfirmDelete(c.id)}>
+                    <button type="button" className="danger" onClick={() => setConfirmDelete(c.id)}>
                       Delete
                     </button>
                   )}
@@ -414,7 +425,6 @@ function ClientForm(props: {
 
   return (
     <form className="login-form client-form" onSubmit={(e) => void submit(e)}>
-      <h3>{d.id ? 'Edit client' : 'New client'}</h3>
       <label>
         Client name
         <input

@@ -23,8 +23,12 @@ const ACTIVE: ReadonlySet<RunReport['state']> = new Set([
 ]);
 const POLL_MS = 1000;
 
-/** Wraps the home screen and adds the demo's launcher beneath it. */
-export function PortalDemoGate({ children }: { children: ReactNode }): React.JSX.Element {
+/** Hands the demo's launcher to the home screen, which shows it on its Development page. */
+export function PortalDemoGate({
+  children,
+}: {
+  children: (launcher: ReactNode) => ReactNode;
+}): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const launcher = useRef<HTMLButtonElement>(null);
   const headingId = useId();
@@ -41,21 +45,22 @@ export function PortalDemoGate({ children }: { children: ReactNode }): React.JSX
   }
   return (
     <>
-      {children}
-      <aside className="pd-launcher" aria-labelledby={headingId}>
-        <div>
-          <p className="pd-badge">Demo Only — Temporary Feature</p>
-          <h2 id={headingId} className="pd-launcher-title">
-            Fill the Fiducial portal form
-          </h2>
-          <p className="pd-muted">
-            Fills the portal’s New proposal form with synthetic data and stops before saving.
-          </p>
-        </div>
-        <button ref={launcher} type="button" className="pd-button" onClick={() => setOpen(true)}>
-          Open demo
-        </button>
-      </aside>
+      {children(
+        <aside className="pd-launcher" aria-labelledby={headingId}>
+          <div>
+            <p className="pd-badge">Demo Only — Temporary Feature</p>
+            <h2 id={headingId} className="pd-launcher-title">
+              Fill the Fiducial portal form
+            </h2>
+            <p className="pd-muted">
+              Fills the portal’s New proposal form with synthetic data and stops before saving.
+            </p>
+          </div>
+          <button ref={launcher} type="button" className="pd-button" onClick={() => setOpen(true)}>
+            Open demo
+          </button>
+        </aside>,
+      )}
     </>
   );
 }

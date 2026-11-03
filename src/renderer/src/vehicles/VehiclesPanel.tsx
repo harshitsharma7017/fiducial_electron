@@ -3,6 +3,7 @@
 // name the advisor chooses and the details United India's Motor calculator asks for, and can be
 // quoted from here ("Motor quote").
 import { useCallback, useEffect, useState } from 'react';
+import { Modal } from '../ui/Modal';
 import type { VehicleSummary } from '../../../shared/contracts/vehicle';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
 import {
@@ -84,25 +85,32 @@ export function VehiclesPanel(): React.JSX.Element | null {
           {error}
         </p>
       )}
-      {!draft && vehicles && (
+      {vehicles && (
         <button
           type="button"
+          className="primary"
           onClick={() => setDraft({ id: null, name: '', vehicle: EMPTY_VEHICLE })}
         >
           Add vehicle
         </button>
       )}
-      {draft && (
-        <VehicleForm
-          draft={draft}
-          onChange={setDraft}
-          onCancel={() => setDraft(null)}
-          onSaved={() => {
-            setDraft(null);
-            void refresh();
-          }}
-        />
-      )}
+      <Modal
+        open={draft !== null}
+        title={draft?.id ? 'Edit vehicle' : 'New vehicle'}
+        onClose={() => setDraft(null)}
+      >
+        {draft && (
+          <VehicleForm
+            draft={draft}
+            onChange={setDraft}
+            onCancel={() => setDraft(null)}
+            onSaved={() => {
+              setDraft(null);
+              void refresh();
+            }}
+          />
+        )}
+      </Modal>
       {vehicles && vehicles.length > 0 && (
         <ul className="insurer-list">
           {vehicles.map((v) => (
@@ -125,7 +133,7 @@ export function VehiclesPanel(): React.JSX.Element | null {
                   </button>
                   {confirmDelete === v.id ? (
                     <>
-                      <button type="button" onClick={() => void remove(v.id)}>
+                      <button type="button" className="danger" onClick={() => void remove(v.id)}>
                         Confirm delete
                       </button>
                       <button type="button" onClick={() => setConfirmDelete(null)}>
@@ -133,7 +141,7 @@ export function VehiclesPanel(): React.JSX.Element | null {
                       </button>
                     </>
                   ) : (
-                    <button type="button" onClick={() => setConfirmDelete(v.id)}>
+                    <button type="button" className="danger" onClick={() => setConfirmDelete(v.id)}>
                       Delete
                     </button>
                   )}
@@ -180,7 +188,6 @@ function VehicleForm(props: {
 
   return (
     <form className="login-form client-form" onSubmit={(e) => void submit(e)}>
-      <h3>{d.id ? 'Edit vehicle' : 'New vehicle'}</h3>
       <label>
         Name (for you to find it, for example &ldquo;Swift &ndash; Ramesh&rdquo;)
         <input
