@@ -164,9 +164,10 @@ Verified in the built app (scratch profile; Bajaj and New India login pages only
 ## How to switch it on
 
 ```sh
-FQF_INSURER_PORTALS=1 npm run dev
+npm run dev:prod
 ```
 
+This is `npm run dev` with `FQF_INSURER_PORTALS=1` set, and works the same on macOS and Windows.
 Without the variable the screen is hidden and every insurer channel refuses (`UNSUPPORTED_FLOW`).
 
 ## Safeguards
@@ -210,7 +211,7 @@ Run the agent check with `node test/insurer-login-e2e/run.mjs`.
 ## Not verified yet (needs the real passwords: the advisor does this)
 
 For each of the five autofill insurers:
-1. Run `FQF_INSURER_PORTALS=1 npm run dev`, choose **Save sign-in** and enter the real details.
+1. Run `npm run dev:prod`, choose **Save sign-in** and enter the real details.
 2. Choose **Open portal**.
    - **Expect:** "Sign-in details filled".
    - **Then:** complete the CAPTCHA and sign in.

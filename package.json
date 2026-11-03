@@ -12,6 +12,7 @@
   },
   "scripts": {
     "dev": "node scripts/run-clean-env.mjs electron-vite dev",
+    "dev:prod": "node scripts/run-clean-env.mjs FQF_INSURER_PORTALS=1 electron-vite dev",
     "build": "node scripts/run-clean-env.mjs electron-vite build",
     "build:mac": "npm run build && node scripts/run-clean-env.mjs electron-builder --mac --config electron-builder.yml && node scripts/check-package.mjs mac",
     "build:win": "npm run build && node scripts/run-clean-env.mjs electron-builder --win --config electron-builder.yml && node scripts/check-package.mjs win",
