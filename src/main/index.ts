@@ -9,6 +9,7 @@ import { createInsurerCredentials } from './insurers/credentials';
 import { createFormRecorder } from './insurers/form-recorder';
 import { createPortalWindows } from './insurers/portal-windows';
 import { createSessionClock } from './insurers/session-clock';
+import { createSessionKeeper } from './insurers/session-keeper';
 import { createQuoteService } from './quotes/service';
 import { createVaultOpener } from './secrets/vault-opener';
 import { openClientStore } from './storage/client-store';
@@ -105,6 +106,7 @@ function start(): void {
       logger,
       credentials,
       clock: createSessionClock(join(userData, 'insurer-sessions.json')),
+      keeper: createSessionKeeper(join(userData, 'insurer-sessions'), safeStorage),
     });
     const insurers = createInsurerService({
       enabled: automation,

@@ -17,11 +17,14 @@
 // - The partition is saved on disk ("persist:"), so lasting cookies and site storage survive an
 //   app restart (in packaged builds the cookie-encryption fuse encrypts cookie values with the OS
 //   key; development builds have no fuses). Session cookies, which many portals use for sign-in
-//   (Bajaj's Keycloak does), are not written to disk by Electron: for those portals quitting the
-//   app ends the sign-in, and the next open fills the login again.
+//   (Bajaj's Keycloak and United India do), are not written to disk by Electron: the session
+//   keeper (session-keeper.ts) keeps them, encrypted with the OS key, while the session runs, and
+//   puts them back at start-up, so a restart does not sign the advisor out (and OTP portals do
+//   not need the client's OTP again). The window then reopens on the page it was on.
 // - Each session ends SESSION_HOURS after it started (session-clock.ts), or when the advisor signs
-//   out: the window is closed and the partition's cookies, storage and caches are wiped, so the
-//   next open starts at the login page. Sessions with no clock are wiped at start-up.
+//   out: the window is closed, the partition's cookies, storage and caches are wiped and the
+//   kept session cookies deleted, so the next open starts at the login page. Sessions with no
+//   clock are wiped at start-up.
 // - The insurer's own server may end a session sooner (for example after inactivity). The app does
 //   not keep sessions alive artificially: the portal then shows its login page, and the app fills
 //   it again.
@@ -38,6 +41,7 @@ import {
   type InsurerPortal,
 } from '../../shared/insurers/portals';
 import type { Logger } from '../logging/logger';
+import type { SessionKeeper } from './session-keeper';
 import { hardenSession, setNavigationRule, setSessionPolicy } from '../security/navigation-policy';
 import { originOf, schemeOf } from '../security/origins';
 import { LOCKED_DOWN } from '../security/web-preferences';
@@ -55,6 +59,8 @@ const AGENT_SOURCE = insurerLoginAgent.toString();
 const FORM_WAIT_MS = 15_000;
 /** How often running sessions are checked against the 12-hour limit. */
 const EXPIRY_CHECK_MS = 60_000;
+/** How soon after a cookie or page change the session is kept (changes come in bursts). */
+const SAVE_DELAY_MS = 1500;
 
 export type SessionEnd = 'expired' | 'signed-out';
 
@@ -95,6 +101,8 @@ export function createPortalWindows(deps: {
   logger: Logger;
   credentials: InsurerCredentials;
   clock: SessionClock;
+  /** Keeps sign-ins across restarts (absent in tests: nothing is kept). */
+  keeper?: SessionKeeper;
 }): PortalWindows {
   const windows = new Map<string, BrowserWindow>();
   /** Fill again on demand (Show portal): the agent keeps anything already in the boxes. */
@@ -109,9 +117,43 @@ export function createPortalWindows(deps: {
     quitting = true;
   });
 
+  // Keeping sign-ins across restarts: a save shortly after the portal's cookies or page change,
+  // only while the insurer's session runs.
+  const pendingSave = new Map<string, NodeJS.Timeout>();
+  /** Where each window reopens after a restart (the page it was on), until it is opened. */
+  const reopenAt = new Map<string, string>();
+  const watched = new WeakSet<Session>();
+  const scheduleSave = (id: string): void => {
+    const keeper = deps.keeper;
+    if (!keeper || deps.clock.startedAt(id) === null) return;
+    clearTimeout(pendingSave.get(id));
+    const timer = setTimeout(() => {
+      pendingSave.delete(id);
+      if (deps.clock.startedAt(id) === null) return;
+      const portal = findPortal(id);
+      const win = windows.get(id);
+      const url = win && !win.isDestroyed() ? win.webContents.getURL() : null;
+      const lastUrl =
+        url && portal && mayNavigate(portal, url, true) ? url : (reopenAt.get(id) ?? null);
+      void keeper.save(id, session.fromPartition(partitionFor(id)).cookies, lastUrl);
+    }, SAVE_DELAY_MS);
+    timer.unref?.();
+    pendingSave.set(id, timer);
+  };
+  const forgetKept = (id: string): void => {
+    clearTimeout(pendingSave.get(id));
+    pendingSave.delete(id);
+    reopenAt.delete(id);
+    deps.keeper?.forget(id);
+  };
+
   const sessionOf = (id: string): Session => {
     const ses = session.fromPartition(partitionFor(id));
     hardenSession(ses, deps.logger);
+    if (!watched.has(ses)) {
+      watched.add(ses);
+      ses.cookies.on('changed', () => scheduleSave(id));
+    }
     const portal = findPortal(id);
     if (portal) {
       // Every window of this session (the portal and its pop-ups) follows the portal's origins;
@@ -165,6 +207,7 @@ export function createPortalWindows(deps: {
     blocked.delete(id);
     if (win && !win.isDestroyed()) win.destroy();
     lastFill.delete(id);
+    forgetKept(id);
     await wipe(sessionOf(id));
     deps.clock.stop(id);
     if (hadSession) {
@@ -175,12 +218,22 @@ export function createPortalWindows(deps: {
   }
 
   // Start-up: no session outlives its clock. Expired sessions, and any saved session without a
-  // clock (for example if the clock file was lost), are wiped.
+  // clock (for example if the clock file was lost), are wiped. Running sessions get their kept
+  // session cookies back, and their window reopens on the page it was on.
   const startup = (async () => {
     const expired = new Set(deps.clock.expired());
     for (const portal of INSURER_PORTALS) {
       if (expired.has(portal.id)) await endSession(portal.id, 'expired');
-      else if (deps.clock.startedAt(portal.id) === null) await wipe(sessionOf(portal.id));
+      else if (deps.clock.startedAt(portal.id) === null) {
+        forgetKept(portal.id);
+        await wipe(sessionOf(portal.id));
+      } else if (deps.keeper) {
+        const kept = await deps.keeper.restore(portal.id, sessionOf(portal.id).cookies);
+        if (kept?.lastUrl && mayNavigate(portal, kept.lastUrl, true)) {
+          reopenAt.set(portal.id, kept.lastUrl);
+        }
+        if (kept) deps.logger.info('insurer.session-restored', { insurer: portal.id });
+      }
     }
   })().catch(() => undefined);
 
@@ -268,11 +321,19 @@ export function createPortalWindows(deps: {
     };
     refill.set(portal.id, tryFill);
     win.webContents.on('did-finish-load', () => void tryFill());
+    // The page it is on is kept with the session (to reopen there after a restart).
+    win.webContents.on('did-navigate', () => scheduleSave(portal.id));
+    win.webContents.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
+      if (isMainFrame) scheduleSave(portal.id);
+    });
     // Single-page apps change the hash route without a new load (for example after sign-out).
     win.webContents.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
       if (isMainFrame) void tryFill();
     });
-    void win.loadURL(portal.startUrl).catch(() => undefined);
+    // After a restart, the page it was on (if the portal still allows it); else the start page.
+    const resumeAt = reopenAt.get(portal.id);
+    reopenAt.delete(portal.id);
+    void win.loadURL(resumeAt ?? portal.startUrl).catch(() => undefined);
     return win;
   }
 

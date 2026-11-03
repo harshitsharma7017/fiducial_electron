@@ -90,9 +90,21 @@ needed:
   if the advisor is still working. The 12 hours count from the first open, not the sign-in. The
   next open starts at the login page, which the app fills again.
 - **Sign out:** ends the session at once, with the same wipe.
-- **Quitting the app:** ends the sign-in for portals that use session cookies (Bajaj does, and
-  most likely others). Electron does not write session cookies to disk. The 12-hour clock and any
-  lasting cookies or site storage are kept; expired sessions are wiped at start-up.
+- **Quitting or restarting the app:** the sign-in is kept for the rest of the 12 hours, so OTP
+  portals do not need the client's OTP again. Most portals (Bajaj, United India) sign in with
+  session cookies, which Electron never writes to disk. The app keeps them itself
+  (`src/main/insurers/session-keeper.ts`):
+  - **What:** only the session cookies, plus the page the insurer window was on, so it reopens
+    there and not on the login page.
+  - **Where:** `<userData>/insurer-sessions/<insurer>.session`, encrypted with the OS key (the same
+    key as the saved sign-in details), owner-only.
+  - **When:** saved shortly after the portal's cookies or page change, only while the session runs.
+    Put back at start-up.
+  - **Deleted:** on sign out, after the 12 hours, or when a session is wiped at start-up. A file that
+    cannot be read is deleted and ignored.
+
+  Lasting cookies, site storage and the 12-hour clock are kept on disk as before. Expired sessions
+  are wiped at start-up.
 - **The insurer's own timeout still applies.** If a portal signs the advisor out after inactivity,
   it shows its login page and the app fills it again. The app does not keep sessions alive
   artificially.

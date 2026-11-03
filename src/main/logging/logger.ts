@@ -30,6 +30,7 @@ export const LOG_EVENTS = [
   'insurer.login-saved',
   'insurer.login-forgotten',
   'insurer.session-ended',
+  'insurer.session-restored',
   'insurer.recording-started',
   'insurer.recording-stopped',
   'client.saved',
