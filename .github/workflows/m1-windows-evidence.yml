@@ -1,0 +1,104 @@
+# M1 Windows x64 evidence (Q-M1-02). Runs the existing M1 feasibility spike, which has its own
+# toolchain under spikes/m1, on a GitHub-hosted Windows runner. Evidence gathering only: no
+# product code, no secrets, no artifacts. The job summary carries sanitised results; raw
+# results, logs and generated databases never leave the runner. Partial evidence: a Windows
+# Server image under a runner account, not a clean Windows 10/11 client machine.
+name: m1-windows-evidence
+
+on:
+  push:
+    branches: [spike/m1-windows-evidence]
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: spikes/m1
+    # Each evidence step continues on failure so every result is recorded; the last step fails
+    # the job if any of them failed.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: spikes/m1/package-lock.json
+      - id: install
+        run: npm ci --ignore-scripts
+      - id: electron_install
+        run: npm run electron:install
+
+      - id: typecheck
+        continue-on-error: true
+        run: npm run typecheck
+      - id: lint
+        continue-on-error: true
+        run: npm run lint
+      - id: tests
+        continue-on-error: true
+        run: npm test -- --reporter=default --reporter=json --outputFile.json=out/evidence/vitest.json
+
+      # Development build. S3 must run before S5 (S3 create resets user-data/keys/).
+      - id: s3_dev_create
+        continue-on-error: true
+        run: node scripts/run-spike.mjs --spike=s3 --phase=create
+      - id: s3_dev_reopen
+        continue-on-error: true
+        run: node scripts/run-spike.mjs --spike=s3 --phase=reopen
+      - id: s5_dev_write
+        continue-on-error: true
+        run: node scripts/run-spike.mjs --spike=s5 --phase=write
+      - id: s5_dev_read
+        continue-on-error: true
+        run: node scripts/run-spike.mjs --spike=s5 --phase=read
+      # Reads every file of the development run once no app is left, including Chromium's
+      # session files (locked while the app runs), against the recorded needle digests.
+      - id: post_exit_scan_dev
+        continue-on-error: true
+        run: node scripts/scan-after-exit.mjs --run=dev
+      - id: fs_probe
+        continue-on-error: true
+        run: node scripts/windows-fs-probe.mjs
+
+      # Packaged (fused, unsigned) build.
+      - id: package
+        continue-on-error: true
+        run: npm run package
+      - id: s3_packaged_create
+        continue-on-error: true
+        run: node scripts/run-spike.mjs --packaged --spike=s3 --phase=create
+      - id: s3_packaged_reopen
+        continue-on-error: true
+        run: node scripts/run-spike.mjs --packaged --spike=s3 --phase=reopen
+      - id: s5_packaged_write
+        continue-on-error: true
+        run: node scripts/run-spike.mjs --packaged --spike=s5 --phase=write
+      - id: s5_packaged_read
+        continue-on-error: true
+        run: node scripts/run-spike.mjs --packaged --spike=s5 --phase=read
+      - id: s5_packaged_decrypt_foreign
+        continue-on-error: true
+        run: node scripts/run-spike.mjs --packaged --spike=s5 --phase=decrypt-foreign "--foreign=$PWD/out/runs/dev/user-data/keys/s5-secret.enc"
+      - id: s5_packaged_vault_foreign
+        continue-on-error: true
+        run: node scripts/run-spike.mjs --packaged --spike=s5 --phase=vault-foreign "--foreign=$PWD/out/runs/dev/user-data/secrets"
+      - id: post_exit_scan_packaged
+        continue-on-error: true
+        run: node scripts/scan-after-exit.mjs --run=packaged
+
+      - name: Sanitised summary
+        if: always()
+        env:
+          STEP_OUTCOMES: ${{ toJSON(steps) }}
+        run: node scripts/evidence-summary.mjs
+      - name: Fail if any evidence step failed
+        if: ${{ always() && contains(steps.*.outcome, 'failure') }}
+        run: exit 1

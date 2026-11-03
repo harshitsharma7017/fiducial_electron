@@ -15,16 +15,18 @@ export function devExecutable() {
   return createRequire(import.meta.url)('electron');
 }
 
+/** The packaged app: a `.app` bundle on macOS, the packager's output folder on Windows. */
 export function packagedAppBundle() {
-  return join(
+  const dir = join(
     SPIKE_ROOT,
     'out/package',
     `${PACKAGED_NAME}-${process.platform}-${process.arch}`,
-    `${PACKAGED_NAME}.app`,
   );
+  return process.platform === 'win32' ? dir : join(dir, `${PACKAGED_NAME}.app`);
 }
 
 export function packagedExecutable() {
+  if (process.platform === 'win32') return join(packagedAppBundle(), `${PACKAGED_NAME}.exe`);
   return join(packagedAppBundle(), 'Contents/MacOS', PACKAGED_NAME);
 }
 
@@ -43,6 +45,23 @@ export function bundleOf(executable) {
 }
 
 export function processesUnder(bundlePath) {
+  if (process.platform === 'win32') {
+    // No `ps` on Windows: list processes whose executable lies under the path. The path is
+    // passed through the environment so it never needs quoting in the command.
+    const script =
+      '(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and ' +
+      '$_.ExecutablePath.StartsWith($env:FQF_PROCESS_PATH, ' +
+      '[System.StringComparison]::OrdinalIgnoreCase) }).ProcessId';
+    const pids = execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      encoding: 'utf8',
+      env: { ...process.env, FQF_PROCESS_PATH: bundlePath },
+    });
+    return pids
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => /^\d+$/.test(l))
+      .map(Number);
+  }
   const out = execFileSync('ps', ['-A', '-o', 'pid=,command='], { encoding: 'utf8' });
   return out
     .split('\n')

@@ -40,6 +40,14 @@ const args = parsed.args;
 const outDir = resolve(args.out);
 mkdirSync(outDir, { recursive: true });
 if (args.userData) app.setPath('userData', resolve(args.userData));
+// S3 and S5 keep Chromium's own session data (caches, local storage, network state) in a
+// separate folder, so their user-data folder holds only the spike's files. On Windows,
+// Chromium holds some of those files open without read sharing: a scan of a shared folder
+// failed with EBUSY (Windows evidence run, 28 Oct 2026). S2 keeps the default, because its
+// cookie inspection reads user-data/Partitions.
+if (args.userData && (args.spike === 's3' || args.spike === 's5')) {
+  app.setPath('sessionData', `${resolve(args.userData)}-session`);
+}
 
 // Recorded for S5: what safeStorage reports before the app is ready (sync API is deprecated).
 let preReadySafeStorage: string;

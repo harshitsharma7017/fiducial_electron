@@ -1,11 +1,11 @@
-// Packages the spike for the current macOS architecture (unsigned; ad-hoc signature only)
-// and applies the DM-04 fuse settings. The packaged app gets its own name so its Keychain
-// item never collides with the development run's.
+// Packages the spike for the current platform and architecture (unsigned; on macOS an ad-hoc
+// signature only) and applies the DM-04 fuse settings. The packaged app gets its own name so
+// its OS key-store entry never collides with the development run's.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { flipFuses, FuseV1Options, FuseVersion } from '@electron/fuses';
 import { packager } from '@electron/packager';
-import { packagedAppBundle, PACKAGED_NAME, SPIKE_ROOT } from './lib/launch.mjs';
+import { packagedAppBundle, packagedExecutable, PACKAGED_NAME, SPIKE_ROOT } from './lib/launch.mjs';
 
 const electronVersion = JSON.parse(
   readFileSync(join(SPIKE_ROOT, 'node_modules/electron/package.json'), 'utf8'),
@@ -39,7 +39,8 @@ await packager({
   ],
 });
 
-await flipFuses(packagedAppBundle(), {
+// Fuses live in the Electron binary: the .app bundle on macOS, the .exe on Windows.
+await flipFuses(process.platform === 'win32' ? packagedExecutable() : packagedAppBundle(), {
   version: FuseVersion.V1,
   resetAdHocDarwinSignature: process.platform === 'darwin' && process.arch === 'arm64',
   [FuseV1Options.RunAsNode]: false,

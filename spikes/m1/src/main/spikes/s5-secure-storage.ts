@@ -7,12 +7,12 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, safeStorage } from 'electron';
-import { filesContaining } from '../../shared/file-scan';
 import { check, type Check } from '../../shared/result';
 import { SecretStore } from '../../shared/secret-store';
 import { tamperTrials } from '../../shared/tamper';
+import { plaintextScan } from '../plaintext-scan';
 import type { SpikeContext, SpikeOutcome } from '../spike-context';
-import { sanitisePath, withTimeout } from '../util';
+import { withTimeout } from '../util';
 import { vaultForeign, vaultRead, vaultWrite } from './s5-vault';
 
 /** Short hash used to compare secrets across processes without recording them. */
@@ -76,9 +76,8 @@ async function write(ctx: SpikeContext): Promise<SpikeOutcome> {
   const legacyOpened = await store.open(safeStorage.encryptString(legacySecret));
   const legacyReadable = legacyOpened.ok && legacyOpened.data.value === legacySecret;
 
-  const hits = filesContaining([app.getPath('userData'), ctx.outDir], [Buffer.from(secret)]).map(
-    sanitisePath,
-  );
+  const scan = plaintextScan(ctx, [Buffer.from(secret)]);
+  const hits = scan.problems;
   const containsPlain = sealed.data.includes(Buffer.from(secret));
 
   checks.push(
@@ -105,7 +104,7 @@ async function write(ctx: SpikeContext): Promise<SpikeOutcome> {
     ),
     check(
       's5.no-plaintext-files',
-      'Secret not found in any file under userData or the output folder',
+      'Secret not found in any file under userData or the output folder (the session folder of the running Chromium: post-exit scan)',
       [],
       hits,
       hits.length === 0,
@@ -118,6 +117,7 @@ async function write(ctx: SpikeContext): Promise<SpikeOutcome> {
     facts: {
       vault: vault.facts,
       fingerprint: fingerprint(secret),
+      deferredToPostExit: scan.deferredToPostExit,
       ciphertextBytes: sealed.data.length,
       ciphertextPrefix: sealed.data.subarray(0, 3).toString('latin1'),
       shouldReEncrypt: opened.ok ? opened.data.shouldReEncrypt : null,
@@ -154,11 +154,8 @@ async function read(ctx: SpikeContext): Promise<SpikeOutcome> {
     : null;
 
   // The output folder includes the captured logs of every phase of this run.
-  const hits = opened.ok
-    ? filesContaining([app.getPath('userData'), ctx.outDir], [Buffer.from(opened.data.value)]).map(
-        sanitisePath,
-      )
-    : ['(secret not recovered)'];
+  const scan = opened.ok ? plaintextScan(ctx, [Buffer.from(opened.data.value)]) : null;
+  const hits = scan ? scan.problems : ['(secret not recovered)'];
 
   checks.push(
     check(
@@ -177,7 +174,7 @@ async function read(ctx: SpikeContext): Promise<SpikeOutcome> {
     ),
     check(
       's5.no-plaintext-anywhere',
-      'Secret absent from userData, results and captured logs',
+      'Secret absent from userData, results and captured logs (the session folder of the running Chromium: post-exit scan)',
       [],
       hits,
       hits.length === 0,
@@ -192,6 +189,7 @@ async function read(ctx: SpikeContext): Promise<SpikeOutcome> {
     facts: {
       appName: app.getName(),
       shouldReEncrypt: opened.ok ? opened.data.shouldReEncrypt : null,
+      deferredToPostExit: scan?.deferredToPostExit ?? null,
       rawSafeStorageTamper: tamper ? { ...tamper } : null,
       vault: vault.facts,
     },
