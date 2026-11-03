@@ -12,6 +12,7 @@ import {
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
 import { ClientStoreError, type ClientStore } from '../storage/client-store';
+import type { AadhaarVault } from './aadhaar-vault';
 
 export interface ClientList {
   enabled: boolean;
@@ -22,14 +23,22 @@ export interface ClientList {
 export interface ClientService {
   list(): Promise<ClientList>;
   get(id: string): Promise<ClientRecord>;
-  save(id: string | null, input: ClientInput): Promise<string>;
+  /** Saves the client; `aadhaar` sets (a number) or removes (null) its Aadhaar number, kept apart
+   * in the secret vault; absent keeps it. */
+  save(id: string | null, input: ClientInput, aadhaar?: string | null): Promise<string>;
   delete(id: string): Promise<boolean>;
+  /** The last four digits of the client's Aadhaar number, or null if none is saved. */
+  aadhaarLastFour(id: string): Promise<string | null>;
+  /** Main process only (filling an insurer's form): the whole Aadhaar number, or null. */
+  aadhaarFor(id: string): Promise<string | null>;
   close(): void;
 }
 
 export function createClientService(deps: {
   enabled: boolean;
   open: () => Promise<ClientStore>;
+  /** Where Aadhaar numbers are kept (absent: none can be saved). */
+  aadhaar?: AadhaarVault;
   logger: Logger;
   now?: () => Date;
 }): ClientService {
@@ -99,22 +108,37 @@ export function createClientService(deps: {
       return record;
     },
 
-    save: async (id, input) => {
+    save: async (id, input, aadhaar) => {
       const s = await requireStore();
       if (hasFutureDateOfBirth(input, (deps.now ?? (() => new Date()))())) {
         throw new AppException('VALIDATION_FAILED');
       }
+      if (aadhaar && !deps.aadhaar) throw new AppException('UNSUPPORTED_FLOW');
       if (id !== null && !guard(() => s.get(id))) throw new AppException('VALIDATION_FAILED');
       const saved = guard(() => s.save(id, input));
       deps.logger.info('client.saved');
+      if (aadhaar) await deps.aadhaar!.set(saved.id, aadhaar);
+      else if (aadhaar === null) await deps.aadhaar?.clear(saved.id);
       return saved.id;
     },
 
     delete: async (id) => {
       const s = await requireStore();
       const deleted = guard(() => s.delete(id));
+      // The Aadhaar number goes with the client (also if the client was already gone).
+      await deps.aadhaar?.clear(id);
       if (deleted) deps.logger.info('client.deleted');
       return deleted;
+    },
+
+    aadhaarLastFour: async (id) => {
+      await requireStore();
+      return deps.aadhaar ? deps.aadhaar.lastFour(id) : null;
+    },
+
+    aadhaarFor: async (id) => {
+      await requireStore();
+      return deps.aadhaar ? deps.aadhaar.read(id) : null;
     },
 
     close: () => {

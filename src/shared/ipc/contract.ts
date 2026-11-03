@@ -2,7 +2,12 @@
 // before any handler runs and validates responses before they leave. Schemas are strict:
 // unexpected fields are rejected, not ignored.
 import { z } from 'zod';
-import { clientInputSchema, clientRecordSchema, clientSummarySchema } from '../contracts/client';
+import {
+  aadhaarSchema,
+  clientInputSchema,
+  clientRecordSchema,
+  clientSummarySchema,
+} from '../contracts/client';
 import { entityIdSchema } from '../contracts/common';
 import { insurerIdSchema } from '../contracts/insurer';
 import { FILL_OUTCOMES } from '../insurers/fill-outcomes';
@@ -111,8 +116,22 @@ export const saveClientRequestSchema = z
     /** Absent for a new client. */
     id: entityIdSchema.optional(),
     client: clientInputSchema,
+    /** The Aadhaar number, kept apart in the secret vault: absent keeps what is saved, null
+     * removes it. */
+    aadhaar: z.union([aadhaarSchema, z.null()]).optional(),
   })
   .strict();
+
+/** A client as the renderer sees it: the record, and of the Aadhaar number only its last four
+ * digits (or null if none is saved). */
+export const clientViewSchema = clientRecordSchema.extend({
+  aadhaarLastFour: z
+    .string()
+    .regex(/^\d{4}$/)
+    .nullable(),
+});
+
+export type ClientView = z.infer<typeof clientViewSchema>;
 
 export type SaveClientRequest = z.input<typeof saveClientRequestSchema>;
 
@@ -127,6 +146,8 @@ export const quoteRunResultSchema = z
       .object({ label: z.string().max(200), amount: z.string().max(40) })
       .strict()
       .optional(),
+    /** E-proposals: what the advisor still fills by hand, and the insurer's messages about it. */
+    toDo: z.array(z.string().max(400)).max(30).optional(),
   })
   .strict();
 
@@ -167,7 +188,7 @@ export const ipcContract = {
   },
   [IPC_CHANNELS.clientsGet]: {
     request: clientOnly,
-    response: clientRecordSchema,
+    response: clientViewSchema,
   },
   [IPC_CHANNELS.clientsSave]: {
     request: saveClientRequestSchema,
@@ -178,7 +199,9 @@ export const ipcContract = {
       .object({
         clientId: entityIdSchema,
         insurerId: insurerIdSchema,
-        product: z.enum(['health', 'motor']),
+        /** health / motor: premium calculators; fm-proposal: Family Medicare e-proposal (filled,
+         * never saved or submitted). */
+        product: z.enum(['health', 'motor', 'fm-proposal']),
         /** Health: the advisor confirms, for this quote, every member's good health declaration. */
         goodHealthConfirmed: z.boolean(),
       })

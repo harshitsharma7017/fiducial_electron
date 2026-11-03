@@ -35,9 +35,12 @@ export function createHandlers(deps: {
     'insurers:sign-out': async ({ id }) => ({ signedOut: await deps.insurers.signOut(id) }),
     'insurers:record': ({ id, action }) => deps.insurers.record(id, action),
     'clients:list': () => deps.clients.list(),
-    'clients:get': ({ id }) => deps.clients.get(id),
-    'clients:save': async ({ id, client }) => ({
-      id: await deps.clients.save(id ?? null, client),
+    'clients:get': async ({ id }) => ({
+      ...(await deps.clients.get(id)),
+      aadhaarLastFour: await deps.clients.aadhaarLastFour(id),
+    }),
+    'clients:save': async ({ id, client, aadhaar }) => ({
+      id: await deps.clients.save(id ?? null, client, aadhaar),
     }),
     'clients:delete': async ({ id }) => ({ deleted: await deps.clients.delete(id) }),
     'quotes:run': (request) => deps.quotes.run(request),

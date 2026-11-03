@@ -10,6 +10,10 @@ verified with a real sign-in.** Off by default.
     only up to the point where the premium shows.
   - **What it never does:** submit a proposal, create a customer, save a draft or start a payment.
   - **Later:** proposal submission would be a separate phase, after senior approval.
+- **E-proposals, filled only (decision of 3 November 2026).** The app may fill an E-Proposal form
+  from the saved client and then stops. The advisor completes it, checks it and presses Save As
+  Draft or Submit. The app never presses them. The Aadhaar number is filled when saved for the client
+  (kept apart in the secret vault: see `docs/CLIENTS.md`).
 - **Product lines:** health, motor and travel.
   - **Health** uses the saved client data (members, ages, sum insured).
   - **Motor** needs vehicle details, and **travel** needs trip details (destination, dates,
@@ -46,6 +50,43 @@ United India's own ERRORS pop-up stops the run, and its message is shown.
 calendar, pop-ups, and the child rows' shared radio name): the full flow for a couple with three
 children, and a stop on United India's error message. **Not yet run on
 the live portal.**
+
+## United India: Family Medicare e-proposal (filled, never saved)
+
+Automated as recorded on 3 November 2026: sections I, II and XI only. The advisor records the other
+sections later. From the signed-in home page the app:
+1. Opens the **Family Medicare E-Proposal Form** (a pop-up) and closes **Important Instructions**.
+2. Chooses **Filled by: agent**, then a **New** proposal. "Filled by customer" opens a short form
+   that sends the proposal to the client; the app never uses it.
+3. **I. Proposer Details:**
+   - **Is High Risk Customer?** It answers **No**, or **Yes** for a client marked high-risk. The
+     advisor then chooses the risk type.
+   - Name, date of birth (on the calendar) and gender.
+   - Marital status: Single or Married only. Widowed or divorced is left to the advisor.
+   - Occupation, PAN, Aadhaar (when saved), e-insurance account number, PIN code, address,
+     landline, mobile, e-mail and CKYC number.
+   - State, city and village, chosen by name among what United India's PIN lookup lists. A name it
+     does not list is left to the advisor, who is told which; the run goes on.
+4. **II. Nomination:** the nominee's name, relationship, address and contact number. Opening the
+   section may make United India show its ERRORS pop-up for what section I still lacks. The app
+   closes the pop-up once it has faded out, keeps the message (each one once), and goes on.
+5. **XI. Declaration from Intermediary:** the intermediary's place of signing, opened the same way.
+6. **Stops.** The result lists what the advisor still fills by hand, with United India's messages:
+   - anything the client record lacks (Aadhaar, the high-risk type, state, city or village, and
+     so on);
+   - a state, city or village United India's lookup did not list.
+
+It never presses Save As Draft or Submit.
+
+**Verified:** against a local copy of the form built from the recording (same ids, duplicate ids,
+models, option lists, calendar and ERRORS pop-up). Checked for:
+- a full client with Aadhaar: every field is filled, and only United India's message about section
+  III is left;
+- a sparse client: what it lacks is listed;
+- high-risk clients with and without a type: the ERRORS pop-up fades out, is closed and listed;
+- a village the lookup does not list: the advisor is told which.
+
+Nothing is ever saved. **Not yet run on the live portal.**
 
 ## What it does
 

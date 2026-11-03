@@ -4,10 +4,10 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { exposePortalDemo } from '../demo/portal-automation/preload/expose';
 import type { FqfApi } from '../shared/ipc/api';
 import { IPC_CHANNELS } from '../shared/ipc/channels';
-import type { ClientRecord } from '../shared/contracts/client';
 import type {
   AppInfo,
   ClientListResponse,
+  ClientView,
   InsurerPortalList,
   QuoteRunResultView,
 } from '../shared/ipc/contract';
@@ -49,7 +49,7 @@ const api: FqfApi = {
     list: () =>
       ipcRenderer.invoke(IPC_CHANNELS.clientsList, {}) as Promise<AppResult<ClientListResponse>>,
     get: (id) =>
-      ipcRenderer.invoke(IPC_CHANNELS.clientsGet, { id }) as Promise<AppResult<ClientRecord>>,
+      ipcRenderer.invoke(IPC_CHANNELS.clientsGet, { id }) as Promise<AppResult<ClientView>>,
     save: (request) =>
       ipcRenderer.invoke(IPC_CHANNELS.clientsSave, request) as Promise<AppResult<{ id: string }>>,
     delete: (id) =>

@@ -14,6 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { aadhaarEntryName, createAadhaarVault } from '../src/main/clients/aadhaar-vault';
 import { createClientService } from '../src/main/clients/service';
 import { createDispatcher } from '../src/main/ipc/dispatcher';
 import { createHandlers } from '../src/main/ipc/handlers';
@@ -352,7 +353,12 @@ describe('the client service and IPC channels', () => {
     const records: LogRecord[] = [];
     const logger = createLogger([(r) => records.push(r)]);
     const p = place();
-    const clients = createClientService({ enabled, open: opener ?? (() => open(p)), logger });
+    const clients = createClientService({
+      enabled,
+      open: opener ?? (() => open(p)),
+      aadhaar: createAadhaarVault(createVaultOpener(p.vaultDir, backend)),
+      logger,
+    });
     const insurers = createInsurerService({
       enabled: false,
       credentials: {
@@ -383,6 +389,67 @@ describe('the client service and IPC channels', () => {
       dispatch({ webContentsId: 1, frameIsMain: true, frameUrl: 'app://fqf/' }, channel, payload);
     return { clients, call, records, p };
   }
+
+  // Aadhaar numbers, kept apart in the secret vault. UIDAI's published test number (sandbox), with
+  // a valid check digit.
+  const AADHAAR = '9999 4105 7058';
+  const HOLDER = {
+    customer: { name: 'Synthetic Aadhaar Holder' },
+    pincode: '560001',
+    members: [{ relationship: 'self', age: 40 }],
+  };
+  const idOf = (result: unknown) => (result as { data: { id: string } }).data.id;
+
+  it('keeps an Aadhaar number in the vault, never in the database, showing only its last four digits', async () => {
+    const { clients, call, records, p } = setup(true);
+    const id = idOf(await call('clients:save', { client: HOLDER, aadhaar: AADHAAR }));
+    expect(await call('clients:get', { id })).toMatchObject({
+      ok: true,
+      data: { id, aadhaarLastFour: '7058' },
+    });
+    // Only the main process reads the whole number.
+    expect(await clients.aadhaarFor(id)).toBe('999941057058');
+    // Its own vault entry, named by a hash of the client id; nowhere in plain text on disk.
+    expect(existsSync(join(p.vaultDir, `${aadhaarEntryName(id)}.fqse`))).toBe(true);
+    const bytes = allBytes(p.dir);
+    for (const value of ['999941057058', '9999 4105 7058', id]) {
+      expect(bytes.includes(Buffer.from(value, 'utf8')), value).toBe(false);
+    }
+    clients.close();
+    // The database itself has no trace of it.
+    const vault = await SecretVault.open(p.vaultDir, backend);
+    if (!vault.ok) throw new Error(vault.error.code);
+    const key = await vault.data.get('database-key');
+    if (!key.ok) throw new Error(key.error.code);
+    const db = openEncrypted(p.dbPath, Buffer.from(key.data, 'hex'));
+    expect(JSON.stringify(db.prepare('SELECT * FROM client').all())).not.toContain('7058');
+    db.close();
+    expect(JSON.stringify(records)).not.toContain('7058');
+  });
+
+  it('keeps the Aadhaar number when not sent, removes it with null, and deletes it with the client', async () => {
+    const { clients, call } = setup(true);
+    const id = idOf(await call('clients:save', { client: HOLDER, aadhaar: AADHAAR }));
+    await call('clients:save', { id, client: { ...HOLDER, pincode: '400001' } });
+    expect(await clients.aadhaarLastFour(id)).toBe('7058');
+    await call('clients:save', { id, client: HOLDER, aadhaar: null });
+    expect(await clients.aadhaarLastFour(id)).toBeNull();
+    await call('clients:save', { id, client: HOLDER, aadhaar: AADHAAR });
+    await call('clients:delete', { id });
+    expect(await clients.aadhaarFor(id)).toBeNull();
+    clients.close();
+  });
+
+  it('rejects an Aadhaar number with a wrong check digit or format, without echoing it', async () => {
+    const { clients, call, records } = setup(true);
+    for (const bad of ['999941057059', '099941057058', '99994105705', 'abcdefghijkl']) {
+      const result = await call('clients:save', { client: HOLDER, aadhaar: bad });
+      expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } });
+      expect(JSON.stringify([result, records])).not.toContain(bad);
+    }
+    expect((await clients.list()).clients).toEqual([]);
+    clients.close();
+  });
 
   it('is off unless switched on: no database is created', async () => {
     const { call, p } = setup(false);
@@ -612,6 +679,50 @@ describe('vehicles for motor quotes (schema version 3)', () => {
       { ...CAR, extra: true },
     ]) {
       expect(() => store.save(null, { ...base, members: [], vehicle: bad } as never)).toThrow();
+    }
+    expect(store.list()).toEqual([]);
+    store.close();
+  });
+});
+
+describe('proposal details for e-proposals (schema version 4)', () => {
+  const PROPOSAL = {
+    pan: 'abcde 1234f',
+    address: '  12, Synthetic Street,   Bengaluru ',
+    occupation: 'Software Professional',
+    nomineeRelationship: 'spouse',
+    highRiskCustomer: false,
+  };
+  const base = {
+    customer: { name: 'Synthetic Proposer' },
+    pincode: '560001',
+    members: [{ relationship: 'self', age: 40 }],
+  };
+
+  it('saves them normalised and reads them back; never holds an Aadhaar number', async () => {
+    const store = await open(place());
+    const saved = store.save(null, { ...base, proposal: PROPOSAL } as never);
+    expect(store.get(saved.id)?.client.proposal).toEqual({
+      pan: 'ABCDE1234F',
+      address: '12, Synthetic Street, Bengaluru',
+      occupation: 'Software Professional',
+      nomineeRelationship: 'spouse',
+      highRiskCustomer: false,
+    });
+    expect(() =>
+      store.save(null, { ...base, proposal: { ...PROPOSAL, aadhaar: '000011112222' } } as never),
+    ).toThrow();
+    store.close();
+  });
+
+  it('rejects an invalid PAN or nominee relationship', async () => {
+    const store = await open(place());
+    for (const bad of [
+      { pan: 'ABCD1234F' },
+      { pan: '12345ABCDE' },
+      { nomineeRelationship: 'cousin' },
+    ]) {
+      expect(() => store.save(null, { ...base, proposal: bad } as never)).toThrow();
     }
     expect(store.list()).toEqual([]);
     store.close();

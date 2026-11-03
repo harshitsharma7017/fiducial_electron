@@ -43,6 +43,14 @@ export interface PlanStep {
   /** Shown to the advisor if this step fails. */
   label: string;
   op: PageOp;
+  /** A step the page may not need (for example closing a pop-up that may not show): its failure
+   * does not stop the run. */
+  optional?: boolean;
+  /** United India may answer this step with its ERRORS pop-up about fields the advisor fills by
+   * hand: the pop-up is closed, its message kept for the advisor, and the run goes on. */
+  closeErrors?: boolean;
+  /** For an optional step: what the advisor is told if the page could not take it. */
+  ifMissed?: string;
 }
 
 export type UiicHealthPlan = { ok: true; steps: PlanStep[] } | { ok: false; problems: string[] };

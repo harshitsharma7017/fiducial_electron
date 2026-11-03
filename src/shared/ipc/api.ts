@@ -1,9 +1,9 @@
 // The renderer-facing API exposed by the preload as `window.fqf`. Type-only imports keep zod
 // out of the preload bundle. API_SHAPE lists the exact exposed surface, checked by the smoke test.
-import type { ClientRecord } from '../contracts/client';
 import type {
   AppInfo,
   ClientListResponse,
+  ClientView,
   InsurerPortalList,
   QuoteRunResultView,
   SaveClientRequest,
@@ -34,13 +34,14 @@ export interface FqfApi {
     run(request: {
       clientId: string;
       insurerId: string;
-      product: 'health' | 'motor';
+      product: 'health' | 'motor' | 'fm-proposal';
       goodHealthConfirmed: boolean;
     }): Promise<AppResult<QuoteRunResultView>>;
   };
   clients: {
     list(): Promise<AppResult<ClientListResponse>>;
-    get(id: string): Promise<AppResult<ClientRecord>>;
+    /** The client, and of the Aadhaar number only its last four digits. */
+    get(id: string): Promise<AppResult<ClientView>>;
     save(request: SaveClientRequest): Promise<AppResult<{ id: string }>>;
     delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
   };

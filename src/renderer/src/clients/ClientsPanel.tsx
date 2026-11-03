@@ -1,11 +1,17 @@
 // Saved clients: the details quotes are fetched for, kept encrypted on this computer until the
 // advisor deletes them. Members carry relationship and age, and optionally date of birth and
 // gender (United India's calculator needs them); the proposer may have a marital status. Each
-// client can be quoted from here ("Get quote").
+// client can be quoted from here ("Get quote"). Proposal details (PAN, address, occupation, nominee
+// relationship, high-risk customer) are for e-proposal forms; the Aadhaar number is never saved.
 import { useCallback, useEffect, useState } from 'react';
 import {
   ageOn,
+  HIGH_RISK_TYPES,
+  NOMINEE_RELATIONSHIPS,
+  UIIC_OCCUPATIONS,
   type ClientInputRaw,
+  type HighRiskType,
+  type NomineeRelationship,
   type ClientSummary,
   type Gender,
   type MaritalStatus,
@@ -47,6 +53,65 @@ const MARITAL_LABELS: Record<MaritalStatus, string> = {
   divorced: 'Divorced',
 };
 
+const NOMINEE_LABELS: Record<NomineeRelationship, string> = {
+  spouse: 'Spouse',
+  father: 'Father',
+  mother: 'Mother',
+  son: 'Son',
+  daughter: 'Daughter',
+  father_in_law: 'Father-in-law',
+  mother_in_law: 'Mother-in-law',
+  brother: 'Brother',
+  sister: 'Sister',
+};
+
+/** The proposal details kept as text in the form (all but the relationship and the flag). */
+const PROPOSAL_TEXT = [
+  'pan',
+  'address',
+  'state',
+  'city',
+  'village',
+  'occupation',
+  'landlineStdCode',
+  'landlineNumber',
+  'ckycNumber',
+  'eInsuranceAccountNumber',
+  'nomineeName',
+  'nomineeAddress',
+  'nomineeContact',
+  'intermediaryPlace',
+] as const;
+type ProposalTextKey = (typeof PROPOSAL_TEXT)[number];
+
+type ProposalDraft = Record<ProposalTextKey, string> & {
+  nomineeRelationship: NomineeRelationship | '';
+  highRiskCustomer: boolean;
+  highRiskType: HighRiskType | '';
+};
+
+const HIGH_RISK_LABELS: Record<HighRiskType, string> = {
+  hni: 'High-net-worth individual (HNI)',
+  pep: 'Politically exposed person (PEP) or close relative',
+  'nri-hni': 'NRI / foreign resident who is also HNI',
+  'trust-ngo': 'Trust / NGO paying over ₹10 lakh premium a year',
+};
+
+const EMPTY_PROPOSAL: ProposalDraft = {
+  ...(Object.fromEntries(PROPOSAL_TEXT.map((k) => [k, ''])) as Record<ProposalTextKey, string>),
+  nomineeRelationship: '',
+  highRiskCustomer: false,
+  highRiskType: '',
+};
+
+/** The Aadhaar number, kept apart (secret vault): the form only knows its last four digits. */
+interface AadhaarDraft {
+  lastFour: string | null;
+  /** A new number typed in (replaces any saved one). */
+  input: string;
+  remove: boolean;
+}
+
 interface Draft {
   id: string | null;
   name: string;
@@ -59,6 +124,9 @@ interface Draft {
   withPreferences: boolean;
   withVehicle: boolean;
   vehicle: VehicleDraft;
+  withProposal: boolean;
+  proposal: ProposalDraft;
+  aadhaar: AadhaarDraft;
   coverType: 'individual' | 'floater';
   sumInsuredRupees: string;
   tenureYears: string;
@@ -76,6 +144,9 @@ const EMPTY: Draft = {
   withPreferences: true,
   withVehicle: false,
   vehicle: EMPTY_VEHICLE,
+  withProposal: false,
+  proposal: EMPTY_PROPOSAL,
+  aadhaar: { lastFour: null, input: '', remove: false },
   coverType: 'floater',
   sumInsuredRupees: '',
   tenureYears: '1',
@@ -114,6 +185,26 @@ function toInput(d: Draft): ClientInputRaw {
         }
       : {}),
     ...(d.withVehicle ? { vehicle: vehicleToInput(d.vehicle) as never } : {}),
+    ...(d.withProposal
+      ? {
+          proposal: {
+            // Only the details given: empty boxes are not saved.
+            ...Object.fromEntries(
+              PROPOSAL_TEXT.filter((k) => optional(d.proposal[k])).map((k) => [
+                k,
+                d.proposal[k].trim(),
+              ]),
+            ),
+            ...(d.proposal.nomineeRelationship
+              ? { nomineeRelationship: d.proposal.nomineeRelationship }
+              : {}),
+            highRiskCustomer: d.proposal.highRiskCustomer,
+            ...(d.proposal.highRiskCustomer && d.proposal.highRiskType
+              ? { highRiskType: d.proposal.highRiskType }
+              : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -172,6 +263,17 @@ export function ClientsPanel(): React.JSX.Element | null {
       withPreferences: !!client.preferences,
       withVehicle: !!client.vehicle,
       vehicle: client.vehicle ? vehicleFromRecord(client.vehicle) : EMPTY_VEHICLE,
+      withProposal: !!client.proposal || result.data.aadhaarLastFour !== null,
+      aadhaar: { lastFour: result.data.aadhaarLastFour, input: '', remove: false },
+      proposal: {
+        ...(Object.fromEntries(PROPOSAL_TEXT.map((k) => [k, client.proposal?.[k] ?? ''])) as Record<
+          ProposalTextKey,
+          string
+        >),
+        nomineeRelationship: client.proposal?.nomineeRelationship ?? '',
+        highRiskCustomer: client.proposal?.highRiskCustomer ?? false,
+        highRiskType: client.proposal?.highRiskType ?? '',
+      },
       coverType: client.preferences?.coverType ?? 'floater',
       sumInsuredRupees: client.preferences
         ? String(client.preferences.sumInsuredPaise / PAISE_PER_RUPEE)
@@ -249,6 +351,14 @@ export function ClientsPanel(): React.JSX.Element | null {
                       Motor quote
                     </button>
                   )}
+                  {c.memberCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setQuoting(quoting === `fm:${c.id}` ? null : `fm:${c.id}`)}
+                    >
+                      Family Medicare proposal
+                    </button>
+                  )}
                   {c.hasPreferences && c.memberCount > 0 && (
                     <button
                       type="button"
@@ -278,6 +388,7 @@ export function ClientsPanel(): React.JSX.Element | null {
               </div>
               {quoting === c.id && <QuotePanel clientId={c.id} />}
               {quoting === `motor:${c.id}` && <MotorQuotePanel clientId={c.id} />}
+              {quoting === `fm:${c.id}` && <FmProposalPanel clientId={c.id} />}
             </li>
           ))}
         </ul>
@@ -304,8 +415,13 @@ function ClientForm(props: {
     event.preventDefault();
     setBusy(true);
     setError(null);
+    const aadhaar = d.aadhaar.input.trim()
+      ? { aadhaar: d.aadhaar.input.trim() }
+      : d.aadhaar.remove
+        ? { aadhaar: null }
+        : {};
     const result = await window.fqf.clients
-      .save({ ...(d.id ? { id: d.id } : {}), client: toInput(d) })
+      .save({ ...(d.id ? { id: d.id } : {}), client: toInput(d), ...aadhaar })
       .catch(() => null);
     setBusy(false);
     if (result?.ok) props.onSaved();
@@ -468,6 +584,22 @@ function ClientForm(props: {
       <label className="check">
         <input
           type="checkbox"
+          checked={d.withProposal}
+          onChange={(e) => set({ withProposal: e.target.checked })}
+        />
+        Add proposal details (for e-proposal forms)
+      </label>
+      {d.withProposal && (
+        <ProposalFields
+          value={d.proposal}
+          onChange={(proposal) => set({ proposal })}
+          aadhaar={d.aadhaar}
+          onAadhaarChange={(aadhaar) => set({ aadhaar })}
+        />
+      )}
+      <label className="check">
+        <input
+          type="checkbox"
           checked={d.withPreferences}
           onChange={(e) => set({ withPreferences: e.target.checked })}
         />
@@ -549,6 +681,27 @@ function describeField(path: string): string {
       ] ?? 'quote details'
     );
   if (parts[0] === 'pincode') return 'pincode';
+  if (parts[0] === 'aadhaar') return 'Aadhaar number';
+  if (parts[0] === 'proposal')
+    return (
+      {
+        pan: 'PAN',
+        address: 'address',
+        state: 'state',
+        city: 'city',
+        village: 'village',
+        occupation: 'occupation',
+        landlineStdCode: 'landline STD code',
+        landlineNumber: 'landline number',
+        ckycNumber: 'CKYC number',
+        eInsuranceAccountNumber: 'e-insurance account number',
+        nomineeName: "nominee's name",
+        nomineeRelationship: 'nominee relationship',
+        nomineeAddress: "nominee's address",
+        nomineeContact: "nominee's contact number",
+        intermediaryPlace: "intermediary's place of signing",
+      }[parts[1] ?? ''] ?? 'proposal details'
+    );
   return 'details';
 }
 
@@ -671,6 +824,208 @@ function MotorQuotePanel(props: { clientId: string }): React.JSX.Element {
                 <li key={p}>{p}</li>
               ))}
             </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProposalFields(props: {
+  value: ProposalDraft;
+  onChange: (value: ProposalDraft) => void;
+  aadhaar: AadhaarDraft;
+  onAadhaarChange: (value: AadhaarDraft) => void;
+}): React.JSX.Element {
+  const a = props.aadhaar;
+  const setAadhaar = (patch: Partial<AadhaarDraft>) => props.onAadhaarChange({ ...a, ...patch });
+  const p = props.value;
+  const set = (patch: Partial<ProposalDraft>) => props.onChange({ ...p, ...patch });
+  const text = (
+    key: ProposalTextKey,
+    label: string,
+    extra: React.InputHTMLAttributes<HTMLInputElement> = {},
+  ) => (
+    <label>
+      {label}
+      <input
+        value={p[key]}
+        onChange={(e) => set({ [key]: e.target.value })}
+        autoComplete="off"
+        {...extra}
+      />
+    </label>
+  );
+  return (
+    <fieldset>
+      <legend>Proposal details (for e-proposal forms)</legend>
+      <p className="insurer-note">
+        Everything here is optional and stored encrypted. The Aadhaar number is kept apart, in the
+        same secure vault as insurer passwords; after saving, only its last four digits are shown.
+      </p>
+      <h4>Proposer</h4>
+      {text('pan', 'PAN', { maxLength: 10, placeholder: 'ABCDE1234F' })}
+      <label>
+        Aadhaar number
+        {a.lastFour && !a.remove && !a.input ? (
+          <span className="insurer-mode">
+            Saved, ending {a.lastFour}{' '}
+            <button type="button" onClick={() => setAadhaar({ remove: true })}>
+              Remove
+            </button>
+          </span>
+        ) : null}
+        {a.remove && !a.input ? (
+          <span className="insurer-mode">
+            Will be removed when you save.{' '}
+            <button type="button" onClick={() => setAadhaar({ remove: false })}>
+              Keep it
+            </button>
+          </span>
+        ) : null}
+        <input
+          value={a.input}
+          onChange={(e) => setAadhaar({ input: e.target.value })}
+          inputMode="numeric"
+          maxLength={14}
+          autoComplete="off"
+          placeholder={a.lastFour ? 'Type a new number to replace it' : '12 digits'}
+        />
+      </label>
+      {text('address', 'Address', { maxLength: 200 })}
+      <div className="member-row">
+        {text('state', 'State (as the insurer lists it)', { maxLength: 60 })}
+        {text('city', 'City', { maxLength: 80 })}
+      </div>
+      {text('village', 'Village or locality (as the insurer lists it for the pincode)', {
+        maxLength: 100,
+      })}
+      <label>
+        Occupation
+        <select value={p.occupation} onChange={(e) => set({ occupation: e.target.value })}>
+          <option value="">Not given</option>
+          {UIIC_OCCUPATIONS.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="member-row">
+        {text('landlineStdCode', 'Landline STD code', { inputMode: 'numeric', maxLength: 6 })}
+        {text('landlineNumber', 'Landline number', { inputMode: 'numeric', maxLength: 10 })}
+      </div>
+      {text('ckycNumber', 'CKYC number (14 digits)', { inputMode: 'numeric', maxLength: 16 })}
+      {text('eInsuranceAccountNumber', 'E-insurance account number', { maxLength: 20 })}
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={p.highRiskCustomer}
+          onChange={(e) => set({ highRiskCustomer: e.target.checked })}
+        />
+        High-risk customer (high-net-worth individual, politically exposed person, NRI who is also
+        HNI, or trust/NGO)
+      </label>
+      {p.highRiskCustomer && (
+        <label>
+          Type of high risk
+          <select
+            value={p.highRiskType}
+            onChange={(e) => set({ highRiskType: e.target.value as HighRiskType | '' })}
+          >
+            <option value="">Not given</option>
+            {HIGH_RISK_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {HIGH_RISK_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <h4>Nominee</h4>
+      {text('nomineeName', "Nominee's name", { maxLength: 100 })}
+      <label>
+        Nominee relationship
+        <select
+          value={p.nomineeRelationship}
+          onChange={(e) => set({ nomineeRelationship: e.target.value as NomineeRelationship | '' })}
+        >
+          <option value="">Not given</option>
+          {NOMINEE_RELATIONSHIPS.map((r) => (
+            <option key={r} value={r}>
+              {NOMINEE_LABELS[r]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {text('nomineeAddress', "Nominee's address", { maxLength: 200 })}
+      {text('nomineeContact', "Nominee's contact number", { inputMode: 'tel', maxLength: 14 })}
+      <h4>Intermediary</h4>
+      {text('intermediaryPlace', 'Place of signing (your town or city)', { maxLength: 60 })}
+    </fieldset>
+  );
+}
+
+/** Fills United India's Family Medicare e-proposal (sections I-II) for a saved client. */
+function FmProposalPanel(props: { clientId: string }): React.JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    const r = await window.fqf.quotes
+      .run({
+        clientId: props.clientId,
+        insurerId: 'united-india',
+        product: 'fm-proposal',
+        goodHealthConfirmed: false,
+      })
+      .catch(() => null);
+    setBusy(false);
+    setResult(
+      r?.ok ? r.data : { error: r ? r.error.message : 'The proposal could not be started.' },
+    );
+  };
+  return (
+    <div className="quote-panel">
+      <p className="insurer-note">
+        <strong>United India, Family Medicare e-proposal.</strong> Sign in to United India and leave
+        it on its home page. The app opens the e-proposal form and fills the proposer details and
+        nominee relationship, then stops. It never saves or submits the proposal: you complete the
+        rest, check it, and press Save As Draft yourself.
+      </p>
+      <div className="insurer-actions">
+        <button type="button" disabled={busy} onClick={() => void run()}>
+          {busy ? 'Filling United India…' : 'Fill Family Medicare proposal'}
+        </button>
+      </div>
+      {result && 'error' in result && (
+        <p className="error" role="alert">
+          {result.error}
+        </p>
+      )}
+      {result && 'outcome' in result && (
+        <div role="status">
+          <p className={result.outcome === 'ready' ? undefined : 'error'}>
+            {result.step ? `${result.step}: ` : ''}
+            {result.message}
+          </p>
+          {result.problems.length > 0 && (
+            <ul>
+              {result.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          {result.toDo && result.toDo.length > 0 && (
+            <>
+              <p>Still to fill in by hand:</p>
+              <ul>
+                {result.toDo.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
       )}

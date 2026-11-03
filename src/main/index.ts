@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { app, safeStorage, session } from 'electron';
+import { createAadhaarVault } from './clients/aadhaar-vault';
 import { createClientService } from './clients/service';
 import { createInsurerCredentials } from './insurers/credentials';
 import { createFormRecorder } from './insurers/form-recorder';
@@ -117,6 +118,7 @@ function start(): void {
     });
     const clients = createClientService({
       enabled: automation,
+      aadhaar: createAadhaarVault(openVault),
       open: () =>
         openClientStore({
           dbPath: join(userData, 'data', 'fqf.db'),

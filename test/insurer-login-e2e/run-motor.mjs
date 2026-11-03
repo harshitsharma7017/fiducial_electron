@@ -1,6 +1,7 @@
-// United India motor automation only, against the local copy of the Motor calculator
-// (uiic-motor-calculator.cjs). Contacts no insurer: every page is served from 127.0.0.1.
-// Usage: node test/insurer-login-e2e/run-motor.mjs
+// One United India automation against its local copy, in Electron. Contacts no insurer: every
+// page is served from 127.0.0.1.
+// Usage: node test/insurer-login-e2e/run-motor.mjs            (motor calculator)
+//        node test/insurer-login-e2e/run-motor.mjs fm-proposal (Family Medicare e-proposal)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -32,5 +33,6 @@ const electron = createRequire(import.meta.url)('electron');
 const env = { ...process.env, FQF_LOGIN_E2E_BUNDLE: join(OUT, 'agent.cjs') };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.NODE_OPTIONS;
-const child = spawn(electron, [join(HERE, 'motor-harness.cjs')], { env, stdio: 'inherit' });
+const harness = process.argv[2] === 'fm-proposal' ? 'fm-proposal-harness.cjs' : 'motor-harness.cjs';
+const child = spawn(electron, [join(HERE, harness)], { env, stdio: 'inherit' });
 child.on('exit', (code) => process.exit(code ?? 1));

@@ -572,13 +572,18 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         if (!el) return { ok: false, detail: attempt === 0 ? 'not-found' : 'reset-by-page' };
         let want = command.value;
         if (el instanceof HTMLSelectElement) {
-          const option = Array.from(el.options).find(
-            (o) =>
-              o.value === command.value ||
-              o.value === `string:${command.value}` ||
-              o.value === `number:${command.value}` ||
-              o.text.trim() === command.value,
-          );
+          // The visible text matched exactly first, then ignoring case and spacing (place names
+          // come back in capitals).
+          const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+          const options = Array.from(el.options);
+          const option =
+            options.find(
+              (o) =>
+                o.value === command.value ||
+                o.value === `string:${command.value}` ||
+                o.value === `number:${command.value}` ||
+                o.text.trim() === command.value,
+            ) ?? options.find((o) => loose(o.text) === loose(command.value));
           if (!option) return { ok: false, detail: 'option-missing' };
           want = option.value;
           el.focus();

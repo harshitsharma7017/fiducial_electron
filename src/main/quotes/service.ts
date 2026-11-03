@@ -1,23 +1,29 @@
-// Quote runs behind the IPC channel. Off unless the automation features are switched on. Only the
-// United India health calculator is automated so far; other insurers are refused with a reason.
+// Quote runs behind the IPC channel. Off unless the automation features are switched on. United
+// India only so far (health and motor calculators, the Family Medicare e-proposal); other insurers
+// are refused with a reason.
 import type { BrowserWindow } from 'electron';
 import type { ClientService } from '../clients/service';
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
-import { runUiicHealthQuote, runUiicMotorQuote, type QuoteRunResult } from './run-uiic-health';
+import {
+  runUiicFamilyMedicareProposal,
+  runUiicHealthQuote,
+  runUiicMotorQuote,
+  type QuoteRunResult,
+} from './run-uiic-health';
 
 export interface QuoteService {
   run(request: {
     clientId: string;
     insurerId: string;
-    product: 'health' | 'motor';
+    product: 'health' | 'motor' | 'fm-proposal';
     goodHealthConfirmed: boolean;
   }): Promise<QuoteRunResult>;
 }
 
 export function createQuoteService(deps: {
   enabled: boolean;
-  clients: Pick<ClientService, 'get'>;
+  clients: Pick<ClientService, 'get' | 'aadhaarFor'>;
   windowsOf: (insurerId: string) => BrowserWindow[];
   logger: Logger;
   now?: () => Date;
@@ -50,12 +56,18 @@ export function createQuoteService(deps: {
         const result =
           product === 'motor'
             ? await runUiicMotorQuote({ windows, client: record.client, today })
-            : await runUiicHealthQuote({
-                windows,
-                client: record.client,
-                goodHealth: goodHealthConfirmed,
-                today,
-              });
+            : product === 'fm-proposal'
+              ? await runUiicFamilyMedicareProposal({
+                  windows,
+                  client: record.client,
+                  aadhaar: await deps.clients.aadhaarFor(clientId),
+                })
+              : await runUiicHealthQuote({
+                  windows,
+                  client: record.client,
+                  goodHealth: goodHealthConfirmed,
+                  today,
+                });
         deps.logger.log(result.outcome === 'failed' ? 'warn' : 'info', 'quote.run', {
           insurer: insurerId,
           quoteOutcome: result.outcome,

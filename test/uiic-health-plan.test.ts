@@ -162,7 +162,7 @@ describe('the quote service', () => {
   const service = (enabled: boolean, windows: unknown[] = []) =>
     createQuoteService({
       enabled,
-      clients: { get: () => Promise.resolve(record) },
+      clients: { get: () => Promise.resolve(record), aadhaarFor: () => Promise.resolve(null) },
       windowsOf: () => windows as never,
       logger: createLogger([]),
       now: () => TODAY,

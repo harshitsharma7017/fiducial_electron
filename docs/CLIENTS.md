@@ -16,6 +16,20 @@ advisor deletes.
 | Where             | pincode                                                                |
 | Members (1 to 12) | relationship and age only: no names, gender or date of birth (C-05)    |
 | Quote details     | cover type (floater or individual), sum insured, policy term (optional) |
+| Vehicle           | class, new or pre-owned, registration date, zone, IDV, and the details its class needs (optional; motor quotes, 2 November 2026) |
+| Proposal details  | proposer: PAN, address, state, city, village, occupation, high-risk type, landline, CKYC and e-insurance numbers, high-risk customer; nominee: name, relationship, address, contact; intermediary: place of signing (all optional; e-proposal forms, 3 November 2026) |
+
+**The Aadhaar number is kept apart (decision of 3 November 2026).** UIDAI's rules ask that Aadhaar
+numbers be kept in a separately secured store, so it is not in the client database:
+- **Where:** the secret vault (AES-256-GCM, key wrapped by the OS), the same store as the insurer
+  passwords, one entry per client. The entry is named by a one-way hash of the client id.
+- **Checked:** 12 digits, not starting with 0 or 1, with a valid Verhoeff check digit.
+- **Who sees it:** the screens only learn whether one is saved and its last four digits. Only the
+  main process reads the whole number, to fill an insurer's form. It is never logged.
+- **Removed:** with **Remove** on the client form, or when the client is deleted.
+
+Since 2 November 2026, members may also have a date of birth and
+gender, and the proposer a marital status (United India's calculator needs them).
 
 A client with quote details is **Ready to quote**: `quoteRequestFor()`
 (`src/shared/contracts/client.ts`) turns it into the quote request that quote automation will

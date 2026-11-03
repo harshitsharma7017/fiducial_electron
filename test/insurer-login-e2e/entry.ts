@@ -5,7 +5,11 @@ import { keyboardTargetFor } from '../../src/main/insurers/keyboard-target';
 import { createFormRecorder } from '../../src/main/insurers/form-recorder';
 import { insurerLoginAgent } from '../../src/main/insurers/login-agent';
 import { createLogger } from '../../src/main/logging/logger';
-import { runUiicHealthQuote, runUiicMotorQuote } from '../../src/main/quotes/run-uiic-health';
+import {
+  runUiicFamilyMedicareProposal,
+  runUiicHealthQuote,
+  runUiicMotorQuote,
+} from '../../src/main/quotes/run-uiic-health';
 import {
   installNavigationPolicy,
   setSessionPolicy,
@@ -18,6 +22,7 @@ export {
   installNavigationPolicy,
   keyboardFill,
   keyboardTargetFor,
+  runUiicFamilyMedicareProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
   setSessionPolicy,

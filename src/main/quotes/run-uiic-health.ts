@@ -3,10 +3,13 @@
 // of the plan, and after every step checks for United India's ERRORS pop-up.
 // - Health (plan: uiic-health.ts): stops at the "User Details" pop-up for the advisor.
 // - Motor (plan: uiic-motor.ts): reads the premium from "Premium Details" and returns it.
+// - Family Medicare e-proposal (plan: uiic-fm-proposal.ts): fills sections I-II and stops; the
+//   advisor fills the rest and saves it. The app never saves or submits a proposal.
 import type { BrowserWindow, WebContents } from 'electron';
 import type { ClientInput } from '../../shared/contracts/client';
 import { quotePageAgent, type PageOp, type PageOpResult } from './page-ops';
 import { planUiicHealthQuote, type PlanStep } from './uiic-health';
+import { planUiicFamilyMedicareProposal } from './uiic-fm-proposal';
 import { planUiicMotorQuote } from './uiic-motor';
 
 const AGENT_SOURCE = quotePageAgent.toString();
@@ -22,6 +25,8 @@ export interface QuoteRunResult {
   problems: string[];
   /** The premium read from the insurer's page (motor), as shown there. */
   premium?: { label: string; amount: string };
+  /** What the advisor still fills by hand (e-proposals), and the insurer's messages about it. */
+  toDo?: string[];
 }
 
 async function exec(wc: WebContents, op: PageOp): Promise<PageOpResult> {
@@ -58,15 +63,16 @@ async function runInCalculator(deps: {
   tile: string;
   calculatorPath: string;
   steps: PlanStep[];
-}): Promise<{ result: QuoteRunResult | null; last: PageOpResult | null }> {
+}): Promise<{ result: QuoteRunResult | null; last: PageOpResult | null; notes: string[] }> {
   const main = deps.windows()[0];
   if (!main || main.isDestroyed()) {
-    return { result: refused('Open United India and sign in first.'), last: null };
+    return { result: refused('Open United India and sign in first.'), last: null, notes: [] };
   }
   if (pathOf(main.webContents.getURL()) !== HOME_PATH) {
     return {
       result: refused("Go to United India's home page (after signing in), then try again."),
       last: null,
+      notes: [],
     };
   }
   const failed = (step: string, message: string): QuoteRunResult => ({
@@ -85,6 +91,7 @@ async function runInCalculator(deps: {
         `The "${deps.tile}" tile was not found on the home page.`,
       ),
       last: null,
+      notes: [],
     };
   }
   let calculator: BrowserWindow | undefined;
@@ -103,17 +110,43 @@ async function runInCalculator(deps: {
     return {
       result: failed('Open the calculator', 'The calculator window did not open.'),
       last: null,
+      notes: [],
     };
   }
 
   let last: PageOpResult | null = null;
+  /** United India's messages the run closed and went on (closeErrors steps). */
+  const notes: string[] = [];
   for (const step of deps.steps) {
-    last = await exec(calculator.webContents, step.op);
-    const errors = await exec(calculator.webContents, { op: 'errors' });
+    const result = await exec(calculator.webContents, step.op);
+    let errors = await exec(calculator.webContents, { op: 'errors' });
+    if (errors.errors && step.closeErrors) {
+      notes.push(
+        `United India says: ${errors.errors.replace(/^\s*ERRORS\s*/i, '').replace(/\s*Close\s*$/, '')}`,
+      );
+      await exec(calculator.webContents, {
+        op: 'clickButton',
+        text: 'Close',
+        within: 'ERRORS',
+        timeoutMs: 3000,
+      });
+      // The pop-up fades out: wait until it is gone before looking again.
+      await exec(calculator.webContents, {
+        op: 'waitForDialogGone',
+        text: 'ERRORS',
+        timeoutMs: 3000,
+      });
+      errors = await exec(calculator.webContents, { op: 'errors' });
+    }
     if (errors.errors) {
       calculator.focus();
-      return { result: failed(step.label, `United India says: ${errors.errors}`), last };
+      return { result: failed(step.label, `United India says: ${errors.errors}`), last, notes };
     }
+    if (!result.ok && step.optional) {
+      if (step.ifMissed) notes.push(step.ifMissed);
+      continue;
+    }
+    last = result;
     if (!last.ok) {
       calculator.focus();
       return {
@@ -122,11 +155,13 @@ async function runInCalculator(deps: {
           `Stopped at "${step.label}" (${last.detail ?? 'unknown'}). The calculator may have changed; finish this quote by hand.`,
         ),
         last,
+        notes,
       };
     }
   }
   calculator.focus();
-  return { result: null, last };
+  // The same message may come from more than one step (each section opened lists it again).
+  return { result: null, last, notes: [...new Set(notes)] };
 }
 
 export async function runUiicHealthQuote(deps: {
@@ -177,5 +212,30 @@ export async function runUiicMotorQuote(deps: {
     message: `United India motor premium (including GST): ${amount}. ${label}. United India calls this a provisional quote premium; the agent's discount may change it.`,
     problems: [],
     premium: { label, amount },
+  };
+}
+
+export async function runUiicFamilyMedicareProposal(deps: {
+  windows: () => BrowserWindow[];
+  client: ClientInput;
+  /** The client's Aadhaar number, read from the vault just now; never returned or logged. */
+  aadhaar: string | null;
+}): Promise<QuoteRunResult> {
+  const plan = planUiicFamilyMedicareProposal(deps.client, { aadhaar: deps.aadhaar });
+  if (!plan.ok) return refused('This client cannot be filled in automatically yet.', plan.problems);
+  const { result, notes } = await runInCalculator({
+    windows: deps.windows,
+    tile: 'Family Medicare E-Proposal Form',
+    calculatorPath: '/CustomerAppLive/data/ProposalFMhome.html',
+    steps: plan.steps,
+  });
+  if (result) return result;
+  return {
+    outcome: 'ready',
+    step: null,
+    message:
+      'Family Medicare proposal: the proposer details and nominee relationship are filled. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.',
+    problems: [],
+    toDo: [...plan.byHand, ...notes],
   };
 }
