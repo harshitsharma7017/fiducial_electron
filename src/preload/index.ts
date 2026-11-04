@@ -19,6 +19,7 @@ import type { AppResult } from '../shared/ipc/result';
 import type { VehicleRecord, VehicleSummary } from '../shared/contracts/vehicle';
 import type { TravellerSummary } from '../shared/contracts/traveller';
 import type { RuralRecord, RuralSummary } from '../shared/contracts/rural';
+import type { MarineRecord, MarineSummary } from '../shared/contracts/marine';
 
 const api: FqfApi = {
   app: {
@@ -107,6 +108,20 @@ const api: FqfApi = {
       ipcRenderer.invoke(IPC_CHANNELS.ruralSave, request) as Promise<AppResult<{ id: string }>>,
     delete: (id) =>
       ipcRenderer.invoke(IPC_CHANNELS.ruralDelete, { id }) as Promise<
+        AppResult<{ deleted: boolean }>
+      >,
+  },
+  marine: {
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.marineList, {}) as Promise<
+        AppResult<{ marine: MarineSummary[] }>
+      >,
+    get: (id) =>
+      ipcRenderer.invoke(IPC_CHANNELS.marineGet, { id }) as Promise<AppResult<MarineRecord>>,
+    save: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.marineSave, request) as Promise<AppResult<{ id: string }>>,
+    delete: (id) =>
+      ipcRenderer.invoke(IPC_CHANNELS.marineDelete, { id }) as Promise<
         AppResult<{ deleted: boolean }>
       >,
   },

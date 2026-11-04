@@ -18,6 +18,7 @@ import type {
   TravellerSummary,
 } from '../../shared/contracts/traveller';
 import type { RuralClient, RuralRecord, RuralSummary } from '../../shared/contracts/rural';
+import type { MarineClient, MarineRecord, MarineSummary } from '../../shared/contracts/marine';
 import { ClientStoreError, type ClientStore } from '../storage/client-store';
 import type { AadhaarVault, PassportVault } from './aadhaar-vault';
 
@@ -63,6 +64,11 @@ export interface ClientService {
   getRural(id: string): Promise<RuralRecord>;
   saveRural(id: string | null, input: RuralClient): Promise<string>;
   deleteRural(id: string): Promise<boolean>;
+  /** Marine clients (the policy holder of a voyage), kept apart from the others. */
+  listMarine(): Promise<MarineSummary[]>;
+  getMarine(id: string): Promise<MarineRecord>;
+  saveMarine(id: string | null, input: MarineClient): Promise<string>;
+  deleteMarine(id: string): Promise<boolean>;
   close(): void;
 }
 
@@ -294,6 +300,42 @@ export function createClientService(deps: {
       const s = await requireStore();
       const deleted = guard(() => s.rural.delete(id));
       if (deleted) deps.logger.info('rural.deleted');
+      return deleted;
+    },
+
+    listMarine: async () => {
+      const s = await requireStore();
+      return guard(() => s.marine.list());
+    },
+
+    getMarine: async (id) => {
+      const s = await requireStore();
+      const record = guard(() => s.marine.get(id));
+      if (!record) throw new AppException('VALIDATION_FAILED');
+      return record;
+    },
+
+    saveMarine: async (id, input) => {
+      const s = await requireStore();
+      const today = (deps.now ?? (() => new Date()))();
+      const dates = [input.dateOfBirth, input.registrationDate].filter(
+        (d): d is string => d !== undefined,
+      );
+      if (hasFutureDateOfBirth({ members: dates.map((dateOfBirth) => ({ dateOfBirth })) }, today)) {
+        throw new AppException('VALIDATION_FAILED');
+      }
+      if (id !== null && !guard(() => s.marine.get(id))) {
+        throw new AppException('VALIDATION_FAILED');
+      }
+      const saved = guard(() => s.marine.save(id, input));
+      deps.logger.info('marine.saved');
+      return saved.id;
+    },
+
+    deleteMarine: async (id) => {
+      const s = await requireStore();
+      const deleted = guard(() => s.marine.delete(id));
+      if (deleted) deps.logger.info('marine.deleted');
       return deleted;
     },
 

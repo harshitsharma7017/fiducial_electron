@@ -667,6 +667,65 @@ describe('the client service and IPC channels', () => {
     clients.close();
   });
 
+  // Marine clients (schema version 8): the policy holder of a voyage, a business or a person.
+  const BUSINESS = {
+    kind: 'organization',
+    customer: { name: 'Synthetic Exports Pvt Ltd', phone: '9876543210' },
+    pincode: '400001',
+    address: '5 Synthetic Dock Road',
+    pan: 'ABCDE1234F',
+    registrationNo: 'U12345MH2020PTC000001',
+    registrationDate: '2020-05-01',
+    msme: true,
+    organisationType: 'Private Limited Company',
+  };
+
+  it('saves, lists, reads and deletes marine clients, apart from the others', async () => {
+    const { call, clients } = setup(true);
+    const id = idOf(await call('marine:save', { marine: BUSINESS }));
+    expect(await call('marine:list', {})).toEqual({
+      ok: true,
+      data: {
+        marine: [
+          {
+            id,
+            name: 'Synthetic Exports Pvt Ltd',
+            pincode: '400001',
+            kind: 'organization',
+            updatedAt: expect.any(String) as string,
+          },
+        ],
+      },
+    });
+    expect(await call('marine:get', { id })).toMatchObject({
+      ok: true,
+      data: { id, marine: BUSINESS },
+    });
+    expect(await clients.listRural()).toEqual([]);
+    expect(await call('rural:get', { id })).toMatchObject({ ok: false });
+    expect(await call('marine:delete', { id })).toEqual({ ok: true, data: { deleted: true } });
+    expect(await clients.listMarine()).toEqual([]);
+    clients.close();
+  });
+
+  it('rejects malformed marine clients', async () => {
+    const { call, clients } = setup(true);
+    for (const marine of [
+      { ...BUSINESS, gender: 'male' },
+      { ...BUSINESS, kind: 'individual' },
+      { ...BUSINESS, pan: 'ABC' },
+      { ...BUSINESS, registrationDate: '2099-01-01' },
+      { ...BUSINESS, organisationType: 'Partnership' },
+    ]) {
+      expect(await call('marine:save', { marine })).toMatchObject({
+        ok: false,
+        error: { code: 'VALIDATION_FAILED' },
+      });
+    }
+    expect(await clients.listMarine()).toEqual([]);
+    clients.close();
+  });
+
   it('is off unless switched on: no database is created', async () => {
     const { call, p } = setup(false);
     expect(await call('clients:list', {})).toEqual({

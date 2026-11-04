@@ -3,7 +3,8 @@
 // e-proposals. New India: motor (the vehicle details of the Private Car and Two Wheeler forms;
 // run-nia-motor.ts), the health quote forms of twelve policies (run-nia-health.ts) and three
 // overseas travel quote forms (run-nia-travel.ts) and four rural quote forms for a rural client
-// (run-nia-rural.ts). Other
+// (run-nia-rural.ts), and the Marine Specific Voyage form for a marine client (run-nia-marine.ts).
+// Other
 // insurers and products are refused with a reason. Motor quotes are for a saved vehicle, travel
 // e-proposals for a travel client, the others for a saved client.
 import type { ClientService } from '../clients/service';
@@ -22,6 +23,7 @@ import {
 import type { UiicProposalForm } from './uiic-health-proposal';
 import { runNiaHealthQuote } from './run-nia-health';
 import { runNiaMotorQuote } from './run-nia-motor';
+import { runNiaMarineQuote } from './run-nia-marine';
 import { runNiaRuralQuote } from './run-nia-rural';
 import { runNiaTravelQuote } from './run-nia-travel';
 
@@ -42,7 +44,7 @@ export function createQuoteService(deps: {
   enabled: boolean;
   clients: Pick<
     ClientService,
-    'get' | 'aadhaarFor' | 'getVehicle' | 'getTraveller' | 'passportFor' | 'getRural'
+    'get' | 'aadhaarFor' | 'getVehicle' | 'getTraveller' | 'passportFor' | 'getRural' | 'getMarine'
   >;
   /** The insurer's open pages: its portal first, then its pop-ups. */
   windowsOf: (insurerId: string) => PortalPage[];
@@ -58,7 +60,8 @@ export function createQuoteService(deps: {
       const newIndiaOnly =
         request.product === 'nia-health' ||
         request.product === 'nia-travel' ||
-        request.product === 'nia-rural';
+        request.product === 'nia-rural' ||
+        request.product === 'nia-marine';
       if (
         newIndiaOnly ? insurerId !== 'new-india' : insurerId !== 'united-india' && !newIndiaMotor
       ) {
@@ -79,16 +82,32 @@ export function createQuoteService(deps: {
       }
       // Read before the run starts: an unknown client, travel client, rural client or vehicle is
       // refused at once.
-      if (request.product === 'nia-rural') {
-        const rural = (await deps.clients.getRural(request.ruralId)).rural;
+      if (request.product === 'nia-rural' || request.product === 'nia-marine') {
+        const today = (deps.now ?? (() => new Date()))();
+        const windows = () => deps.windowsOf(insurerId);
+        const start =
+          request.product === 'nia-rural'
+            ? {
+                kind: 'rural' as const,
+                rural: (await deps.clients.getRural(request.ruralId)).rural,
+                run: request.run,
+              }
+            : {
+                kind: 'marine' as const,
+                holder: (await deps.clients.getMarine(request.marineId)).marine,
+                shipment: request.shipment,
+              };
         running = true;
         try {
-          const result = await runNiaRuralQuote({
-            windows: () => deps.windowsOf(insurerId),
-            rural,
-            run: request.run,
-            today: (deps.now ?? (() => new Date()))(),
-          });
+          const result =
+            start.kind === 'rural'
+              ? await runNiaRuralQuote({ windows, rural: start.rural, run: start.run, today })
+              : await runNiaMarineQuote({
+                  windows,
+                  holder: start.holder,
+                  shipment: start.shipment,
+                  today,
+                });
           deps.logger.log(result.outcome === 'failed' ? 'warn' : 'info', 'quote.run', {
             insurer: insurerId,
             quoteOutcome: result.outcome,

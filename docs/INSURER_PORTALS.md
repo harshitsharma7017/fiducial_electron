@@ -351,6 +351,47 @@ It never presses **Save & Calculate Premium**, **Approve** or **Send Quote**.
 
 **Not yet run on the live portal.**
 
+## New India: Marine Specific Voyage (filled, never calculated)
+
+Built from the recording of 4 November 2026 (`new-india-2026-11-04T10-22-36-040Z`). In it, the
+advisor opened the form from the dashboard (MARINE, Specific Voyage), looked at the policy holder as
+an individual and as an organisation, and opened its sections. Nothing was typed and no premium was
+worked out, so dates are typed as dd/mm/yyyy.
+
+A marine client (see CLIENTS.md) has a **New India Specific Voyage quote** button. The advisor
+enters the shipment for that quote; it is not saved. The app fills:
+- **Policy Holder Information**, as a new customer:
+  - a business: the Organization category, business name, registration number and date, MSME,
+    type of organisation, address, mobile, e-mail and PAN;
+  - a person: as on the travel forms.
+- **Transit Details:**
+  - type of voyage, start date, transit type and mode of transport;
+  - from and to country, picked from New India's suggestions;
+  - ports, bill type, number and date, mark number, and whether the certificate shows the premium.
+- **Cargo Details:**
+  - cargo type, sum insured, rate and % extra;
+  - invoice number and date;
+  - excess (applicable on, %, minimum);
+  - the Inland Transit Clause A, B or C.
+
+Some lists may depend on the type of voyage. A transit type, mode, country or clause New India does
+not offer is listed for the advisor rather than stopping the run. Also left to the advisor:
+- the cities, packaging, basis of valuation, state, PIN code and GST;
+- the bank details;
+- Vessel Details.
+
+It never presses **Save & Calculate Premium** or **Approve**.
+
+**Verified:** against a local copy of the form and the dashboard (`npm run test:nia -- marine`).
+Checked for:
+- a business with a full shipment;
+- a person, with a country New India does not list;
+- a start date in the past, refused.
+
+**Not yet run on the live portal.**
+
+## What it does
+
 The advisor saves each insurer's user ID and password once. When they open that insurer's portal
 from the app, the app fills both into the insurer's own sign-in page. The advisor completes any
 CAPTCHA and presses the insurer's sign-in button. The app never presses it, and never reads or

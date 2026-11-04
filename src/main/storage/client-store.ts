@@ -45,6 +45,12 @@ import {
   type RuralRecord,
   type RuralSummary,
 } from '../../shared/contracts/rural';
+import {
+  marineClientSchema,
+  type MarineClient,
+  type MarineRecord,
+  type MarineSummary,
+} from '../../shared/contracts/marine';
 import { VaultOpenError, type VaultOpener } from '../secrets/vault-opener';
 import { openDurable, type DurableStore } from './durable-db';
 import { openEncrypted } from './encrypted-db';
@@ -52,7 +58,7 @@ import type { StoreProblem } from './store-problems';
 
 const KEY_ENTRY = 'database-key';
 const KEY_HEX = /^[0-9a-f]{64}$/;
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 /** Why the store could not be used. `code` is safe to show; `reason` is for logs and support. */
 export class ClientStoreError extends Error {
@@ -94,6 +100,14 @@ export interface ClientStore {
     /** Creates a rural client (id null) or replaces an existing one. Returns the saved record. */
     save(id: string | null, input: RuralClient): RuralRecord;
     /** Removes the rural client. Returns whether it existed. */
+    delete(id: string): boolean;
+  };
+  marine: {
+    list(): MarineSummary[];
+    get(id: string): MarineRecord | null;
+    /** Creates a marine client (id null) or replaces an existing one. Returns the saved record. */
+    save(id: string | null, input: MarineClient): MarineRecord;
+    /** Removes the marine client. Returns whether it existed. */
     delete(id: string): boolean;
   };
   /** Clients the last upgrade removed (vehicle-only clients, version 5): their Aadhaar entries
@@ -273,6 +287,22 @@ function migrate(
       d.pragma('user_version = 7');
     });
   }
+  // Version 8 (4 November 2026): marine clients (the policy holder of a voyage), kept apart like
+  // rural clients (validated JSON).
+  if (version < 8) {
+    store.commit((d) => {
+      d.exec(`
+        CREATE TABLE marine_client (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          marine_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      d.pragma('user_version = 8');
+    });
+  }
   return removed;
 }
 
@@ -304,6 +334,14 @@ interface RuralRow {
   id: string;
   name: string;
   rural_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface MarineRow {
+  id: string;
+  name: string;
+  marine_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -425,6 +463,16 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
     id: row.id,
     // Re-validated on the way out, like clients.
     rural: ruralClientSchema.parse(JSON.parse(row.rural_json)),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+
+  const getMarineRow = (id: string): MarineRow | undefined =>
+    db.prepare('SELECT * FROM marine_client WHERE id = ?').get(id) as MarineRow | undefined;
+  const toMarineRecord = (row: MarineRow): MarineRecord => ({
+    id: row.id,
+    // Re-validated on the way out, like clients.
+    marine: marineClientSchema.parse(JSON.parse(row.marine_json)),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -699,6 +747,64 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
       },
       delete: (id) =>
         write((d) => d.prepare('DELETE FROM rural_client WHERE id = ?').run(id).changes > 0),
+    },
+
+    marine: {
+      list: () =>
+        (
+          db
+            .prepare(
+              'SELECT id, name, marine_json, updated_at FROM marine_client ORDER BY updated_at DESC, name',
+            )
+            .all() as MarineRow[]
+        ).map((r) => {
+          const marine = marineClientSchema.parse(JSON.parse(r.marine_json));
+          return {
+            id: r.id,
+            name: r.name,
+            pincode: marine.pincode,
+            kind: marine.kind,
+            updatedAt: r.updated_at,
+          };
+        }),
+      get: (id) => {
+        const row = getMarineRow(id);
+        return row ? toMarineRecord(row) : null;
+      },
+      save: (id, raw) => {
+        const input = marineClientSchema.parse(raw);
+        const at = now().toISOString();
+        const existing = id === null ? undefined : getMarineRow(id);
+        if (id !== null && !existing) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');
+        const marineId = existing?.id ?? newId();
+        const values = {
+          id: marineId,
+          name: input.customer.name,
+          marine_json: JSON.stringify(input),
+          created_at: existing?.created_at ?? at,
+          updated_at: at,
+        };
+        write((d) =>
+          existing
+            ? d
+                .prepare(
+                  `UPDATE marine_client SET name = @name, marine_json = @marine_json,
+                     updated_at = @updated_at WHERE id = @id`,
+                )
+                .run(values)
+            : d
+                .prepare(
+                  `INSERT INTO marine_client (id, name, marine_json, created_at, updated_at)
+                   VALUES (@id, @name, @marine_json, @created_at, @updated_at)`,
+                )
+                .run(values),
+        );
+        const saved = getMarineRow(marineId);
+        if (!saved) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');
+        return toMarineRecord(saved);
+      },
+      delete: (id) =>
+        write((d) => d.prepare('DELETE FROM marine_client WHERE id = ?').run(id).changes > 0),
     },
 
     removedByUpgrade,

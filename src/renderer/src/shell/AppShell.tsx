@@ -12,6 +12,7 @@ import {
   PanelLeftOpen,
   Plane,
   ShieldCheck,
+  Ship,
   Tractor,
   Users,
   type LucideIcon,
@@ -21,7 +22,14 @@ import { PortalArea, PortalTabStrip, showAppScreens, usePortalTabs } from '../in
 import { ThemeSwitcher } from '../theme/ThemeSwitcher';
 
 export type ViewId =
-  'overview' | 'clients' | 'travellers' | 'rural' | 'vehicles' | 'insurers' | 'development';
+  | 'overview'
+  | 'clients'
+  | 'travellers'
+  | 'rural'
+  | 'marine'
+  | 'vehicles'
+  | 'insurers'
+  | 'development';
 
 interface NavItem {
   id: ViewId;
@@ -44,6 +52,7 @@ const NAV: NavItem[] = [
   { id: 'clients', label: 'Health clients', icon: Users, automation: true },
   { id: 'travellers', label: 'Travel clients', icon: Plane, automation: true },
   { id: 'rural', label: 'Rural clients', icon: Tractor, automation: true },
+  { id: 'marine', label: 'Marine clients', icon: Ship, automation: true },
   { id: 'vehicles', label: 'Vehicles', icon: Car, automation: true },
   { id: 'insurers', label: 'Insurer portals', icon: Building2, automation: true },
 ];

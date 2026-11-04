@@ -112,6 +112,21 @@ Package, Livestock (BLDA scheme) and Cattle (Non-scheme).
 - **Choices for each run are not saved:** scheme, claim ratio, BLDA beneficiary, policy start date
   and excess are entered for each quote.
 
+## Marine clients (kept apart from the others)
+
+Decision of 4 November 2026: marine clients are **separate records**, with their own list on the
+**Marine clients** screen. Each is the policy holder of New India's Marine Specific Voyage form.
+
+- **A business (organisation) or a person:**
+  - name, mobile, e-mail, notes, pincode, address and PAN;
+  - a business adds registration number and date, MSME or not, and type of organisation (from New
+    India's list);
+  - a person adds date of birth, gender and marital status.
+- **Where:** the same encrypted database, in its own `marine_client` table (validated JSON). Kept
+  until the advisor deletes it.
+- **Upgrade (schema version 8):** adds the empty marine client table. Nothing is moved or removed.
+- **The shipment is not saved:** it is entered for each quote.
+
 ## How it is stored
 
 | What               | Where                       | Protection                                                         |

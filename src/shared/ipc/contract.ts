@@ -26,6 +26,8 @@ import { NIA_HEALTH_POLICIES } from '../insurers/nia-health';
 import { niaTripSchema } from '../insurers/nia-travel';
 import { niaRuralRunSchema } from '../insurers/nia-rural';
 import { ruralClientSchema, ruralRecordSchema, ruralSummarySchema } from '../contracts/rural';
+import { marineClientSchema, marineRecordSchema, marineSummarySchema } from '../contracts/marine';
+import { niaShipmentSchema } from '../insurers/nia-marine';
 import {
   hasControlCharacter,
   LOGIN_AUTOMATION,
@@ -187,6 +189,15 @@ export const saveRuralRequestSchema = z
   .strict();
 export type SaveRuralRequest = z.input<typeof saveRuralRequestSchema>;
 
+export const saveMarineRequestSchema = z
+  .object({
+    /** Absent for a new marine client. */
+    id: entityIdSchema.optional(),
+    marine: marineClientSchema,
+  })
+  .strict();
+export type SaveMarineRequest = z.input<typeof saveMarineRequestSchema>;
+
 export const quoteRunResultSchema = z
   .object({
     outcome: z.enum(['ready', 'refused', 'failed']),
@@ -287,6 +298,15 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       policy: z.enum(NIA_HEALTH_POLICIES),
       /** The advisor confirms, for this quote, that no member has a listed condition. */
       goodHealthConfirmed: z.boolean(),
+    })
+    .strict(),
+  // New India's Marine Specific Voyage form, for a marine client: the shipment is for this run.
+  z
+    .object({
+      product: z.literal('nia-marine'),
+      marineId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      shipment: niaShipmentSchema,
     })
     .strict(),
   // New India rural quote forms, for a rural client: the scheme and the like are for this run.
@@ -480,6 +500,22 @@ export const ipcContract = {
     response: z.object({ id: entityIdSchema }).strict(),
   },
   [IPC_CHANNELS.ruralDelete]: {
+    request: clientOnly,
+    response: z.object({ deleted: z.boolean() }).strict(),
+  },
+  [IPC_CHANNELS.marineList]: {
+    request: z.object({}).strict(),
+    response: z.object({ marine: z.array(marineSummarySchema).max(10_000) }).strict(),
+  },
+  [IPC_CHANNELS.marineGet]: {
+    request: clientOnly,
+    response: marineRecordSchema,
+  },
+  [IPC_CHANNELS.marineSave]: {
+    request: saveMarineRequestSchema,
+    response: z.object({ id: entityIdSchema }).strict(),
+  },
+  [IPC_CHANNELS.marineDelete]: {
     request: clientOnly,
     response: z.object({ deleted: z.boolean() }).strict(),
   },
