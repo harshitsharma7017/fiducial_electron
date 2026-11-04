@@ -9,11 +9,11 @@ import type { Vehicle } from '../../shared/contracts/vehicle';
 import { NIA_BY_HAND, NIA_FORMS, planNiaMotorQuote } from './nia-motor';
 import { exec, type QuoteRunResult } from './run-uiic-health';
 
-const FORM_PATH = '/NIABancsPortal/QuoteNonCustomer.html';
+export const FORM_PATH = '/NIABancsPortal/QuoteNonCustomer.html';
 const DASHBOARD_PATH = '/NIABancsPortal/NonCustomerDashboard.html';
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const pathOf = (url: string): string => {
+export const pathOf = (url: string): string => {
   try {
     return new URL(url).pathname;
   } catch {
@@ -63,7 +63,12 @@ export async function runNiaMotorQuote(deps: {
     page = undefined;
   }
   if (!page) {
-    const opened = await openForm(pages, form);
+    const opened = await openNiaForm(pages, {
+      ...form,
+      group: 'MOTOR',
+      groupName: 'Motor Products',
+      tiles: [form.name],
+    });
     if ('message' in opened) return opened;
     page = opened.page;
   }
@@ -112,13 +117,29 @@ export async function runNiaMotorQuote(deps: {
   };
 }
 
+/** A quote form to open from New India's dashboard. */
+export interface NiaFormToOpen {
+  /** The product, as the advisor knows it. */
+  name: string;
+  /** The form's heading once open. */
+  heading: string;
+  /** The product group's tile (MOTOR, HEALTH) and the group's name, for messages. */
+  group: string;
+  groupName: string;
+  /** The product's tile text: the first one shown is clicked. */
+  tiles: string[];
+}
+
 /**
- * Opens the product's quote form from New India's dashboard: MOTOR (unless the Motor Products
- * tiles are already shown), then the product's tile, and waits for the form and its heading.
+ * Opens the product's quote form from New India's dashboard: the group (unless its tiles are
+ * already shown), then the product's tile, and waits for the form and its heading. A pop-up New
+ * India shows on the dashboard meanwhile is handed to `onPopup` (it answers it and the wait goes
+ * on, or stops the run); without `onPopup` it stops the run with its text.
  */
-async function openForm(
+export async function openNiaForm(
   pages: () => PortalPage[],
-  form: { heading: string; name: string },
+  form: NiaFormToOpen,
+  onPopup?: (dashboard: PortalPage, text: string) => Promise<QuoteRunResult | null>,
 ): Promise<{ page: PortalPage } | QuoteRunResult> {
   const failed = (step: string, message: string): QuoteRunResult => ({
     outcome: 'failed',
@@ -136,24 +157,31 @@ async function openForm(
     };
   }
   const wc = dashboard.webContents;
-  const tile = () => exec(wc, { op: 'clickText', text: form.name, timeoutMs: 1500 });
-  let clicked = await tile();
+  const clickTile = async (timeoutMs: number) => {
+    let last = await exec(wc, { op: 'clickText', text: form.tiles[0]!, timeoutMs });
+    for (const tile of form.tiles.slice(1)) {
+      if (last.detail !== 'not-found') break;
+      last = await exec(wc, { op: 'clickText', text: tile, timeoutMs: 1500 });
+    }
+    return last;
+  };
+  let clicked = await clickTile(1500);
   if (clicked.detail === 'not-found') {
-    const motor = await exec(wc, { op: 'clickText', text: 'MOTOR', timeoutMs: 10_000 });
-    if (!motor.ok) {
+    const group = await exec(wc, { op: 'clickText', text: form.group, timeoutMs: 10_000 });
+    if (!group.ok) {
       dashboard.focus();
       return failed(
         'Open the quote form',
-        `The MOTOR product was not found on New India's dashboard (${motor.detail}). Open the ${form.name} quote form by hand, then try again.`,
+        `The ${form.group} product was not found on New India's dashboard (${group.detail}). Open the ${form.name} quote form by hand, then try again.`,
       );
     }
-    clicked = await exec(wc, { op: 'clickText', text: form.name, timeoutMs: 10_000 });
+    clicked = await clickTile(10_000);
   }
   if (!clicked.ok) {
     dashboard.focus();
     return failed(
       'Open the quote form',
-      `The ${form.name} tile was not found under Motor Products (${clicked.detail}). Open the form by hand, then try again.`,
+      `The ${form.name} tile was not found under ${form.groupName} (${clicked.detail}). Open the form by hand, then try again.`,
     );
   }
   // The form opens in the same page (recorded): wait for it, then for its heading (the form
@@ -161,7 +189,17 @@ async function openForm(
   for (let waited = 0; waited < 30_000; waited += 500) {
     await sleep(500);
     const page = pages().find((w) => pathOf(w.webContents.getURL()) === FORM_PATH);
-    if (!page) continue;
+    if (!page) {
+      const popup = onPopup && !dashboard.isDestroyed() ? await exec(wc, { op: 'popup' }) : null;
+      if (onPopup && popup?.errors) {
+        const stop = await onPopup(dashboard, popup.errors);
+        if (stop) {
+          dashboard.focus();
+          return stop;
+        }
+      }
+      continue;
+    }
     const heading = await exec(page.webContents, {
       op: 'hasHeading',
       text: form.heading,

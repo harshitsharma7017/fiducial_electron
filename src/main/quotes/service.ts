@@ -1,7 +1,9 @@
 // Quote runs behind the IPC channel. Off unless the automation features are switched on. United
 // India: health and motor calculators, the health, Overseas Travel and Overseas Mediclaim
-// e-proposals. New India: motor only (the vehicle details of the Private Car and Two Wheeler
-// forms; run-nia-motor.ts). Other insurers and products are refused with a reason. Motor quotes are for a saved vehicle, the others for a saved client.
+// e-proposals. New India: motor (the vehicle details of the Private Car and Two Wheeler forms;
+// run-nia-motor.ts) and the health quote forms of twelve policies (run-nia-health.ts). Other
+// insurers and products are refused with a reason. Motor quotes are for a saved vehicle, travel
+// e-proposals for a travel client, the others for a saved client.
 import type { ClientService } from '../clients/service';
 import type { PortalPage } from '../insurers/portal-host';
 import { AppException } from '../ipc/dispatcher';
@@ -16,6 +18,7 @@ import {
   type QuoteRunResult,
 } from './run-uiic-health';
 import type { UiicProposalForm } from './uiic-health-proposal';
+import { runNiaHealthQuote } from './run-nia-health';
 import { runNiaMotorQuote } from './run-nia-motor';
 
 /** The e-proposal each product fills. */
@@ -48,7 +51,10 @@ export function createQuoteService(deps: {
       if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
       const { insurerId } = request;
       const newIndiaMotor = insurerId === 'new-india' && request.product === 'motor';
-      if (insurerId !== 'united-india' && !newIndiaMotor) {
+      const newIndiaHealth = request.product === 'nia-health';
+      if (
+        newIndiaHealth ? insurerId !== 'new-india' : insurerId !== 'united-india' && !newIndiaMotor
+      ) {
         return {
           outcome: 'refused',
           step: null,
@@ -102,6 +108,14 @@ export function createQuoteService(deps: {
                 : (() => {
                     throw new AppException('VALIDATION_FAILED');
                   })();
+        } else if (request.product === 'nia-health') {
+          result = await runNiaHealthQuote({
+            windows,
+            client: subject.record.client,
+            policy: request.policy,
+            goodHealth: request.goodHealthConfirmed,
+            today,
+          });
         } else if (
           request.product !== 'health' &&
           request.product !== 'motor' &&

@@ -202,6 +202,52 @@ Studies use made-up model prefixes and page names. Checked for:
 
 Nothing is ever saved. **Not yet run on the live portal**, and SCHENGEN and Studies not recorded.
 
+## New India: health quote forms (filled, never calculated)
+
+Built from the recording of 4 November 2026 (`new-india-2026-11-04T09-24-53-914Z`). In it, the
+advisor opened the quote form of every New India health policy from the dashboard, opened its
+sections and added its members. Nothing was typed and no premium was worked out, so two things are
+assumed:
+- dates of birth are typed as dd/mm/yyyy (the boxes are labelled so and are not read-only);
+- each dashboard tile reads as the form's heading without "Insurance", or without the
+  "(Cashless facility available)" note.
+
+The twelve policies:
+- Arogya Pragati Plus, Arogya Sanjeevani, Jan Arogya Bima, Janata Mediclaim;
+- Asha Kiran, Cancer Guard, Criti Protect, New India Mediclaim;
+- Premier Mediclaim, TOP-UP Mediclaim, Universal Health Insurance Scheme (APL), Yuva Bharat.
+
+A health client has a **New India health quote** button. The advisor picks the policy and may
+confirm good health for that quote. From the dashboard (or with the form already open) the app:
+1. Opens **HEALTH**, then the policy's tile. Before Premier Mediclaim, New India asks whether anyone
+   has a listed condition:
+   - with the good health confirmation, the app answers **No**;
+   - without it, the run is refused before anything is touched.
+2. Opens each section only if it is closed. The section links toggle, and a count follows their
+   text.
+3. Fills what the client record answers:
+   - the policy period (2 or 3 years);
+   - Arogya Sanjeevani's pincode, choosing the first postal code New India lists;
+   - the floater sum insured (Arogya Sanjeevani, Asha Kiran, Yuva Bharat), or each member's sum
+     insured on individual cover (Janata, New India Mediclaim);
+   - each member through its own **Add …** button, with the date of birth;
+   - each member's gender (Cancer Guard);
+   - "Normal" as the dependent type of a child under 18;
+   - "No" to diabetes and hypertension (Arogya Sanjeevani, with the confirmation);
+   - Criti Protect: the proposer only, with the type of member, good health and the sum insured
+     in lakhs.
+4. **Stops**, and lists what is left to the advisor: threshold limits of the top-ups, plans, zones,
+   payment frequency, smoking and tobacco, earning member and occupation, height and weight, and
+   New India's terms box.
+
+It never presses **Save & Calculate Premium** (that saves a quote on New India) or **Continue**.
+A member the form does not take (a son on Asha Kiran, parents-in-law outside Arogya Sanjeevani) is
+refused with the reason.
+
+**Verified:** against local copies of five of the forms (Arogya Sanjeevani, Jan Arogya Bima,
+Premier Mediclaim, Cancer Guard, New India Mediclaim) and the dashboard
+(`npm run test:nia -- health`). **Not yet run on the live portal.**
+
 ## What it does
 
 The advisor saves each insurer's user ID and password once. When they open that insurer's portal

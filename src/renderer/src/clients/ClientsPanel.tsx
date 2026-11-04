@@ -27,6 +27,11 @@ import {
 } from './proposal-fields';
 import { RELATIONSHIPS, type Relationship } from '../../../shared/contracts/customer';
 import type { ClientListResponse, QuoteRunResultView } from '../../../shared/ipc/contract';
+import {
+  NIA_HEALTH_POLICIES,
+  NIA_HEALTH_POLICY_NAMES,
+  type NiaHealthPolicy,
+} from '../../../shared/insurers/nia-health';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
 
 const RELATIONSHIP_LABELS: Record<Relationship, string> = {
@@ -276,6 +281,14 @@ export function ClientsPanel(): React.JSX.Element | null {
                       Get quote
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setQuoting(quoting === `nia-health:${c.id}` ? null : `nia-health:${c.id}`)
+                    }
+                  >
+                    New India health quote
+                  </button>
                   <button type="button" onClick={() => void edit(c)}>
                     Edit
                   </button>
@@ -296,6 +309,7 @@ export function ClientsPanel(): React.JSX.Element | null {
                 </div>
               </div>
               {quoting === c.id && <QuotePanel clientId={c.id} />}
+              {quoting === `nia-health:${c.id}` && <NiaHealthPanel clientId={c.id} />}
               {PROPOSAL_FORMS.map(
                 (f) =>
                   quoting === `${f.product}:${c.id}` && (
@@ -713,6 +727,93 @@ function ProposalPanel(props: {
       <div className="insurer-actions">
         <button type="button" disabled={busy} onClick={() => void run()}>
           {busy ? 'Filling United India…' : `Fill ${form.name} proposal`}
+        </button>
+      </div>
+      {result && 'error' in result && (
+        <p className="error" role="alert">
+          {result.error}
+        </p>
+      )}
+      {result && 'outcome' in result && (
+        <div role="status">
+          <p className={result.outcome === 'ready' ? undefined : 'error'}>
+            {result.step ? `${result.step}: ` : ''}
+            {result.message}
+          </p>
+          {result.problems.length > 0 && (
+            <ul>
+              {result.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          {result.toDo && result.toDo.length > 0 && (
+            <>
+              <p>Still to fill in by hand:</p>
+              <ul>
+                {result.toDo.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Fills one of New India's health quote forms for a saved client, stopping before its premium. */
+function NiaHealthPanel(props: { clientId: string }): React.JSX.Element {
+  const [policy, setPolicy] = useState<NiaHealthPolicy>('arogya-sanjeevani');
+  const [goodHealth, setGoodHealth] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    const r = await window.fqf.quotes
+      .run({
+        clientId: props.clientId,
+        insurerId: 'new-india',
+        product: 'nia-health',
+        policy,
+        goodHealthConfirmed: goodHealth,
+      })
+      .catch(() => null);
+    setBusy(false);
+    setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
+  };
+  return (
+    <div className="quote-panel">
+      <p className="insurer-note">
+        <strong>New India, health quote.</strong> Sign in to New India and leave it on its dashboard
+        (or open the policy&rsquo;s quote form yourself). The app opens the policy&rsquo;s form and
+        fills the client&rsquo;s members, then stops. It never presses Save &amp; Calculate Premium:
+        you check the form and press it.
+      </p>
+      <label>
+        Policy{' '}
+        <select value={policy} onChange={(e) => setPolicy(e.target.value as NiaHealthPolicy)}>
+          {NIA_HEALTH_POLICIES.map((p) => (
+            <option key={p} value={p}>
+              {NIA_HEALTH_POLICY_NAMES[p]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={goodHealth}
+          onChange={(e) => setGoodHealth(e.target.checked)}
+        />
+        No member has diabetes, hypertension, a critical, chronic or recurring illness or an adverse
+        medical history (New India&rsquo;s questions, for this quote).
+      </label>
+      <div className="insurer-actions">
+        <button type="button" disabled={busy} onClick={() => void run()}>
+          {busy ? 'Filling New India…' : `Fill ${NIA_HEALTH_POLICY_NAMES[policy]} form`}
         </button>
       </div>
       {result && 'error' in result && (

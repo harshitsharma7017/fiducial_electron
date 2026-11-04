@@ -22,6 +22,7 @@ import {
   travellerSummarySchema,
 } from '../contracts/traveller';
 import { FILL_OUTCOMES } from '../insurers/fill-outcomes';
+import { NIA_HEALTH_POLICIES } from '../insurers/nia-health';
 import {
   hasControlCharacter,
   LOGIN_AUTOMATION,
@@ -262,6 +263,17 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       clientId: entityIdSchema,
       insurerId: insurerIdSchema,
       /** Health: the advisor confirms, for this quote, every member's good health declaration. */
+      goodHealthConfirmed: z.boolean(),
+    })
+    .strict(),
+  // New India health quote forms: the policy is chosen for this run.
+  z
+    .object({
+      product: z.literal('nia-health'),
+      clientId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      policy: z.enum(NIA_HEALTH_POLICIES),
+      /** The advisor confirms, for this quote, that no member has a listed condition. */
       goodHealthConfirmed: z.boolean(),
     })
     .strict(),

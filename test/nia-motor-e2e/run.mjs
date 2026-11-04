@@ -1,7 +1,7 @@
 // New India motor automation against its local copy, in Electron, on its own (kept apart from
 // the United India checks in test/insurer-login-e2e). Contacts no insurer: every page is served
 // from 127.0.0.1.
-// Usage: npm run test:nia
+// Usage: npm run test:nia (motor), npm run test:nia -- health (health quote forms)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -31,5 +31,6 @@ const electron = createRequire(import.meta.url)('electron');
 const env = { ...process.env, FQF_LOGIN_E2E_BUNDLE: join(OUT, 'agent.cjs') };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.NODE_OPTIONS;
-const child = spawn(electron, [join(HERE, 'harness.cjs')], { env, stdio: 'inherit' });
+const harness = process.argv[2] === 'health' ? 'health-harness.cjs' : 'harness.cjs';
+const child = spawn(electron, [join(HERE, harness)], { env, stdio: 'inherit' });
 child.on('exit', (code) => process.exit(code ?? 1));

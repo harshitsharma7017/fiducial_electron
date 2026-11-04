@@ -118,7 +118,24 @@ export type PageOp =
    */
   | { op: 'clickText'; text: string; timeoutMs: number }
   /** Waits for a visible heading (as the recorder notes them) reading exactly `text`. */
-  | { op: 'hasHeading'; text: string; timeoutMs: number };
+  | { op: 'hasHeading'; text: string; timeoutMs: number }
+  /**
+   * Makes sure something is shown (a box by `selector`, or an element reading exactly `text`),
+   * opening it only if it is not: a section's link (its text, ignoring the count New India shows
+   * after it: "Member Information 3"), a button (Add Spouse), or an element reading exactly `text`
+   * (a FLOATER tile). Never clicks when it is already shown, so an open section is not closed.
+   */
+  | {
+      op: 'ensureShown';
+      shown: { selector?: string; text?: string };
+      open: { link?: string; button?: string; text?: string };
+      timeoutMs: number;
+    }
+  /**
+   * Types a date into a box that takes it as dd/mm/yyyy (New India's dates of birth), then leaves
+   * the box so the page works the age out. A read-only box (a calendar only) fails `read-only`.
+   */
+  | { op: 'typeDate'; input: string; date: string };
 
 export interface PageOpResult {
   ok: boolean;
@@ -843,6 +860,72 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         (el) => visible(el) && text(el) !== '',
       );
       return box ? { ok: false, errors: text(box).slice(0, 400) } : { ok: true };
+    }
+    case 'ensureShown': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const exactText = (want: string): HTMLElement[] => {
+        const hits = Array.from(document.body.querySelectorAll<HTMLElement>('*')).filter(
+          (el) =>
+            loose(el.textContent ?? '') === loose(want) &&
+            visible(el) &&
+            loose(text(el)) === loose(want),
+        );
+        return hits.filter((el) => !hits.some((o) => o !== el && el.contains(o)));
+      };
+      const isShown = (): boolean =>
+        (!!command.shown.selector && first(document, command.shown.selector) !== null) ||
+        (!!command.shown.text && exactText(command.shown.text).length > 0);
+      if (isShown()) return { ok: true, detail: 'already-shown' };
+      const { link, button, text: tile } = command.open;
+      let opener: HTMLElement | null = null;
+      if (link) {
+        const name = loose(link);
+        opener =
+          (Array.from(document.querySelectorAll('a')).find(
+            (a) => visible(a) && loose(text(a)).replace(/\s*\d+$/, '') === name,
+          ) as HTMLElement | undefined) ?? null;
+      } else if (button) {
+        opener = await until(() => buttonWithText(document, button), 3000);
+      } else if (tile) {
+        const found = exactText(tile).map(
+          (el) =>
+            el.closest<HTMLElement>(
+              'a, button, label, [ng-click], [data-ng-click], [onclick], [role="button"]',
+            ) ?? el,
+        );
+        const unique = [...new Set(found)];
+        if (unique.length > 1) return { ok: false, detail: `ambiguous (${unique.length} shown)` };
+        opener = unique[0] ?? null;
+      }
+      if (!opener) return { ok: false, detail: 'opener-not-found' };
+      if ((opener as HTMLButtonElement).disabled) return { ok: false, detail: 'disabled' };
+      opener.click();
+      const shown = await until(() => (isShown() ? true : null), command.timeoutMs);
+      return shown ? { ok: true } : { ok: false, detail: 'not-shown-after-click' };
+    }
+    case 'typeDate': {
+      const [y, m, d] = command.date.split('-');
+      const want = `${d}/${m}/${y}`;
+      const box = await until(() => first(document, command.input), 5000);
+      if (!(box instanceof HTMLInputElement)) return { ok: false, detail: 'not-found' };
+      if (box.readOnly || box.disabled) return { ok: false, detail: 'read-only' };
+      box.focus();
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      if (setter?.set) setter.set.call(box, want);
+      else box.value = want;
+      fire(box, 'input');
+      fire(box, 'keyup');
+      fire(box, 'change');
+      // Close a calendar the box may have opened, then leave the box (the page works the age out
+      // when it is left).
+      box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      box.blur();
+      fire(box, 'blur');
+      await sleep(700);
+      const now = (first(document, command.input) as HTMLInputElement | null)?.value ?? '';
+      return now.replace(/-/g, '/') === want
+        ? { ok: true }
+        : { ok: false, detail: `not-kept: box shows "${now}"` };
     }
   }
 }
