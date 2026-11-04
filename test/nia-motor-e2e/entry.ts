@@ -4,6 +4,7 @@ import { createLogger } from '../../src/main/logging/logger';
 import { runNiaHealthQuote } from '../../src/main/quotes/run-nia-health';
 import { runNiaMarineQuote } from '../../src/main/quotes/run-nia-marine';
 import { runNiaMotorQuote } from '../../src/main/quotes/run-nia-motor';
+import { runNiaPaQuote } from '../../src/main/quotes/run-nia-pa';
 import { runNiaRuralQuote } from '../../src/main/quotes/run-nia-rural';
 import { runNiaTravelQuote } from '../../src/main/quotes/run-nia-travel';
 import {
@@ -17,6 +18,7 @@ export {
   runNiaHealthQuote,
   runNiaMarineQuote,
   runNiaMotorQuote,
+  runNiaPaQuote,
   runNiaRuralQuote,
   runNiaTravelQuote,
   setSessionPolicy,

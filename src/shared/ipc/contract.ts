@@ -28,6 +28,7 @@ import { niaRuralRunSchema } from '../insurers/nia-rural';
 import { ruralClientSchema, ruralRecordSchema, ruralSummarySchema } from '../contracts/rural';
 import { marineClientSchema, marineRecordSchema, marineSummarySchema } from '../contracts/marine';
 import { niaShipmentSchema } from '../insurers/nia-marine';
+import { niaPaRunSchema } from '../insurers/nia-pa';
 import {
   hasControlCharacter,
   LOGIN_AUTOMATION,
@@ -298,6 +299,19 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       policy: z.enum(NIA_HEALTH_POLICIES),
       /** The advisor confirms, for this quote, that no member has a listed condition. */
       goodHealthConfirmed: z.boolean(),
+    })
+    .strict(),
+  // New India Personal Accident forms, for a health client's proposer: choices for this run.
+  z
+    .object({
+      product: z.literal('nia-pa'),
+      clientId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      run: niaPaRunSchema,
+      /** The advisor confirms no claim in the previous three years. */
+      noClaimsConfirmed: z.boolean(),
+      /** The advisor confirms the insured has no physical disabilities or defects. */
+      noDisabilitiesConfirmed: z.boolean(),
     })
     .strict(),
   // New India's Marine Specific Voyage form, for a marine client: the shipment is for this run.

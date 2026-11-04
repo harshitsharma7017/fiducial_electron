@@ -3,7 +3,8 @@
 // e-proposals. New India: motor (the vehicle details of the Private Car and Two Wheeler forms;
 // run-nia-motor.ts), the health quote forms of twelve policies (run-nia-health.ts) and three
 // overseas travel quote forms (run-nia-travel.ts) and four rural quote forms for a rural client
-// (run-nia-rural.ts), and the Marine Specific Voyage form for a marine client (run-nia-marine.ts).
+// (run-nia-rural.ts), the Marine Specific Voyage form for a marine client (run-nia-marine.ts),
+// and three Personal Accident forms for a health client's proposer (run-nia-pa.ts).
 // Other
 // insurers and products are refused with a reason. Motor quotes are for a saved vehicle, travel
 // e-proposals for a travel client, the others for a saved client.
@@ -24,6 +25,7 @@ import type { UiicProposalForm } from './uiic-health-proposal';
 import { runNiaHealthQuote } from './run-nia-health';
 import { runNiaMotorQuote } from './run-nia-motor';
 import { runNiaMarineQuote } from './run-nia-marine';
+import { runNiaPaQuote } from './run-nia-pa';
 import { runNiaRuralQuote } from './run-nia-rural';
 import { runNiaTravelQuote } from './run-nia-travel';
 
@@ -61,7 +63,8 @@ export function createQuoteService(deps: {
         request.product === 'nia-health' ||
         request.product === 'nia-travel' ||
         request.product === 'nia-rural' ||
-        request.product === 'nia-marine';
+        request.product === 'nia-marine' ||
+        request.product === 'nia-pa';
       if (
         newIndiaOnly ? insurerId !== 'new-india' : insurerId !== 'united-india' && !newIndiaMotor
       ) {
@@ -165,6 +168,14 @@ export function createQuoteService(deps: {
                   : (() => {
                       throw new AppException('VALIDATION_FAILED');
                     })();
+        } else if (request.product === 'nia-pa') {
+          result = await runNiaPaQuote({
+            windows,
+            client: subject.record.client,
+            run: request.run,
+            noClaims: request.noClaimsConfirmed,
+            noDisabilities: request.noDisabilitiesConfirmed,
+          });
         } else if (request.product === 'nia-health') {
           result = await runNiaHealthQuote({
             windows,

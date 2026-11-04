@@ -32,6 +32,15 @@ import {
   NIA_HEALTH_POLICY_NAMES,
   type NiaHealthPolicy,
 } from '../../../shared/insurers/nia-health';
+import {
+  NIA_PA_EXCESS,
+  NIA_PA_FORM_NAMES,
+  NIA_PA_FORMS,
+  NIA_PA_STATUSES,
+  NIA_PA_SUMS,
+  type NiaPaForm,
+  type NiaPaRun,
+} from '../../../shared/insurers/nia-pa';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
 
 const RELATIONSHIP_LABELS: Record<Relationship, string> = {
@@ -289,6 +298,14 @@ export function ClientsPanel(): React.JSX.Element | null {
                   >
                     New India health quote
                   </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setQuoting(quoting === `nia-pa:${c.id}` ? null : `nia-pa:${c.id}`)
+                    }
+                  >
+                    New India PA quote
+                  </button>
                   <button type="button" onClick={() => void edit(c)}>
                     Edit
                   </button>
@@ -310,6 +327,7 @@ export function ClientsPanel(): React.JSX.Element | null {
               </div>
               {quoting === c.id && <QuotePanel clientId={c.id} />}
               {quoting === `nia-health:${c.id}` && <NiaHealthPanel clientId={c.id} />}
+              {quoting === `nia-pa:${c.id}` && <NiaPaPanel clientId={c.id} />}
               {PROPOSAL_FORMS.map(
                 (f) =>
                   quoting === `${f.product}:${c.id}` && (
@@ -847,5 +865,191 @@ function NiaHealthPanel(props: { clientId: string }): React.JSX.Element {
         </div>
       )}
     </div>
+  );
+}
+
+/** Fills one of New India's Personal Accident forms for the client's proposer ("Self"). */
+function NiaPaPanel(props: { clientId: string }): React.JSX.Element {
+  const [form, setForm] = useState<NiaPaForm>('janta');
+  const [sumInsured, setSumInsured] = useState<(typeof NIA_PA_SUMS)[number]>('100000');
+  const [status, setStatus] = useState<keyof typeof NIA_PA_STATUSES>('earning');
+  const [term, setTerm] = useState(1);
+  const [excess, setExcess] = useState<(typeof NIA_PA_EXCESS)[number]>('0');
+  const [pension, setPension] = useState('');
+  const [organisation, setOrganisation] = useState('');
+  const [noClaims, setNoClaims] = useState(false);
+  const [noDisabilities, setNoDisabilities] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+
+  const runOf = (): NiaPaRun =>
+    form === 'pension'
+      ? { form, monthlyPensionRupees: Number(pension || 'NaN'), organisation: organisation.trim() }
+      : form === 'janta'
+        ? { form, sumInsured, status, term, excess }
+        : { form, sumInsured, status, term };
+  const run = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setResult(null);
+    const r = await window.fqf.quotes
+      .run({
+        clientId: props.clientId,
+        insurerId: 'new-india',
+        product: 'nia-pa',
+        run: runOf(),
+        noClaimsConfirmed: noClaims,
+        noDisabilitiesConfirmed: noDisabilities,
+      })
+      .catch(() => null);
+    setBusy(false);
+    setResult(
+      r?.ok
+        ? r.data
+        : {
+            error:
+              r?.ok === false && r.error.code === 'VALIDATION_FAILED'
+                ? 'Check the details: one is missing or not valid.'
+                : (r?.error.message ?? 'The quote could not be started.'),
+          },
+    );
+  };
+  return (
+    <form className="quote-panel login-form" onSubmit={(e) => void run(e)}>
+      <p className="insurer-note">
+        <strong>New India, Personal Accident quote.</strong> The client&rsquo;s proposer
+        (&ldquo;Self&rdquo;) is the insured. Sign in to New India and leave it on its dashboard (or
+        open the form yourself). When New India asks whether the client has a PAN, answer it on its
+        page and press Fill again. The app never presses Save &amp; Calculate.
+      </p>
+      <label>
+        Policy
+        <select value={form} onChange={(e) => setForm(e.target.value as NiaPaForm)}>
+          {NIA_PA_FORMS.map((f) => (
+            <option key={f} value={f}>
+              {NIA_PA_FORM_NAMES[f]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {form === 'pension' ? (
+        <div className="member-row">
+          <label>
+            Monthly pension (₹)
+            <input
+              value={pension}
+              onChange={(e) => setPension(e.target.value.replace(/\D/g, ''))}
+              inputMode="numeric"
+              maxLength={8}
+              required
+            />
+          </label>
+          <label>
+            Organisation before retirement
+            <input
+              value={organisation}
+              onChange={(e) => setOrganisation(e.target.value)}
+              maxLength={30}
+              required
+            />
+          </label>
+        </div>
+      ) : (
+        <div className="member-row">
+          <label>
+            Sum insured (₹)
+            <select
+              value={sumInsured}
+              onChange={(e) => setSumInsured(e.target.value as typeof sumInsured)}
+            >
+              {NIA_PA_SUMS.map((s) => (
+                <option key={s} value={s}>
+                  {Number(s).toLocaleString('en-IN')}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Status of the insured
+            <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
+              {Object.entries(NIA_PA_STATUSES).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Years
+            <select value={term} onChange={(e) => setTerm(Number(e.target.value))}>
+              {[1, 2, 3].map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+          {form === 'janta' && (
+            <label>
+              Excess (%)
+              <select value={excess} onChange={(e) => setExcess(e.target.value as typeof excess)}>
+                {NIA_PA_EXCESS.map((x) => (
+                  <option key={x} value={x}>
+                    {x}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
+      <label className="check">
+        <input type="checkbox" checked={noClaims} onChange={(e) => setNoClaims(e.target.checked)} />
+        No claim in the previous three years (New India does not issue the policy online otherwise).
+      </label>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={noDisabilities}
+          onChange={(e) => setNoDisabilities(e.target.checked)}
+        />
+        The insured has no physical disabilities or defects.
+      </label>
+      <div className="insurer-actions">
+        <button type="submit" disabled={busy}>
+          {busy ? 'Filling New India…' : `Fill ${NIA_PA_FORM_NAMES[form]} form`}
+        </button>
+      </div>
+      {result && 'error' in result && (
+        <p className="error" role="alert">
+          {result.error}
+        </p>
+      )}
+      {result && 'outcome' in result && (
+        <div role="status">
+          <p className={result.outcome === 'ready' ? undefined : 'error'}>
+            {result.step ? `${result.step}: ` : ''}
+            {result.message}
+          </p>
+          {result.problems.length > 0 && (
+            <ul>
+              {result.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          {result.toDo && result.toDo.length > 0 && (
+            <>
+              <p>Still to fill in by hand:</p>
+              <ul>
+                {result.toDo.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </form>
   );
 }

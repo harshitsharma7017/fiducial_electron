@@ -390,6 +390,51 @@ Checked for:
 
 **Not yet run on the live portal.**
 
+## New India: Personal Accident forms (filled, never calculated)
+
+Built from the recording of 4 November 2026 (`new-india-2026-11-04T10-41-14-769Z`). In it, the
+advisor opened three forms from the dashboard (PERSONAL ACCIDENT, then the policy's tile), answered
+the PAN question, and opened their sections. Answering "Yes" to a claim in the previous three years
+brought New India's alert that the policy cannot be issued through the portal. Nothing was typed and
+no premium was worked out, so dates are typed as dd/mm/yyyy.
+
+They run from a **health client**: its proposer ("Self") is the insured. The **New India PA quote**
+button takes:
+- the policy: Janata PA Sukshma Bima, Personal Janta or Pension Protect;
+- that run's choices: sum insured, status, years and excess, or the monthly pension and the
+  organisation before retirement;
+- two confirmations: no claim in the previous three years (required, as New India refuses
+  otherwise), and no physical disabilities or defects.
+
+The app fills:
+- the policy holder, as on the travel forms;
+- the previous claim (No) and the duration;
+- the insured's status, date of birth and gender;
+- the occupation, when the client's matches New India's Gramin list;
+- disabilities ("None") or physical defects (No), with the confirmation;
+- the nominee, within New India's lengths: 20 characters for the Janata forms' name;
+- the sum insured and excess;
+- Pension Protect: new policy, the insured's name and date of birth, the monthly pension and the
+  organisation.
+
+Left to the advisor:
+- the type of group;
+- the owner or beneficiary;
+- details of relationship;
+- the nominee's date of birth;
+- the medical certificate and special conditions;
+- the bank details.
+
+It never presses **Save & Calculate** (**Save & Calculate Premium**) or **Approve & Pay**.
+
+**Verified:** against local copies of the three forms and the dashboard (`npm run test:nia -- pa`).
+Checked for:
+- each form filled;
+- the PAN question stopping the run, then the run carrying on after it is answered;
+- a run without the no-claims confirmation, refused.
+
+**Not yet run on the live portal.**
+
 ## What it does
 
 The advisor saves each insurer's user ID and password once. When they open that insurer's portal
