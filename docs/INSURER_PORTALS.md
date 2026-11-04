@@ -54,7 +54,7 @@ the live portal.**
 
 ## United India: health e-proposals (filled, never saved)
 
-Four forms, with the same sections I and II:
+Five forms, with the same sections I and II:
 - **Family Medicare** and **Individual Health:** automated as recorded on 3 November 2026. Only the
   intermediary's declaration differs: section XI on Family Medicare, section X on Individual Health.
 - **Arogya Sanjeevani** and **Super Top-up:** not recorded. The advisor says their forms are the
@@ -62,6 +62,8 @@ Four forms, with the same sections I and II:
   pages' addresses or section numbers. So the app accepts any of United India's proposal pages
   (`/CustomerAppLive/data/Proposal…home.html`) and finds the intermediary's section by its name. If a
   tile opens some other page, the run stops and says which page it opened.
+- **Yuvaan Health Insurance Policy:** not recorded. The advisor says it is the same as Arogya
+  Sanjeevani; handled the same way (its tile's name from the recorded home page).
 
 The app fills sections I, II and the intermediary's declaration; the advisor records the other
 sections later. A client has a button for each form. From the signed-in home page the app:
@@ -93,8 +95,8 @@ It never presses Save As Draft or Submit.
 ids, models, option lists, calendar and ERRORS pop-up). The two forms give the same ids to
 different radios, so the app picks them by value. The two forms not recorded are copies of
 Individual Health with made-up page names and differently numbered sections. Checked for (Family
-Medicare all, Individual Health the first three, Arogya Sanjeevani and Super Top-up the first
-two):
+Medicare all, Individual Health the first three, Arogya Sanjeevani, Super Top-up and Yuvaan Health
+the first two):
 - a full client with Aadhaar: every field is filled, and only United India's message about section
   III is left;
 - a sparse client: what it lacks is listed;

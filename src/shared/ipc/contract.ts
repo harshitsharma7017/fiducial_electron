@@ -192,7 +192,8 @@ export type QuoteRunResultView = z.infer<typeof quoteRunResultSchema>;
 
 /**
  * A quote run: motor quotes are for a saved vehicle; health quotes and the health e-proposals
- * (Family Medicare, Individual Health, Arogya Sanjeevani, Super Top-up) are for a health client;
+ * (Family Medicare, Individual Health, Arogya Sanjeevani, Super Top-up, Yuvaan Health) are for a
+ * health client;
  * the travel e-proposals (Overseas Travel, Overseas Mediclaim) for a travel client. E-proposals
  * are filled, never saved or submitted.
  */
@@ -202,7 +203,14 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
     .strict(),
   z
     .object({
-      product: z.enum(['health', 'fm-proposal', 'ihp-proposal', 'as-proposal', 'stu-proposal']),
+      product: z.enum([
+        'health',
+        'fm-proposal',
+        'ihp-proposal',
+        'as-proposal',
+        'stu-proposal',
+        'yhp-proposal',
+      ]),
       clientId: entityIdSchema,
       insurerId: insurerIdSchema,
       /** Health: the advisor confirms, for this quote, every member's good health declaration. */

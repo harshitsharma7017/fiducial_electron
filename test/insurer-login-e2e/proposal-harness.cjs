@@ -1,5 +1,5 @@
 // Runs the United India health e-proposal automation (bundled real code) against local copies of
-// the Family Medicare, Individual Health, Arogya Sanjeevani and Super Top-up forms, and checks what was filled, what is left to the
+// the Family Medicare, Individual Health, Arogya Sanjeevani, Super Top-up and Yuvaan Health forms, and checks what was filled, what is left to the
 // advisor, and that nothing was saved. Exits 0 only if every check passes. Started by
 // run-motor.mjs proposals.
 const http = require('node:http');
@@ -179,6 +179,12 @@ const FORMS = [
     form: 'super-top-up',
     name: 'Super Top-up',
     page: 'ProposalSTUhome.html',
+    cases: [CASES[0], CASES[1]],
+  },
+  {
+    form: 'yuvaan',
+    name: 'Yuvaan Health',
+    page: 'ProposalYHPhome.html',
     cases: [CASES[0], CASES[1]],
   },
 ];

@@ -24,6 +24,7 @@ const PROPOSAL_FORM = {
   'ihp-proposal': 'individual-health',
   'as-proposal': 'arogya-sanjeevani',
   'stu-proposal': 'super-top-up',
+  'yhp-proposal': 'yuvaan',
 } as const satisfies Record<string, UiicProposalForm>;
 
 export interface QuoteService {

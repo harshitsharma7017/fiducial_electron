@@ -6,7 +6,7 @@ Desktop application for insurance advisors (Windows and macOS). Requirements are
 - sign-in autofill for password-based insurer portals, with 12-hour sessions that survive restarts;
 - saved clients and, separately, saved vehicles, in an encrypted database;
 - United India: health and motor premium calculators; the Family Medicare, Individual Health,
-  Arogya Sanjeevani and Super Top-up e-proposals; and the Overseas Travel and Overseas Mediclaim
+  Arogya Sanjeevani, Super Top-up and Yuvaan Health e-proposals; and the Overseas Travel and Overseas Mediclaim
   (B&H, SCHENGEN, Studies) e-proposals, with their premiums (all filled, never saved or
   submitted).
 

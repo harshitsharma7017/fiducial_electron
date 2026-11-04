@@ -67,6 +67,14 @@ const FORMS = {
     transgender: 'proposerGender',
     intermediary: 'X. Declaration from Intermediary',
   },
+  // Not recorded: said by the advisor to be the same as Arogya Sanjeevani.
+  yuvaan: {
+    title: 'Yuvaan Health Insurance Policy',
+    ids: { customer: 'proposalfilledBy', agent: 'Radio7', newer: 'Radio4', fetch: 'Radio5' },
+    female: 'proposerGender',
+    transgender: 'proposerGender',
+    intermediary: 'XI. Declaration from Intermediary',
+  },
 };
 
 const formPage = ({
@@ -229,7 +237,8 @@ const home = `<!doctype html><html><head><meta charset="utf-8"><title>UIIC - Int
   <div><a href="/CustomerAppLive/data/ProposalFMhome.html#/ProposalFormMainBody" target="_blank">Family Medicare E-Proposal Form</a></div>
   <div><a href="/CustomerAppLive/data/ProposalIHPhome.html#/ProposalFormMainBody" target="_blank">Individual Health E-Proposal Form</a></div>
   <div><a href="/CustomerAppLive/data/ProposalASPhome.html#/ProposalFormMainBody" target="_blank">Arogya Sanjeevani E-Proposal Form</a></div>
-  <div><a href="/CustomerAppLive/data/ProposalSTUhome.html#/ProposalFormMainBody" target="_blank">Super Top-up Policy E-Proposal Form</a></div></body></html>`;
+  <div><a href="/CustomerAppLive/data/ProposalSTUhome.html#/ProposalFormMainBody" target="_blank">Super Top-up Policy E-Proposal Form</a></div>
+  <div><a href="/CustomerAppLive/data/ProposalYHPhome.html#/ProposalFormMainBody" target="_blank">Yuvaan Health Insurance Policy E-Proposal Form</a></div></body></html>`;
 
 module.exports = {
   '/GCWebPortal/login/HomeAction.do': home,
@@ -237,4 +246,5 @@ module.exports = {
   '/CustomerAppLive/data/ProposalIHPhome.html': formPage(FORMS['individual-health']),
   '/CustomerAppLive/data/ProposalASPhome.html': formPage(FORMS['arogya-sanjeevani']),
   '/CustomerAppLive/data/ProposalSTUhome.html': formPage(FORMS['super-top-up']),
+  '/CustomerAppLive/data/ProposalYHPhome.html': formPage(FORMS.yuvaan),
 };

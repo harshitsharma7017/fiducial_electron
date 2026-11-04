@@ -671,6 +671,7 @@ const PROPOSAL_FORMS = [
   { product: 'ihp-proposal', name: 'Individual Health' },
   { product: 'as-proposal', name: 'Arogya Sanjeevani' },
   { product: 'stu-proposal', name: 'Super Top-up' },
+  { product: 'yhp-proposal', name: 'Yuvaan Health' },
 ] as const;
 
 /** Fills one of United India's health e-proposals (sections I-II) for a saved client. */
