@@ -2,7 +2,8 @@
 // India: health and motor calculators, the health, Overseas Travel and Overseas Mediclaim
 // e-proposals. New India: motor (the vehicle details of the Private Car and Two Wheeler forms;
 // run-nia-motor.ts), the health quote forms of twelve policies (run-nia-health.ts) and three
-// overseas travel quote forms (run-nia-travel.ts). Other
+// overseas travel quote forms (run-nia-travel.ts) and four rural quote forms for a rural client
+// (run-nia-rural.ts). Other
 // insurers and products are refused with a reason. Motor quotes are for a saved vehicle, travel
 // e-proposals for a travel client, the others for a saved client.
 import type { ClientService } from '../clients/service';
@@ -21,6 +22,7 @@ import {
 import type { UiicProposalForm } from './uiic-health-proposal';
 import { runNiaHealthQuote } from './run-nia-health';
 import { runNiaMotorQuote } from './run-nia-motor';
+import { runNiaRuralQuote } from './run-nia-rural';
 import { runNiaTravelQuote } from './run-nia-travel';
 
 /** The e-proposal each product fills. */
@@ -40,7 +42,7 @@ export function createQuoteService(deps: {
   enabled: boolean;
   clients: Pick<
     ClientService,
-    'get' | 'aadhaarFor' | 'getVehicle' | 'getTraveller' | 'passportFor'
+    'get' | 'aadhaarFor' | 'getVehicle' | 'getTraveller' | 'passportFor' | 'getRural'
   >;
   /** The insurer's open pages: its portal first, then its pop-ups. */
   windowsOf: (insurerId: string) => PortalPage[];
@@ -53,7 +55,10 @@ export function createQuoteService(deps: {
       if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
       const { insurerId } = request;
       const newIndiaMotor = insurerId === 'new-india' && request.product === 'motor';
-      const newIndiaOnly = request.product === 'nia-health' || request.product === 'nia-travel';
+      const newIndiaOnly =
+        request.product === 'nia-health' ||
+        request.product === 'nia-travel' ||
+        request.product === 'nia-rural';
       if (
         newIndiaOnly ? insurerId !== 'new-india' : insurerId !== 'united-india' && !newIndiaMotor
       ) {
@@ -72,7 +77,27 @@ export function createQuoteService(deps: {
           problems: [],
         };
       }
-      // Read before the run starts: an unknown client, travel client or vehicle is refused at once.
+      // Read before the run starts: an unknown client, travel client, rural client or vehicle is
+      // refused at once.
+      if (request.product === 'nia-rural') {
+        const rural = (await deps.clients.getRural(request.ruralId)).rural;
+        running = true;
+        try {
+          const result = await runNiaRuralQuote({
+            windows: () => deps.windowsOf(insurerId),
+            rural,
+            run: request.run,
+            today: (deps.now ?? (() => new Date()))(),
+          });
+          deps.logger.log(result.outcome === 'failed' ? 'warn' : 'info', 'quote.run', {
+            insurer: insurerId,
+            quoteOutcome: result.outcome,
+          });
+          return result;
+        } finally {
+          running = false;
+        }
+      }
       const subject =
         request.product === 'motor'
           ? {

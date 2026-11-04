@@ -4,6 +4,7 @@ import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
 import { ClientsPanel } from './clients/ClientsPanel';
 import { VehiclesPanel } from './vehicles/VehiclesPanel';
 import { TravellersPanel } from './travellers/TravellersPanel';
+import { RuralPanel } from './rural/RuralPanel';
 import { InsurerPortals } from './insurers/InsurerPortals';
 import { AppShell, type ViewId } from './shell/AppShell';
 import { Overview, type AppStatus } from './shell/Overview';
@@ -83,7 +84,7 @@ export function App(): React.JSX.Element {
   // page's content, or null when the build has none.
   const renderHome = (dev: ReactNode) => {
     const available: ViewId[] = ['overview'];
-    if (automation) available.push('clients', 'travellers', 'vehicles', 'insurers');
+    if (automation) available.push('clients', 'travellers', 'rural', 'vehicles', 'insurers');
     if (dev) available.push('development');
     const shown = available.includes(view) ? view : 'overview';
     return (
@@ -104,6 +105,9 @@ export function App(): React.JSX.Element {
             </div>
             <div className="page" hidden={shown !== 'travellers'}>
               <TravellersPanel />
+            </div>
+            <div className="page" hidden={shown !== 'rural'}>
+              <RuralPanel />
             </div>
             <div className="page" hidden={shown !== 'vehicles'}>
               <VehiclesPanel />

@@ -135,7 +135,12 @@ export type PageOp =
    * Types a date into a box that takes it as dd/mm/yyyy (New India's dates of birth), then leaves
    * the box so the page works the age out. A read-only box (a calendar only) fails `read-only`.
    */
-  | { op: 'typeDate'; input: string; date: string };
+  | { op: 'typeDate'; input: string; date: string }
+  /**
+   * Waits for a button, link or label reading exactly `text` to be on the page, shown or not (a
+   * form recognised by a button inside a closed section: New India's Add Animal).
+   */
+  | { op: 'hasText'; text: string; timeoutMs: number };
 
 export interface PageOpResult {
   ok: boolean;
@@ -911,6 +916,17 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       opener.click();
       const shown = await until(() => (isShown() ? true : null), command.timeoutMs);
       return shown ? { ok: true } : { ok: false, detail: 'not-shown-after-click' };
+    }
+    case 'hasText': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const found = await until(
+        () =>
+          Array.from(document.querySelectorAll('button, a, label')).find(
+            (el) => loose(el.textContent ?? '') === loose(command.text),
+          ) ?? null,
+        command.timeoutMs,
+      );
+      return found ? { ok: true } : { ok: false, detail: 'text-not-found' };
     }
     case 'typeDate': {
       const [y, m, d] = command.date.split('-');

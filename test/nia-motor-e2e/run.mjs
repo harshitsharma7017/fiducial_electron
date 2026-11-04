@@ -2,7 +2,7 @@
 // the United India checks in test/insurer-login-e2e). Contacts no insurer: every page is served
 // from 127.0.0.1.
 // Usage: npm run test:nia (motor), npm run test:nia -- health (health quote forms),
-// npm run test:nia -- travel (overseas travel quote forms)
+// npm run test:nia -- travel (overseas travel quote forms), npm run test:nia -- rural (rural forms)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -33,6 +33,8 @@ const env = { ...process.env, FQF_LOGIN_E2E_BUNDLE: join(OUT, 'agent.cjs') };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.NODE_OPTIONS;
 const harness =
-  { health: 'health-harness.cjs', travel: 'travel-harness.cjs' }[process.argv[2]] ?? 'harness.cjs';
+  { health: 'health-harness.cjs', travel: 'travel-harness.cjs', rural: 'rural-harness.cjs' }[
+    process.argv[2]
+  ] ?? 'harness.cjs';
 const child = spawn(electron, [join(HERE, harness)], { env, stdio: 'inherit' });
 child.on('exit', (code) => process.exit(code ?? 1));

@@ -17,6 +17,7 @@ import type {
   TravellerRecord,
   TravellerSummary,
 } from '../../shared/contracts/traveller';
+import type { RuralClient, RuralRecord, RuralSummary } from '../../shared/contracts/rural';
 import { ClientStoreError, type ClientStore } from '../storage/client-store';
 import type { AadhaarVault, PassportVault } from './aadhaar-vault';
 
@@ -57,6 +58,11 @@ export interface ClientService {
   passportLastFour(id: string): Promise<string | null>;
   /** Main process only (filling an insurer's form): the whole passport number, or null. */
   passportFor(id: string): Promise<string | null>;
+  /** Rural clients (a farmer, their animals and farm), kept apart from the others. */
+  listRural(): Promise<RuralSummary[]>;
+  getRural(id: string): Promise<RuralRecord>;
+  saveRural(id: string | null, input: RuralClient): Promise<string>;
+  deleteRural(id: string): Promise<boolean>;
   close(): void;
 }
 
@@ -253,6 +259,42 @@ export function createClientService(deps: {
     passportFor: async (id) => {
       await requireStore();
       return deps.passport ? deps.passport.read(id) : null;
+    },
+
+    listRural: async () => {
+      const s = await requireStore();
+      return guard(() => s.rural.list());
+    },
+
+    getRural: async (id) => {
+      const s = await requireStore();
+      const record = guard(() => s.rural.get(id));
+      if (!record) throw new AppException('VALIDATION_FAILED');
+      return record;
+    },
+
+    saveRural: async (id, input) => {
+      const s = await requireStore();
+      const today = (deps.now ?? (() => new Date()))();
+      if (
+        input.dateOfBirth &&
+        hasFutureDateOfBirth({ members: [{ dateOfBirth: input.dateOfBirth }] }, today)
+      ) {
+        throw new AppException('VALIDATION_FAILED');
+      }
+      if (id !== null && !guard(() => s.rural.get(id))) {
+        throw new AppException('VALIDATION_FAILED');
+      }
+      const saved = guard(() => s.rural.save(id, input));
+      deps.logger.info('rural.saved');
+      return saved.id;
+    },
+
+    deleteRural: async (id) => {
+      const s = await requireStore();
+      const deleted = guard(() => s.rural.delete(id));
+      if (deleted) deps.logger.info('rural.deleted');
+      return deleted;
     },
 
     close: () => {

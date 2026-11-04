@@ -12,12 +12,14 @@ import type {
   QuoteRunResultView,
   SaveClientRequest,
   SaveLoginRequest,
+  SaveRuralRequest,
   SaveTravellerRequest,
   TravellerView,
 } from './contract';
 import type { AppResult } from './result';
 import type { VehicleInputRaw, VehicleRecord, VehicleSummary } from '../contracts/vehicle';
 import type { TravellerSummary } from '../contracts/traveller';
+import type { RuralRecord, RuralSummary } from '../contracts/rural';
 import type { ImportKind } from '../import/import-kinds';
 
 export interface FqfApi {
@@ -72,6 +74,13 @@ export interface FqfApi {
     save(request: SaveTravellerRequest): Promise<AppResult<{ id: string }>>;
     delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
   };
+  /** Rural clients (a farmer, their animals and farm), for New India's rural forms. */
+  rural: {
+    list(): Promise<AppResult<{ rural: RuralSummary[] }>>;
+    get(id: string): Promise<AppResult<RuralRecord>>;
+    save(request: SaveRuralRequest): Promise<AppResult<{ id: string }>>;
+    delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
+  };
   /** Saved vehicles, for motor quotes (kept on their own, not part of a client). */
   vehicles: {
     list(): Promise<AppResult<{ vehicles: VehicleSummary[] }>>;
@@ -94,6 +103,7 @@ export const API_SHAPE = {
   clients: ['list', 'get', 'save', 'delete'],
   portals: ['tabs', 'show', 'close', 'setBounds'],
   travellers: ['list', 'get', 'save', 'delete'],
+  rural: ['list', 'get', 'save', 'delete'],
   vehicles: ['list', 'get', 'save', 'delete'],
   imports: ['template', 'preview', 'commit'],
 } as const satisfies { [K in keyof FqfApi]: readonly (keyof FqfApi[K])[] };

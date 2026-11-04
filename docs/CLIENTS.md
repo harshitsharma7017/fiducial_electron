@@ -83,6 +83,35 @@ in each.
   health client; nothing is moved or removed.
 - **The trip is not saved:** destination, dates, days and plan are entered for each proposal.
 
+## Rural clients (kept apart from health and travel clients)
+
+Decision of 4 November 2026: rural clients are **separate records**, with their own list on the
+**Rural clients** screen. They are for New India's rural quote forms: Cattle Insurance, Farmers
+Package, Livestock (BLDA scheme) and Cattle (Non-scheme).
+
+- **The farmer:** name, mobile, e-mail, notes, pincode, and optionally:
+  - date of birth, gender and marital status;
+  - address;
+  - the nominee: name, relationship and address.
+- **Animals:** up to 20. Each has:
+  - the kind: cattle, horse, donkey, pony, mule, yak, camel, pig, sheep or goat. Rabbits are not
+    included, because New India insures them by batch.
+  - for cattle, the type: buffalo, bullock, bull, calf or heifer, milch buffalo, milch cow, mithun
+    or stud bull;
+  - origin, gender, breed, colour and marks, and age in years and months;
+  - tag number, purpose of use and market value;
+  - optionally, sum insured, fitness certificate date and location of the stable.
+- **Farm house** (Farmers Package), optional:
+  - the sums insured on the dwelling and on its contents;
+  - the house's identification number, location and description, and whether it is katcha;
+  - the contents' description;
+  - the farmer's existing physical disabilities.
+- **Where:** the same encrypted database, in its own `rural_client` table (validated JSON). Kept
+  until the advisor deletes it.
+- **Upgrade (schema version 7):** adds the empty rural client table. Nothing is moved or removed.
+- **Choices for each run are not saved:** scheme, claim ratio, BLDA beneficiary, policy start date
+  and excess are entered for each quote.
+
 ## How it is stored
 
 | What               | Where                       | Protection                                                         |

@@ -168,6 +168,7 @@ describe('the quote service', () => {
         getVehicle: () => Promise.reject(new Error('not used')),
         getTraveller: () => Promise.reject(new Error('not used')),
         passportFor: () => Promise.resolve(null),
+        getRural: () => Promise.reject(new Error('not used')),
       },
       windowsOf: () => windows as never,
       logger: createLogger([]),

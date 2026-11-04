@@ -121,8 +121,10 @@ export async function runNiaMotorQuote(deps: {
 export interface NiaFormToOpen {
   /** The product, as the advisor knows it. */
   name: string;
-  /** The form's heading once open. */
-  heading: string;
+  /** The form's heading once open (null: a form without one, known by `marker`). */
+  heading: string | null;
+  /** A button's text that only this form has (for a form without a heading). */
+  marker?: string;
   /** The product group's tile (MOTOR, HEALTH) and the group's name, for messages. */
   group: string;
   groupName: string;
@@ -147,6 +149,14 @@ export async function openNiaForm(
     message,
     problems: [],
   });
+  if (form.tiles.length === 0) {
+    return {
+      outcome: 'refused',
+      step: null,
+      message: `Open New India's ${form.name} quote form yourself (its tile was not recorded), then press Fill again.`,
+      problems: [],
+    };
+  }
   const dashboard = pages().find((w) => pathOf(w.webContents.getURL()) === DASHBOARD_PATH);
   if (!dashboard) {
     return {
@@ -200,11 +210,12 @@ export async function openNiaForm(
       }
       continue;
     }
-    const heading = await exec(page.webContents, {
-      op: 'hasHeading',
-      text: form.heading,
-      timeoutMs: 20_000,
-    });
+    const heading = await exec(
+      page.webContents,
+      form.heading !== null
+        ? { op: 'hasHeading', text: form.heading, timeoutMs: 20_000 }
+        : { op: 'hasText', text: form.marker ?? '', timeoutMs: 20_000 },
+    );
     if (heading.ok) return { page };
     page.focus();
     return failed(

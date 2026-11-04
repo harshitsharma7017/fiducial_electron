@@ -39,6 +39,12 @@ import {
   type TravellerRecord,
   type TravellerSummary,
 } from '../../shared/contracts/traveller';
+import {
+  ruralClientSchema,
+  type RuralClient,
+  type RuralRecord,
+  type RuralSummary,
+} from '../../shared/contracts/rural';
 import { VaultOpenError, type VaultOpener } from '../secrets/vault-opener';
 import { openDurable, type DurableStore } from './durable-db';
 import { openEncrypted } from './encrypted-db';
@@ -46,7 +52,7 @@ import type { StoreProblem } from './store-problems';
 
 const KEY_ENTRY = 'database-key';
 const KEY_HEX = /^[0-9a-f]{64}$/;
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 /** Why the store could not be used. `code` is safe to show; `reason` is for logs and support. */
 export class ClientStoreError extends Error {
@@ -80,6 +86,14 @@ export interface ClientStore {
     /** Creates a travel client (id null) or replaces an existing one. Returns the saved record. */
     save(id: string | null, input: Traveller): TravellerRecord;
     /** Removes the travel client. Returns whether it existed. */
+    delete(id: string): boolean;
+  };
+  rural: {
+    list(): RuralSummary[];
+    get(id: string): RuralRecord | null;
+    /** Creates a rural client (id null) or replaces an existing one. Returns the saved record. */
+    save(id: string | null, input: RuralClient): RuralRecord;
+    /** Removes the rural client. Returns whether it existed. */
     delete(id: string): boolean;
   };
   /** Clients the last upgrade removed (vehicle-only clients, version 5): their Aadhaar entries
@@ -243,6 +257,22 @@ function migrate(
       d.pragma('user_version = 6');
     });
   }
+  // Version 7 (4 November 2026): rural clients (a farmer, their animals and farm), kept apart
+  // like travel clients (validated JSON).
+  if (version < 7) {
+    store.commit((d) => {
+      d.exec(`
+        CREATE TABLE rural_client (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          rural_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      d.pragma('user_version = 7');
+    });
+  }
   return removed;
 }
 
@@ -266,6 +296,14 @@ interface TravellerRow {
   id: string;
   name: string;
   traveller_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RuralRow {
+  id: string;
+  name: string;
+  rural_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -377,6 +415,16 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
     id: row.id,
     // Re-validated on the way out, like clients.
     traveller: travellerSchema.parse(JSON.parse(row.traveller_json)),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+
+  const getRuralRow = (id: string): RuralRow | undefined =>
+    db.prepare('SELECT * FROM rural_client WHERE id = ?').get(id) as RuralRow | undefined;
+  const toRuralRecord = (row: RuralRow): RuralRecord => ({
+    id: row.id,
+    // Re-validated on the way out, like clients.
+    rural: ruralClientSchema.parse(JSON.parse(row.rural_json)),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -592,6 +640,65 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
       },
       delete: (id) =>
         write((d) => d.prepare('DELETE FROM traveller WHERE id = ?').run(id).changes > 0),
+    },
+
+    rural: {
+      list: () =>
+        (
+          db
+            .prepare(
+              'SELECT id, name, rural_json, updated_at FROM rural_client ORDER BY updated_at DESC, name',
+            )
+            .all() as RuralRow[]
+        ).map((r) => {
+          const rural = ruralClientSchema.parse(JSON.parse(r.rural_json));
+          return {
+            id: r.id,
+            name: r.name,
+            pincode: rural.pincode,
+            animalCount: rural.animals.length,
+            hasFarm: rural.farm !== undefined,
+            updatedAt: r.updated_at,
+          };
+        }),
+      get: (id) => {
+        const row = getRuralRow(id);
+        return row ? toRuralRecord(row) : null;
+      },
+      save: (id, raw) => {
+        const input = ruralClientSchema.parse(raw);
+        const at = now().toISOString();
+        const existing = id === null ? undefined : getRuralRow(id);
+        if (id !== null && !existing) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');
+        const ruralId = existing?.id ?? newId();
+        const values = {
+          id: ruralId,
+          name: input.customer.name,
+          rural_json: JSON.stringify(input),
+          created_at: existing?.created_at ?? at,
+          updated_at: at,
+        };
+        write((d) =>
+          existing
+            ? d
+                .prepare(
+                  `UPDATE rural_client SET name = @name, rural_json = @rural_json,
+                     updated_at = @updated_at WHERE id = @id`,
+                )
+                .run(values)
+            : d
+                .prepare(
+                  `INSERT INTO rural_client (id, name, rural_json, created_at, updated_at)
+                   VALUES (@id, @name, @rural_json, @created_at, @updated_at)`,
+                )
+                .run(values),
+        );
+        const saved = getRuralRow(ruralId);
+        if (!saved) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');
+        return toRuralRecord(saved);
+      },
+      delete: (id) =>
+        write((d) => d.prepare('DELETE FROM rural_client WHERE id = ?').run(id).changes > 0),
     },
 
     removedByUpgrade,

@@ -163,74 +163,25 @@ export function planNiaTravelQuote(
     return { ok: true, steps, byHand };
   }
 
-  // Policy Holder Information: a new customer (the advisor switches to Existing Customer and finds
-  // the client if New India already has them).
-  section('Policy Holder Information', '#firstNameCreate');
-  add(
-    'New customer',
-    { op: 'check', selector: '#policyHolder1', checked: true },
-    { optional: true, ifMissed: 'policy holder: New or Existing Customer' },
+  policyHolderSteps(
+    {
+      name: traveller.customer.name,
+      gender: traveller.gender,
+      maritalStatus: traveller.maritalStatus,
+      dateOfBirth: traveller.dateOfBirth,
+      address: traveller.proposal?.address,
+      phone: traveller.customer.phone,
+      email: traveller.customer.email,
+      landline:
+        traveller.proposal?.landlineStdCode && traveller.proposal.landlineNumber
+          ? traveller.proposal.landlineStdCode + traveller.proposal.landlineNumber
+          : undefined,
+      eInsuranceAccountNumber: traveller.proposal?.eInsuranceAccountNumber,
+    },
+    steps,
+    byHand,
   );
-  const { customer, proposal } = traveller;
-  const title =
-    traveller.gender === 'male'
-      ? 'Mr.'
-      : traveller.gender === 'female'
-        ? traveller.maritalStatus === 'married'
-          ? 'Mrs.'
-          : 'Ms.'
-        : null;
-  if (title) add('Title', { op: 'setField', selector: '#typeOfOrg', value: title });
-  else byHand.push("policy holder's title");
-  const words = customer.name.trim().split(/\s+/);
-  add('First name', { op: 'setField', selector: '#firstNameCreate', value: words[0]! });
-  if (words.length > 2) {
-    add('Middle name', {
-      op: 'setField',
-      selector: '#middleNameCreate',
-      value: words.slice(1, -1).join(' '),
-    });
-  }
-  if (words.length > 1) {
-    add('Last name', { op: 'setField', selector: '#lastNameCreate', value: words.at(-1)! });
-  } else byHand.push("policy holder's last name (the saved name is one word)");
-  if (traveller.gender) {
-    const g = { male: 0, female: 1, transgender: 2 }[traveller.gender];
-    add('Gender', { op: 'check', selector: `#gender${g}`, checked: true });
-  } else byHand.push("policy holder's gender");
-  add("Policy holder's date of birth", {
-    op: 'typeDate',
-    input: '#dob',
-    date: traveller.dateOfBirth,
-  });
-  if (proposal?.address) {
-    add('Building no., Street', {
-      op: 'setField',
-      selector: '#buildingNo',
-      value: proposal.address.slice(0, 100),
-    });
-  } else byHand.push('address (building no., street)');
-  byHand.push('state, city and PIN code');
-  if (customer.phone) {
-    add('Mobile no.', { op: 'setField', selector: '#mobileInd', value: customer.phone });
-  } else byHand.push('mobile number');
-  if (customer.email) {
-    add('Email ID', { op: 'setField', selector: '#emailInd', value: customer.email });
-  }
-  if (proposal?.landlineStdCode && proposal.landlineNumber) {
-    const landline = proposal.landlineStdCode + proposal.landlineNumber;
-    if (landline.length <= 11) {
-      add('Landline no.', { op: 'setField', selector: '#landLineNo', value: landline });
-    }
-  }
-  if (proposal?.eInsuranceAccountNumber) {
-    add('E-Insurance account no.', {
-      op: 'setField',
-      selector: '#eAccount',
-      value: proposal.eInsuranceAccountNumber,
-    });
-  }
-  byHand.push('bank details (IFSC, bank, branch, account number) and the bank details declaration');
+  const { proposal } = traveller;
 
   // Traveller Details.
   section('Traveller Details', '#passport');
@@ -299,4 +250,108 @@ export function planNiaTravelQuote(
     byHand.push("nominee's date of birth (and an appointee for a nominee under 18)");
   }
   return { ok: true, steps, byHand };
+}
+
+/** The policy holder, as New India's Policy Holder Information section asks it. */
+export interface NiaPolicyHolder {
+  name: string;
+  gender?: 'male' | 'female' | 'transgender' | undefined;
+  maritalStatus?: string | undefined;
+  dateOfBirth?: string | undefined;
+  address?: string | undefined;
+  phone?: string | undefined;
+  email?: string | undefined;
+  landline?: string | undefined;
+  eInsuranceAccountNumber?: string | undefined;
+}
+
+/**
+ * Policy Holder Information, as a new customer (the advisor switches to Existing Customer and
+ * finds the client if New India already has them). `optional`: every step may be missed (a form
+ * whose section was not recorded field by field): what is missed is listed for the advisor.
+ */
+export function policyHolderSteps(
+  person: NiaPolicyHolder,
+  steps: NiaHealthStep[],
+  byHand: string[],
+  options: { optional?: boolean } = {},
+): void {
+  const add = (label: string, op: PageOp, more: Partial<NiaHealthStep> = {}) =>
+    steps.push({
+      label,
+      op,
+      ...(options.optional
+        ? { optional: true, ifMissed: `policy holder: ${label.toLowerCase()}` }
+        : {}),
+      ...more,
+    });
+  add('Policy Holder Information', {
+    op: 'ensureShown',
+    shown: { selector: '#firstNameCreate' },
+    open: { link: 'Policy Holder Information' },
+    timeoutMs: 8000,
+  });
+  add(
+    'New customer',
+    { op: 'check', selector: '#policyHolder1', checked: true },
+    { optional: true, ifMissed: 'policy holder: New or Existing Customer' },
+  );
+  const title =
+    person.gender === 'male'
+      ? 'Mr.'
+      : person.gender === 'female'
+        ? person.maritalStatus === 'married'
+          ? 'Mrs.'
+          : 'Ms.'
+        : null;
+  if (title) add('Title', { op: 'setField', selector: '#typeOfOrg', value: title });
+  else byHand.push("policy holder's title");
+  const words = person.name.trim().split(/\s+/);
+  add('First name', { op: 'setField', selector: '#firstNameCreate', value: words[0]! });
+  if (words.length > 2) {
+    add('Middle name', {
+      op: 'setField',
+      selector: '#middleNameCreate',
+      value: words.slice(1, -1).join(' '),
+    });
+  }
+  if (words.length > 1) {
+    add('Last name', { op: 'setField', selector: '#lastNameCreate', value: words.at(-1)! });
+  } else byHand.push("policy holder's last name (the saved name is one word)");
+  if (person.gender) {
+    const g = { male: 0, female: 1, transgender: 2 }[person.gender];
+    add('Gender', { op: 'check', selector: `#gender${g}`, checked: true });
+  } else byHand.push("policy holder's gender");
+  if (person.dateOfBirth) {
+    add("Policy holder's date of birth", {
+      op: 'typeDate',
+      input: '#dob',
+      date: person.dateOfBirth,
+    });
+  } else byHand.push("policy holder's date of birth");
+  if (person.address) {
+    add('Building no., Street', {
+      op: 'setField',
+      selector: '#buildingNo',
+      value: person.address.slice(0, 100),
+    });
+  } else byHand.push('address (building no., street)');
+  byHand.push('state, city and PIN code');
+  if (person.phone) {
+    add('Mobile no.', { op: 'setField', selector: '#mobileInd', value: person.phone });
+  } else byHand.push('mobile number');
+  if (person.email) {
+    add('Email ID', { op: 'setField', selector: '#emailInd', value: person.email });
+  }
+  if (person.landline && person.landline.length <= 11) {
+    add('Landline no.', { op: 'setField', selector: '#landLineNo', value: person.landline });
+  }
+  if (person.eInsuranceAccountNumber) {
+    add('E-Insurance account no.', {
+      op: 'setField',
+      selector: '#eAccount',
+      value: person.eInsuranceAccountNumber,
+    });
+  }
+  byHand.push('bank details (IFSC, bank, branch, account number) and the bank details declaration');
 }

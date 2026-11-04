@@ -69,7 +69,14 @@ export async function fillNiaForm(deps: {
   // A form already open for another product is not used.
   if (
     page &&
-    !(await exec(page.webContents, { op: 'hasHeading', text: form.heading, timeoutMs: 3000 })).ok
+    !(
+      await exec(
+        page.webContents,
+        form.heading !== null
+          ? { op: 'hasHeading', text: form.heading, timeoutMs: 3000 }
+          : { op: 'hasText', text: form.marker ?? '', timeoutMs: 3000 },
+      )
+    ).ok
   ) {
     page = undefined;
   }

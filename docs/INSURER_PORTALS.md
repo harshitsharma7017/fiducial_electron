@@ -307,7 +307,49 @@ question, the bank details or any consent.
 
 **Not yet run on the live portal.**
 
-## What it does
+## New India: rural quote forms (filled, never calculated)
+
+Built from the recording of 4 November 2026 (`new-india-2026-11-04T09-57-52-227Z`). In it, the
+advisor opened four rural forms, answered New India's PAN question, and opened their sections and
+lists. Nothing was typed and no premium was worked out, so dates are typed as dd/mm/yyyy.
+
+A rural client (see CLIENTS.md) has a **New India rural quote** button. The advisor picks the form
+and enters that run's choices:
+- **Cattle Insurance** (tile "Cattle"): the scheme and, optionally, the claim ratio. The app chooses
+  **New Quote/Policy issuance** and ticks **Cattle** and/or **Calf Heifer Insurance** to match the
+  animals. The animals' own fields under those boxes were not recorded, so they are listed for the
+  advisor.
+- **Farmers Package** (tile "Farmers Package Insurance"): the policy start date and the excess. The
+  app fills:
+  - Risk Details: disabilities, the nominee, the sums insured on the dwelling and contents;
+  - Fire Allied Perils Earthquake: the house's identification, location and description, katcha
+    or not, and the contents.
+- **Livestock (BLDA scheme)** and **Cattle (Non-scheme)**: the recording shows no heading or tile
+  name for these, so the advisor opens the form, and the app recognises it by its **Add Animal** or
+  **Add Cattle** button.
+  - **Livestock (BLDA):** the BLDA scheme, the beneficiary type and, optionally, the claim ratio.
+    Then one row per animal through **Add Animal**, each with its kind's own fields.
+  - **Cattle (Non-scheme):** the scheme. Then one row per head of cattle through **Add Cattle**:
+    type, gender, age, origin, breed, purpose, tag, fitness certificate date and market value.
+- **On every form:** Policy Holder Information as a new customer, as on the travel forms. The two
+  unnamed forms use another version of that section, so a field there that is not found is listed
+  rather than stopping the run.
+- **New India's PAN question** includes the client's KYC consent, so it is left to the advisor. The
+  run stops with a note; the advisor answers it and presses Fill again, and the run carries on in
+  the open form.
+- **Refused, with the reason:** animals a form does not take. Cattle Insurance and the Non-scheme
+  form are for cattle only, and the Non-scheme form lists fewer types.
+
+It never presses **Save & Calculate Premium**, **Approve** or **Send Quote**.
+
+**Verified:** against local copies of the four forms and the dashboard
+(`npm run test:nia -- rural`). Checked for:
+- the PAN question, at New Quote and when the form loads;
+- each form filled;
+- the unnamed forms refused from the dashboard;
+- cattle-only forms refusing other animals.
+
+**Not yet run on the live portal.**
 
 The advisor saves each insurer's user ID and password once. When they open that insurer's portal
 from the app, the app fills both into the insurer's own sign-in page. The advisor completes any

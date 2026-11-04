@@ -73,6 +73,12 @@ export function createHandlers(deps: {
       }),
     }),
     'travellers:delete': async ({ id }) => ({ deleted: await deps.clients.deleteTraveller(id) }),
+    'rural:list': async () => ({ rural: await deps.clients.listRural() }),
+    'rural:get': ({ id }) => deps.clients.getRural(id),
+    'rural:save': async ({ id, rural }) => ({
+      id: await deps.clients.saveRural(id ?? null, rural),
+    }),
+    'rural:delete': async ({ id }) => ({ deleted: await deps.clients.deleteRural(id) }),
     'imports:template': ({ kind, format }) => imports().template(kind, format),
     'imports:preview': ({ kind }) => imports().preview(kind),
     'imports:commit': ({ token, includeDuplicates }) => imports().commit(token, includeDuplicates),

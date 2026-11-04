@@ -581,6 +581,92 @@ describe('the client service and IPC channels', () => {
     clients.close();
   });
 
+  // Rural clients (schema version 7): a farmer, their animals and farm, apart from the others.
+  const RURAL = {
+    customer: { name: 'Synthetic Farmer', phone: '9876543210' },
+    pincode: '411001',
+    gender: 'male',
+    nomineeName: 'Synthetic Nominee',
+    nomineeRelationship: 'spouse',
+    animals: [
+      {
+        kind: 'cattle',
+        cattleType: 'milch-cow',
+        origin: 'cross-breed',
+        gender: 'female',
+        breed: 'HF, black and white',
+        ageYears: 4,
+        ageMonths: 2,
+        tagNumber: 'TAG-0001',
+        marketValueRupees: 60000,
+      },
+      {
+        kind: 'goat',
+        origin: 'indigenous',
+        gender: 'female',
+        breed: 'Osmanabadi',
+        ageYears: 2,
+        ageMonths: 0,
+        marketValueRupees: 9000,
+        sumInsuredRupees: 9000,
+      },
+    ],
+    farm: { dwellingSumInsuredRupees: 300000, contentsSumInsuredRupees: 50000, katcha: false },
+  };
+
+  it('saves, lists, reads and deletes rural clients, apart from health and travel clients', async () => {
+    const { call, clients } = setup(true);
+    const healthId = idOf(await call('clients:save', { client: HOLDER }));
+    const id = idOf(await call('rural:save', { rural: RURAL }));
+    expect(await call('rural:list', {})).toEqual({
+      ok: true,
+      data: {
+        rural: [
+          {
+            id,
+            name: 'Synthetic Farmer',
+            pincode: '411001',
+            animalCount: 2,
+            hasFarm: true,
+            updatedAt: expect.any(String) as string,
+          },
+        ],
+      },
+    });
+    expect(await call('rural:get', { id })).toMatchObject({ ok: true, data: { id, rural: RURAL } });
+    expect((await clients.list()).clients.map((c) => c.id)).toEqual([healthId]);
+    expect(await clients.listTravellers()).toEqual([]);
+    expect(await call('rural:get', { id: healthId })).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_FAILED' },
+    });
+    await call('rural:save', { id, rural: { ...RURAL, animals: [] } });
+    expect((await clients.getRural(id)).rural.animals).toEqual([]);
+    expect(await call('rural:delete', { id })).toEqual({ ok: true, data: { deleted: true } });
+    expect(await clients.listRural()).toEqual([]);
+    clients.close();
+  });
+
+  it('rejects malformed rural clients', async () => {
+    const { call, clients } = setup(true);
+    const [cow, goat] = RURAL.animals;
+    for (const rural of [
+      { ...RURAL, animals: [{ ...cow, cattleType: undefined }] },
+      { ...RURAL, animals: [{ ...goat, cattleType: 'milch-cow' }] },
+      { ...RURAL, animals: [{ ...cow, ageMonths: 12 }] },
+      { ...RURAL, animals: [{ ...cow, marketValueRupees: 0 }] },
+      { ...RURAL, dateOfBirth: '2099-01-01' },
+      { ...RURAL, animals: Array.from({ length: 21 }, () => cow) },
+    ]) {
+      expect(await call('rural:save', { rural })).toMatchObject({
+        ok: false,
+        error: { code: 'VALIDATION_FAILED' },
+      });
+    }
+    expect(await clients.listRural()).toEqual([]);
+    clients.close();
+  });
+
   it('is off unless switched on: no database is created', async () => {
     const { call, p } = setup(false);
     expect(await call('clients:list', {})).toEqual({
