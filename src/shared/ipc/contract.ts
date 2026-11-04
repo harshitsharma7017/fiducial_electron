@@ -23,6 +23,7 @@ import {
 } from '../contracts/traveller';
 import { FILL_OUTCOMES } from '../insurers/fill-outcomes';
 import { NIA_HEALTH_POLICIES } from '../insurers/nia-health';
+import { niaTripSchema } from '../insurers/nia-travel';
 import {
   hasControlCharacter,
   LOGIN_AUTOMATION,
@@ -275,6 +276,17 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       policy: z.enum(NIA_HEALTH_POLICIES),
       /** The advisor confirms, for this quote, that no member has a listed condition. */
       goodHealthConfirmed: z.boolean(),
+    })
+    .strict(),
+  // New India overseas travel quote forms, for a travel client: the trip is entered for this run.
+  z
+    .object({
+      product: z.literal('nia-travel'),
+      travellerId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      trip: niaTripSchema,
+      /** The advisor confirms no pre-existing illness, disease or disability, and no accident. */
+      noPreExistingConfirmed: z.boolean(),
     })
     .strict(),
   // Travel e-proposals are for a travel client; the trip is entered for this run, never saved.

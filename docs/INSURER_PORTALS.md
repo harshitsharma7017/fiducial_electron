@@ -248,6 +248,65 @@ refused with the reason.
 Premier Mediclaim, Cancer Guard, New India Mediclaim) and the dashboard
 (`npm run test:nia -- health`). **Not yet run on the live portal.**
 
+## New India: overseas travel quote forms (filled, never calculated)
+
+Built from the recording of 4 November 2026 (`new-india-2026-11-04T09-43-08-482Z`). In it, the
+advisor opened each form from the dashboard, clicked through its trip choices and opened its
+sections. Nothing was typed and no premium was worked out. As with the health forms, dates are typed
+as dd/mm/yyyy, and each tile is assumed to read as the form's heading without "Insurance".
+
+The forms:
+- **Overseas Mediclaim (Employment & Studies):** destination, studies or employment, leaving date,
+  duration in months (New India works out the return date) and date of birth. Then the plans New
+  India offers for them, picked by place (D, D1…).
+- **Overseas Mediclaim (Business & Holiday):** destination E-1 or E-2 CFT, business or holiday,
+  leaving date and date of birth. This form has Travel Details only.
+- **Overseas Travel Ease (Business & Holiday):** destination, purpose, leaving and return dates,
+  date of birth and the plan by sum insured (Basic $25,000 to Supreme $5,00,000).
+
+A travel client has a **New India travel quote** button. The advisor picks the form and enters the
+trip for that run; the trip is not saved. The advisor also confirms New India's question.
+1. **The pre-existing illness question.** On the dashboard, before any travel form opens, New
+   India asks whether anyone has a pre-existing illness, disease or disability, or has had an
+   accident. It does not sell to them online.
+   - With the advisor's confirmation, the app answers **No**.
+   - Without it, the run is refused before anything is touched.
+2. **The PAN question.** On Employment & Studies and Travel Ease, New India then asks whether the
+   client has a PAN, with the client's consent for KYC. The app stops there and says so. The
+   advisor answers it and presses Fill again; the run carries on in the open form.
+3. **What it fills:**
+   - **Travel Details:** the trip and the date of birth.
+   - **Policy Holder Information, as a new customer:**
+     - title, from gender and marital status;
+     - first, middle and last name, split from the saved name;
+     - gender, date of birth, the address line, mobile, e-mail, landline and e-insurance account.
+   - **Traveller Details:**
+     - occupation, only Professional (New India's list differs from the travel client's);
+     - passport number (8 characters at most) and expiry date;
+     - on Travel Ease, the passport as the ID document.
+   - **Other Details:** the nominee's name and relationship; relationships New India does not list
+     go in as "Others".
+4. **Stops**, and lists what is left:
+   - state, city and PIN code;
+   - bank details and their declaration;
+   - visa, sponsor and university;
+   - the overseas address;
+   - the nominee's date of birth;
+   - an active New India policy.
+
+It never presses **Save & Calculate Premium** or **Calculate Premium**, and never answers the PAN
+question, the bank details or any consent.
+
+**Verified:** against local copies of the three forms and the dashboard
+(`npm run test:nia -- travel`). Checked for:
+- the illness question answered;
+- the PAN question stopping the run, then the run carrying on after it is answered;
+- each form filled;
+- a plan place New India does not offer stopping at Plan;
+- a run without the confirmation refused.
+
+**Not yet run on the live portal.**
+
 ## What it does
 
 The advisor saves each insurer's user ID and password once. When they open that insurer's portal

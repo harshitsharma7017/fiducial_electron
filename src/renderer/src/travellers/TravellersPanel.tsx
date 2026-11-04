@@ -3,7 +3,8 @@
 // traveller (the proposer and insured), with their proposal details and passport. The passport and
 // Aadhaar numbers are kept apart, in the secret vault: after saving, only their last four
 // characters are shown. Each travel client can be filled into United India's Overseas Travel and
-// Overseas Mediclaim (B&H, SCHENGEN, Studies) e-proposals from here.
+// Overseas Mediclaim (B&H, SCHENGEN, Studies) e-proposals, and New India's overseas travel quote
+// forms, from here.
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { ImportButton } from '../import/ImportDialog';
@@ -26,6 +27,7 @@ import {
   TRAVEL_OCCUPATION_LIST,
   TravelProposalPanel,
 } from './TravelProposalPanel';
+import { NiaTravelPanel } from './NiaTravelPanel';
 
 /** The passport number, kept apart (secret vault): the form only knows its last four characters. */
 interface PassportDraft {
@@ -266,6 +268,14 @@ export function TravellersPanel(): React.JSX.Element | null {
                       {p.label}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpen(open === `nia-travel:${t.id}` ? null : `nia-travel:${t.id}`)
+                    }
+                  >
+                    New India travel quote
+                  </button>
                   <button type="button" onClick={() => void edit(t)}>
                     Edit
                   </button>
@@ -295,6 +305,7 @@ export function TravellersPanel(): React.JSX.Element | null {
                     />
                   ),
               )}
+              {open === `nia-travel:${t.id}` && <NiaTravelPanel travellerId={t.id} />}
             </li>
           ))}
         </ul>

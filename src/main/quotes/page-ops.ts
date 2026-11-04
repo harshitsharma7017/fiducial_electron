@@ -697,11 +697,16 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           };
     }
     case 'setField': {
-      // A dropdown (option by value, AngularJS "string:" value, or visible text) or a box.
-      const find = (): HTMLSelectElement | HTMLInputElement | null => {
+      // A dropdown (option by value, AngularJS "string:" value, or visible text), a box or a
+      // text area (New India's address).
+      const find = (): HTMLSelectElement | HTMLInputElement | HTMLTextAreaElement | null => {
         const root = scope(command.within);
         const el = root ? first(root, command.selector) : null;
-        return el instanceof HTMLSelectElement || el instanceof HTMLInputElement ? el : null;
+        return el instanceof HTMLSelectElement ||
+          el instanceof HTMLInputElement ||
+          el instanceof HTMLTextAreaElement
+          ? el
+          : null;
       };
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const el = find();
@@ -726,7 +731,11 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           el.value = want;
         } else {
           el.focus();
-          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+          const proto =
+            el instanceof HTMLTextAreaElement
+              ? HTMLTextAreaElement.prototype
+              : HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(proto, 'value');
           if (setter?.set) setter.set.call(el, want);
           else el.value = want;
           fire(el, 'input');

@@ -1,7 +1,8 @@
 // Quote runs behind the IPC channel. Off unless the automation features are switched on. United
 // India: health and motor calculators, the health, Overseas Travel and Overseas Mediclaim
 // e-proposals. New India: motor (the vehicle details of the Private Car and Two Wheeler forms;
-// run-nia-motor.ts) and the health quote forms of twelve policies (run-nia-health.ts). Other
+// run-nia-motor.ts), the health quote forms of twelve policies (run-nia-health.ts) and three
+// overseas travel quote forms (run-nia-travel.ts). Other
 // insurers and products are refused with a reason. Motor quotes are for a saved vehicle, travel
 // e-proposals for a travel client, the others for a saved client.
 import type { ClientService } from '../clients/service';
@@ -20,6 +21,7 @@ import {
 import type { UiicProposalForm } from './uiic-health-proposal';
 import { runNiaHealthQuote } from './run-nia-health';
 import { runNiaMotorQuote } from './run-nia-motor';
+import { runNiaTravelQuote } from './run-nia-travel';
 
 /** The e-proposal each product fills. */
 const PROPOSAL_FORM = {
@@ -51,9 +53,9 @@ export function createQuoteService(deps: {
       if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
       const { insurerId } = request;
       const newIndiaMotor = insurerId === 'new-india' && request.product === 'motor';
-      const newIndiaHealth = request.product === 'nia-health';
+      const newIndiaOnly = request.product === 'nia-health' || request.product === 'nia-travel';
       if (
-        newIndiaHealth ? insurerId !== 'new-india' : insurerId !== 'united-india' && !newIndiaMotor
+        newIndiaOnly ? insurerId !== 'new-india' : insurerId !== 'united-india' && !newIndiaMotor
       ) {
         return {
           outcome: 'refused',
@@ -77,7 +79,9 @@ export function createQuoteService(deps: {
               kind: 'vehicle' as const,
               vehicle: (await deps.clients.getVehicle(request.vehicleId)).saved.vehicle,
             }
-          : request.product === 'travel-proposal' || request.product === 'omp-proposal'
+          : request.product === 'travel-proposal' ||
+              request.product === 'omp-proposal' ||
+              request.product === 'nia-travel'
             ? {
                 kind: 'traveller' as const,
                 record: await deps.clients.getTraveller(request.travellerId),
@@ -101,13 +105,22 @@ export function createQuoteService(deps: {
             today,
           };
           result =
-            request.product === 'omp-proposal'
-              ? await runUiicOmpProposal({ ...travel, trip: request.trip })
-              : request.product === 'travel-proposal'
-                ? await runUiicTravelProposal({ ...travel, trip: request.trip })
-                : (() => {
-                    throw new AppException('VALIDATION_FAILED');
-                  })();
+            request.product === 'nia-travel'
+              ? await runNiaTravelQuote({
+                  windows,
+                  traveller: subject.record.traveller,
+                  trip: request.trip,
+                  passportNumber: travel.passportNumber,
+                  noPreExisting: request.noPreExistingConfirmed,
+                  today,
+                })
+              : request.product === 'omp-proposal'
+                ? await runUiicOmpProposal({ ...travel, trip: request.trip })
+                : request.product === 'travel-proposal'
+                  ? await runUiicTravelProposal({ ...travel, trip: request.trip })
+                  : (() => {
+                      throw new AppException('VALIDATION_FAILED');
+                    })();
         } else if (request.product === 'nia-health') {
           result = await runNiaHealthQuote({
             windows,
@@ -120,7 +133,8 @@ export function createQuoteService(deps: {
           request.product !== 'health' &&
           request.product !== 'motor' &&
           request.product !== 'travel-proposal' &&
-          request.product !== 'omp-proposal'
+          request.product !== 'omp-proposal' &&
+          request.product !== 'nia-travel'
         ) {
           result = await runUiicHealthProposal({
             windows,

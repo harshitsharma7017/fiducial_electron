@@ -3,6 +3,7 @@
 import { createLogger } from '../../src/main/logging/logger';
 import { runNiaHealthQuote } from '../../src/main/quotes/run-nia-health';
 import { runNiaMotorQuote } from '../../src/main/quotes/run-nia-motor';
+import { runNiaTravelQuote } from '../../src/main/quotes/run-nia-travel';
 import {
   installNavigationPolicy,
   setSessionPolicy,
@@ -13,5 +14,6 @@ export {
   installNavigationPolicy,
   runNiaHealthQuote,
   runNiaMotorQuote,
+  runNiaTravelQuote,
   setSessionPolicy,
 };
