@@ -13,6 +13,7 @@ import { createPortalWindows } from './insurers/portal-windows';
 import { createSessionClock } from './insurers/session-clock';
 import { createSessionKeeper } from './insurers/session-keeper';
 import { createQuoteService } from './quotes/service';
+import { createImportService } from './import/service';
 import { createVaultOpener } from './secrets/vault-opener';
 import { openClientStore } from './storage/client-store';
 import { createInsurerService, insurerPortalsEnabled } from './insurers/service';
@@ -140,11 +141,15 @@ function start(): void {
       windowsOf: (id) => portalWindows.pagesOf(id),
       logger,
     });
+    const imports = createImportService({ clients, window: () => appWindow, logger });
     registerIpc(
-      createDispatcher(createHandlers({ insurers, clients, quotes, portals: portalHost }), {
-        isTrustedSender: senderPolicy.isTrusted,
-        logger,
-      }),
+      createDispatcher(
+        createHandlers({ insurers, clients, quotes, imports, portals: portalHost }),
+        {
+          isTrustedSender: senderPolicy.isTrusted,
+          logger,
+        },
+      ),
     );
     // DEMO ONLY — temporary portal automation demo (src/demo/portal-automation/README.md), in
     // development builds only. `import.meta.env.DEV` is `false` in production builds, so this

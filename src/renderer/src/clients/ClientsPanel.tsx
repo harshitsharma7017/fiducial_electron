@@ -7,6 +7,7 @@
 // ../vehicles/VehiclesPanel.tsx.
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { ImportButton } from '../import/ImportDialog';
 import {
   ageOn,
   type ClientInputRaw,
@@ -208,13 +209,16 @@ export function ClientsPanel(): React.JSX.Element | null {
         </p>
       )}
       {!list.storageError && (
-        <button
-          type="button"
-          className="primary"
-          onClick={() => setDraft({ ...EMPTY, members: [...EMPTY.members] })}
-        >
-          Add client
-        </button>
+        <div className="insurer-actions">
+          <button
+            type="button"
+            className="primary"
+            onClick={() => setDraft({ ...EMPTY, members: [...EMPTY.members] })}
+          >
+            Add client
+          </button>
+          <ImportButton kind="clients" onImported={() => void refresh()} />
+        </div>
       )}
       <Modal
         open={draft !== null}

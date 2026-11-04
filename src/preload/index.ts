@@ -8,6 +8,8 @@ import type {
   AppInfo,
   ClientListResponse,
   ClientView,
+  ImportCommitResult,
+  ImportPreview,
   PortalTabsView,
   InsurerPortalList,
   QuoteRunResultView,
@@ -105,6 +107,20 @@ const api: FqfApi = {
     delete: (id) =>
       ipcRenderer.invoke(IPC_CHANNELS.vehiclesDelete, { id }) as Promise<
         AppResult<{ deleted: boolean }>
+      >,
+  },
+  imports: {
+    template: (kind, format) =>
+      ipcRenderer.invoke(IPC_CHANNELS.importsTemplate, { kind, format }) as Promise<
+        AppResult<{ saved: boolean }>
+      >,
+    preview: (kind) =>
+      ipcRenderer.invoke(IPC_CHANNELS.importsPreview, { kind }) as Promise<
+        AppResult<ImportPreview>
+      >,
+    commit: (token, includeDuplicates) =>
+      ipcRenderer.invoke(IPC_CHANNELS.importsCommit, { token, includeDuplicates }) as Promise<
+        AppResult<ImportCommitResult>
       >,
   },
 };

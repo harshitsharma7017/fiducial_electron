@@ -43,6 +43,13 @@ export type PageOp =
     }
   | { op: 'type'; selector: string; value: string }
   /**
+   * A box that suggests as you type (New India's Model and Variant): waits until it is enabled,
+   * types the value, and picks the suggestion that reads the same (ignoring case and spacing).
+   * No suggestions, or none that reads the same, fails (`no-match`): the typed text is never left
+   * in the box as if it were chosen.
+   */
+  | { op: 'typeahead'; selector: string; value: string; timeoutMs: number }
+  /**
    * Waits until the box holds a value other than `rejectValues` (for example an age box that shows
    * "0" until the portal has worked the age out from the date of birth).
    */
@@ -100,7 +107,18 @@ export type PageOp =
       within?: string;
       row?: 'current';
     }
-  | { op: 'errors' };
+  | { op: 'errors' }
+  /** The text of any visible pop-up (dialog), whatever it says: `ok: false` with `errors`. */
+  | { op: 'popup' }
+  /**
+   * Clicks the visible element whose text is exactly `text` (ignoring case and spacing), outside
+   * any pop-up: a tile drawn as a plain element (New India's dashboard: MOTOR, Private Car). The
+   * click goes to its clickable container (link, button, ng-click). Fails `ambiguous` when more
+   * than one such element is shown, rather than guess.
+   */
+  | { op: 'clickText'; text: string; timeoutMs: number }
+  /** Waits for a visible heading (as the recorder notes them) reading exactly `text`. */
+  | { op: 'hasHeading'; text: string; timeoutMs: number };
 
 export interface PageOpResult {
   ok: boolean;
@@ -196,7 +214,9 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         const root = scope(command.within);
         return root ? first(root, command.selector) : null;
       }, command.timeoutMs);
-      return found ? { ok: true } : { ok: false, detail: 'not-found' };
+      if (found) return { ok: true };
+      const all = (scope(command.within) ?? document).querySelectorAll(command.selector).length;
+      return { ok: false, detail: all ? `not-found (${all} matching, none shown)` : 'not-found' };
     }
     case 'waitForDialog': {
       const found = await until(() => scope(command.text), command.timeoutMs);
@@ -275,6 +295,70 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       fire(el, 'change');
       el.blur();
       return el.value === command.value ? { ok: true } : { ok: false, detail: 'not-kept' };
+    }
+    case 'typeahead': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const box = await until(() => {
+        const el = first(document, command.selector);
+        return el instanceof HTMLInputElement && !el.disabled && !el.readOnly ? el : null;
+      }, command.timeoutMs);
+      if (!box) {
+        const el = first(document, command.selector) as HTMLInputElement | null;
+        return { ok: false, detail: el ? 'still-disabled' : 'not-found' };
+      }
+      box.focus();
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      if (setter?.set) setter.set.call(box, command.value);
+      else box.value = command.value;
+      fire(box, 'input');
+      fire(box, 'keyup');
+      // The box's own suggestion list: the list it names (aria-owns / aria-controls, as
+      // uib-typeahead sets), else a list that opened next to it (within three levels up), else a
+      // jQuery UI list (appended to the page's end). Never any other menu on the page.
+      const SUGGESTIONS =
+        'li, [role="option"], .ui-menu-item, .typeahead li, .autocomplete li, .dropdown-menu li';
+      const shownItems = (root: ParentNode | null): HTMLElement[] =>
+        root
+          ? Array.from(root.querySelectorAll<HTMLElement>(SUGGESTIONS)).filter(
+              (el) => visible(el) && text(el) !== '',
+            )
+          : [];
+      const suggestions = (): HTMLElement[] => {
+        const owned = ['aria-owns', 'aria-controls']
+          .map((a) => box.getAttribute(a))
+          .filter((id): id is string => !!id)
+          .flatMap((ids) => ids.split(/\s+/))
+          .map((id) => document.getElementById(id));
+        for (const list of owned) {
+          const items = shownItems(list);
+          if (items.length > 0) return items;
+        }
+        let near: Element | null = box.parentElement;
+        for (let level = 0; near && level < 3; level += 1, near = near.parentElement) {
+          const items = Array.from(
+            near.querySelectorAll<HTMLElement>('.dropdown-menu, [role="listbox"], .typeahead'),
+          ).flatMap((list) => shownItems(list));
+          if (items.length > 0) return items;
+        }
+        return Array.from(document.querySelectorAll<HTMLElement>('.ui-autocomplete'))
+          .filter(visible)
+          .flatMap((list) => shownItems(list));
+      };
+      // No list: the page has nothing by that name. Typed text it did not offer would be left in
+      // the box looking filled, so stop instead.
+      const shown = await until(() => (suggestions().length > 0 ? true : null), 3000);
+      if (!shown) return { ok: false, detail: 'no-match (no suggestions)' };
+      const match = suggestions().find((el) => loose(text(el)) === loose(command.value));
+      if (!match) return { ok: false, detail: `no-match (${suggestions().length} suggestions)` };
+      // The link inside the item when there is one (uib-typeahead listens there).
+      const target = (match.querySelector('a') as HTMLElement | null) ?? match;
+      target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      target.click();
+      await sleep(700);
+      const kept = first(document, command.selector) as HTMLInputElement | null;
+      return kept && loose(kept.value) === loose(command.value)
+        ? { ok: true }
+        : { ok: false, detail: 'not-kept' };
     }
     case 'waitForValue': {
       const rejected = command.rejectValues ?? [];
@@ -434,6 +518,10 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
               (el) => el !== input && !el.contains(input) && visible(el) && looksLikeOpener(el),
             ) as HTMLElement | undefined) ?? null;
         }
+        // A wrapper around the real button (uib-datepicker's span.input-group-btn): press the
+        // button, since a click on the wrapper does not reach it.
+        const inner = trigger?.tagName === 'BUTTON' ? null : trigger?.querySelector('button');
+        if (inner && visible(inner)) trigger = inner;
         trigger ??= input;
       }
       if (!trigger) return { ok: false, detail: 'trigger-not-found' };
@@ -453,7 +541,7 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         while (node && node !== document.body && !isWholeCalendar(node)) node = node.parentElement;
         return node && node !== document.body ? (node as HTMLElement) : null;
       };
-      const picker = await until(() => {
+      const locate = (): HTMLElement | null => {
         const fromArrows = climb(buttonWithText(document, '«'));
         if (fromArrows) return fromArrows;
         const title = Array.from(
@@ -463,9 +551,13 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           .map((el) => climb(el))
           .find((c) => c !== null);
         return title ?? null;
-      }, 5000);
-      if (!picker)
+      };
+      // Some calendars draw themselves again on every month change (replacing the elements):
+      // find the calendar again when the one held is no longer on the page.
+      const found = await until(locate, 5000);
+      if (!found)
         return { ok: false, detail: `calendar-not-shown (opened with ${describe(trigger)})` };
+      let picker: HTMLElement = found;
       const shown = (): { year: number; month: number } | null => {
         const match = TITLE.exec(picker.textContent ?? '');
         return match ? { year: Number(match[2]), month: MONTHS.indexOf(match[1]!) + 1 } : null;
@@ -524,6 +616,11 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         }
         press(nav);
         await sleep(yearButton ? 60 : 40);
+        if (!picker.isConnected) {
+          const again = await until(locate, 2000);
+          if (!again) return { ok: false, detail: 'calendar-closed-while-moving' };
+          picker = again;
+        }
       }
       // The day: an element of the calendar whose text is exactly the day number and that is not
       // greyed out (days of the neighbouring months are).
@@ -633,7 +730,14 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       };
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const el = find();
-        if (!el) return { ok: false, detail: attempt === 0 ? 'not-found' : 'reset-by-page' };
+        if (!el) {
+          if (attempt > 0) return { ok: false, detail: 'reset-by-page' };
+          const all = (scope(command.within) ?? document).querySelectorAll(command.selector).length;
+          return {
+            ok: false,
+            detail: all ? `not-found (${all} matching, none shown)` : 'not-found',
+          };
+        }
         if (el.checked !== command.checked) el.click();
         await sleep(500);
         if (find()?.checked === command.checked) return { ok: true };
@@ -696,6 +800,47 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
     case 'errors': {
       const box = Array.from(document.querySelectorAll(DIALOGS)).find(
         (el) => visible(el) && /^\s*ERRORS\b/i.test(text(el)),
+      );
+      return box ? { ok: false, errors: text(box).slice(0, 400) } : { ok: true };
+    }
+    case 'clickText': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const want = loose(command.text);
+      const dialogs = (): Element[] =>
+        Array.from(document.querySelectorAll(DIALOGS)).filter(visible);
+      const CLICKABLE = 'a, button, [ng-click], [data-ng-click], [onclick], [role="button"]';
+      const targets = (): HTMLElement[] => {
+        const open = dialogs();
+        // textContent first (cheap); innerText (as shown, after text-transform) only for those.
+        const hits = Array.from(document.body.querySelectorAll<HTMLElement>('*')).filter(
+          (el) =>
+            loose(el.textContent ?? '') === want &&
+            visible(el) &&
+            loose(text(el)) === want &&
+            !open.some((d) => d.contains(el)),
+        );
+        const innermost = hits.filter((el) => !hits.some((o) => o !== el && el.contains(o)));
+        return [...new Set(innermost.map((el) => el.closest<HTMLElement>(CLICKABLE) ?? el))];
+      };
+      const found = await until(() => (targets().length > 0 ? targets() : null), command.timeoutMs);
+      if (!found) return { ok: false, detail: 'not-found' };
+      if (found.length > 1) return { ok: false, detail: `ambiguous (${found.length} shown)` };
+      found[0]!.click();
+      return { ok: true };
+    }
+    case 'hasHeading': {
+      const found = await until(
+        () =>
+          Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6, legend, .card-title')).find(
+            (h) => visible(h) && text(h) === command.text,
+          ) ?? null,
+        command.timeoutMs,
+      );
+      return found ? { ok: true } : { ok: false, detail: 'heading-not-shown' };
+    }
+    case 'popup': {
+      const box = Array.from(document.querySelectorAll(DIALOGS)).find(
+        (el) => visible(el) && text(el) !== '',
       );
       return box ? { ok: false, errors: text(box).slice(0, 400) } : { ok: true };
     }

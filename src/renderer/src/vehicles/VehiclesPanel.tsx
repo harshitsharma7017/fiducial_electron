@@ -1,9 +1,11 @@
 // Saved vehicles, for motor quotes: kept on their own, not as part of a client (decision of
 // 3 November 2026), encrypted on this computer until the advisor deletes them. Each vehicle has a
 // name the advisor chooses and the details United India's Motor calculator asks for, and can be
-// quoted from here ("Motor quote").
+// quoted from here ("Motor quote"): United India's premium, or (private cars and two-wheelers)
+// New India's vehicle details filled in its quote form.
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { ImportButton } from '../import/ImportDialog';
 import type { VehicleSummary } from '../../../shared/contracts/vehicle';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
 import { showAppScreens } from '../insurers/PortalTabs';
@@ -87,13 +89,16 @@ export function VehiclesPanel(): React.JSX.Element | null {
         </p>
       )}
       {vehicles && (
-        <button
-          type="button"
-          className="primary"
-          onClick={() => setDraft({ id: null, name: '', vehicle: EMPTY_VEHICLE })}
-        >
-          Add vehicle
-        </button>
+        <div className="insurer-actions">
+          <button
+            type="button"
+            className="primary"
+            onClick={() => setDraft({ id: null, name: '', vehicle: EMPTY_VEHICLE })}
+          >
+            Add vehicle
+          </button>
+          <ImportButton kind="vehicles" onImported={() => void refresh()} />
+        </div>
       )}
       <Modal
         open={draft !== null}
@@ -148,7 +153,7 @@ export function VehiclesPanel(): React.JSX.Element | null {
                   )}
                 </div>
               </div>
-              {quoting === v.id && <MotorQuotePanel vehicleId={v.id} />}
+              {quoting === v.id && <MotorQuotePanel vehicle={v} />}
             </li>
           ))}
         </ul>
@@ -217,20 +222,26 @@ function VehicleForm(props: {
 }
 
 /** Gets United India's motor premium for a saved vehicle. */
-function MotorQuotePanel(props: { vehicleId: string }): React.JSX.Element {
-  const [busy, setBusy] = useState(false);
+function MotorQuotePanel(props: { vehicle: VehicleSummary }): React.JSX.Element {
+  const { vehicle } = props;
+  const [busy, setBusy] = useState<'united-india' | 'new-india' | null>(null);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
-  const run = async () => {
-    setBusy(true);
+  const run = async (insurerId: 'united-india' | 'new-india') => {
+    setBusy(insurerId);
     setResult(null);
     const r = await window.fqf.quotes
-      .run({ product: 'motor', vehicleId: props.vehicleId, insurerId: 'united-india' })
+      .run({ product: 'motor', vehicleId: vehicle.id, insurerId })
       .catch(() => null);
-    setBusy(false);
+    setBusy(null);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
     // The premium is shown here: come back from the calculator's tab (left open to check it).
     if (r?.ok && r.data.premium) showAppScreens();
   };
+  // New India: the Private Car and Two Wheeler forms, new vehicles (src/main/quotes/nia-motor.ts).
+  const newIndia =
+    (vehicle.vehicleClass === 'private-car' || vehicle.vehicleClass === 'two-wheeler') &&
+    vehicle.condition === 'new';
+  const niaForm = vehicle.vehicleClass === 'private-car' ? 'Private Car' : 'Two Wheeler';
   return (
     <div className="quote-panel">
       <p className="insurer-note">
@@ -239,10 +250,24 @@ function MotorQuotePanel(props: { vehicleId: string }): React.JSX.Element {
         reads the premium.
       </p>
       <div className="insurer-actions">
-        <button type="button" disabled={busy} onClick={() => void run()}>
-          {busy ? 'Getting the premium…' : 'Get United India motor premium'}
+        <button type="button" disabled={busy !== null} onClick={() => void run('united-india')}>
+          {busy === 'united-india' ? 'Getting the premium…' : 'Get United India motor premium'}
         </button>
       </div>
+      {newIndia && (
+        <>
+          <p className="insurer-note">
+            <strong>New India, {niaForm}.</strong> Sign in to New India and leave it on its
+            dashboard. The app opens the {niaForm} quote form and fills the vehicle details; you
+            fill the policy holder and covers and press Calculate Premium.
+          </p>
+          <div className="insurer-actions">
+            <button type="button" disabled={busy !== null} onClick={() => void run('new-india')}>
+              {busy === 'new-india' ? 'Filling…' : 'Fill New India vehicle details'}
+            </button>
+          </div>
+        </>
+      )}
       {result && 'error' in result && (
         <p className="error" role="alert">
           {result.error}
@@ -263,6 +288,13 @@ function MotorQuotePanel(props: { vehicleId: string }): React.JSX.Element {
             <ul>
               {result.problems.map((p) => (
                 <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          {result.toDo && result.toDo.length > 0 && (
+            <ul>
+              {result.toDo.map((t) => (
+                <li key={t}>{t}</li>
               ))}
             </ul>
           )}

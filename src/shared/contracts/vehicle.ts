@@ -32,6 +32,20 @@ export type VehicleClass = z.infer<typeof vehicleClassSchema>;
 
 export const PREVIOUS_NCB = [0, 20, 25, 35, 45, 50] as const;
 
+/** Fuel types, named for what they are (New India's Private Car and Two Wheeler forms). */
+export const FUEL_TYPES = [
+  'petrol',
+  'diesel',
+  'cng',
+  'lpg',
+  'lng',
+  'electric',
+  'hybrid',
+  'mild-hybrid',
+  'bifuel',
+] as const;
+export type FuelType = (typeof FUEL_TYPES)[number];
+
 /**
  * A vehicle's details, for motor quotes. Which of the optional details a quote needs depends on
  * the class (the insurer's form says; see src/main/quotes/uiic-motor.ts).
@@ -59,6 +73,20 @@ export const vehicleSchema = z.strictObject({
     .int()
     .refine((v) => (PREVIOUS_NCB as readonly number[]).includes(v), 'a no-claim bonus step')
     .optional(),
+  // New India's Private Car and Two Wheeler forms ask for these as well (recordings of
+  // 4 November 2026; src/main/quotes/nia-motor.ts). Make, colour and body type are matched
+  // against New India's lists by their visible text.
+  make: singleLineText(60).optional(),
+  model: singleLineText(80).optional(),
+  variant: singleLineText(80).optional(),
+  manufactureYear: z.int().min(1950).max(2100).optional(),
+  fuelType: z.enum(FUEL_TYPES).optional(),
+  /** Private cars: as New India lists it (for example "Hatch-Back"). */
+  bodyType: singleLineText(40).optional(),
+  colour: singleLineText(40).optional(),
+  engineNumber: singleLineText(30).optional(),
+  chassisNumber: singleLineText(30).optional(),
+  invoiceValueRupees: z.int().positive().max(1_000_000_000).optional(),
 });
 
 export type Vehicle = z.infer<typeof vehicleSchema>;

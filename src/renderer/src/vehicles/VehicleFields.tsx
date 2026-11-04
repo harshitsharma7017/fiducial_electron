@@ -1,7 +1,9 @@
 // The vehicle form's details, for motor quotes. Shows only the details the chosen vehicle class
-// needs (as United India's Motor calculator asks for them).
-import type { Vehicle, VehicleClass } from '../../../shared/contracts/vehicle';
-import { PREVIOUS_NCB, VEHICLE_CLASSES } from '../../../shared/contracts/vehicle';
+// needs (as United India's Motor calculator asks for them), and for private cars and
+// two-wheelers the further details New India's forms ask for.
+import type { FuelType, Vehicle, VehicleClass } from '../../../shared/contracts/vehicle';
+import { FUEL_TYPES, PREVIOUS_NCB, VEHICLE_CLASSES } from '../../../shared/contracts/vehicle';
+import { NIA_BODY_TYPES, NIA_COLOURS, NIA_FUEL } from '../../../shared/insurers/nia-motor';
 
 export const VEHICLE_CLASS_LABELS: Record<VehicleClass, string> = {
   'private-car': 'Private car',
@@ -40,6 +42,8 @@ const NEEDS = {
   ],
   weight: ['goods-private', 'goods-public', 'goods-3w-private', 'goods-3w-public'],
   battery: ['private-car', 'two-wheeler'],
+  /** New India's Private Car and Two Wheeler forms. */
+  newIndia: ['private-car', 'two-wheeler'],
 } as const satisfies Record<string, readonly VehicleClass[]>;
 const has = (list: readonly VehicleClass[], c: VehicleClass) => list.includes(c);
 
@@ -60,6 +64,16 @@ export interface VehicleDraft {
   longTermOd: boolean;
   claimLastYear: boolean;
   previousNcbPercent: string;
+  make: string;
+  model: string;
+  variant: string;
+  manufactureYear: string;
+  fuelType: '' | FuelType;
+  bodyType: string;
+  colour: string;
+  engineNumber: string;
+  chassisNumber: string;
+  invoiceValueRupees: string;
 }
 
 export const EMPTY_VEHICLE: VehicleDraft = {
@@ -79,6 +93,16 @@ export const EMPTY_VEHICLE: VehicleDraft = {
   longTermOd: false,
   claimLastYear: false,
   previousNcbPercent: '',
+  make: '',
+  model: '',
+  variant: '',
+  manufactureYear: '',
+  fuelType: '',
+  bodyType: '',
+  colour: '',
+  engineNumber: '',
+  chassisNumber: '',
+  invoiceValueRupees: '',
 };
 
 const num = (value: string) => (value.trim() === '' ? undefined : Number(value));
@@ -99,7 +123,7 @@ export function vehicleToInput(d: VehicleDraft): Record<string, unknown> {
     ...(c === 'special' && num(d.horsePower) !== undefined
       ? { horsePower: num(d.horsePower) }
       : {}),
-    ...(has(NEEDS.seats, c) && num(d.seatingCapacity) !== undefined
+    ...((has(NEEDS.seats, c) || c === 'private-car') && num(d.seatingCapacity) !== undefined
       ? { seatingCapacity: num(d.seatingCapacity) }
       : {}),
     ...(has(NEEDS.weight, c) && num(d.grossWeightKg) !== undefined
@@ -116,6 +140,27 @@ export function vehicleToInput(d: VehicleDraft): Record<string, unknown> {
             ? { previousNcbPercent: Number(d.previousNcbPercent) }
             : {}),
         }
+      : {}),
+    ...(has(NEEDS.newIndia, c) ? newIndiaToInput(d, c) : {}),
+  };
+}
+
+/** New India's details, those filled in (all optional: only New India's forms use them). */
+function newIndiaToInput(d: VehicleDraft, c: VehicleClass): Record<string, unknown> {
+  const text = (key: 'make' | 'model' | 'variant' | 'colour' | 'engineNumber' | 'chassisNumber') =>
+    d[key].trim() ? { [key]: d[key].trim() } : {};
+  return {
+    ...text('make'),
+    ...text('model'),
+    ...text('variant'),
+    ...text('colour'),
+    ...text('engineNumber'),
+    ...text('chassisNumber'),
+    ...(num(d.manufactureYear) !== undefined ? { manufactureYear: num(d.manufactureYear) } : {}),
+    ...(d.fuelType ? { fuelType: d.fuelType } : {}),
+    ...(c === 'private-car' && d.bodyType ? { bodyType: d.bodyType } : {}),
+    ...(num(d.invoiceValueRupees) !== undefined
+      ? { invoiceValueRupees: num(d.invoiceValueRupees) }
       : {}),
   };
 }
@@ -139,6 +184,16 @@ export function vehicleFromRecord(v: Vehicle): VehicleDraft {
     longTermOd: v.longTermOd ?? false,
     claimLastYear: v.claimLastYear ?? false,
     previousNcbPercent: text(v.previousNcbPercent),
+    make: v.make ?? '',
+    model: v.model ?? '',
+    variant: v.variant ?? '',
+    manufactureYear: text(v.manufactureYear),
+    fuelType: v.fuelType ?? '',
+    bodyType: v.bodyType ?? '',
+    colour: v.colour ?? '',
+    engineNumber: v.engineNumber ?? '',
+    chassisNumber: v.chassisNumber ?? '',
+    invoiceValueRupees: text(v.invoiceValueRupees),
   };
 }
 
@@ -301,6 +356,7 @@ export function VehicleFields(props: {
           Own damage for the whole liability period ({c === 'private-car' ? '3' : '5'} years)
         </label>
       )}
+      {has(NEEDS.newIndia, c) && <NewIndiaFields value={v} onChange={set} />}
       {v.condition === 'pre-owned' && (
         <>
           <label className="check">
@@ -328,6 +384,117 @@ export function VehicleFields(props: {
           </label>
         </>
       )}
+    </fieldset>
+  );
+}
+
+const FUEL_LABELS: Record<FuelType, string> = { ...NIA_FUEL, 'mild-hybrid': 'Mild hybrid' };
+
+/** For New India's Private Car and Two Wheeler forms; optional for the other insurers. */
+function NewIndiaFields(props: {
+  value: VehicleDraft;
+  onChange: (patch: Partial<VehicleDraft>) => void;
+}): React.JSX.Element {
+  const v = props.value;
+  const set = props.onChange;
+  const car = v.vehicleClass === 'private-car';
+  const box = (
+    key: 'make' | 'model' | 'variant' | 'engineNumber' | 'chassisNumber',
+    label: string,
+    hint?: string,
+  ) => (
+    <label>
+      {label}
+      <input
+        value={v[key]}
+        onChange={(e) => set({ [key]: e.target.value })}
+        maxLength={key === 'engineNumber' || key === 'chassisNumber' ? 30 : 80}
+        spellCheck={false}
+        {...(hint ? { placeholder: hint } : {})}
+      />
+    </label>
+  );
+  return (
+    <fieldset>
+      <legend>For New India</legend>
+      <p className="insurer-note">
+        New India&rsquo;s {car ? 'Private Car' : 'Two Wheeler'} form also asks for these. Write the
+        make, model and variant as New India lists them.
+      </p>
+      {box('make', 'Make', 'for example MARUTI')}
+      {box('model', 'Model')}
+      {box('variant', 'Variant')}
+      <label>
+        Year of manufacture
+        <input
+          value={v.manufactureYear}
+          onChange={(e) => set({ manufactureYear: e.target.value })}
+          inputMode="numeric"
+          maxLength={4}
+        />
+      </label>
+      <label>
+        Type of fuel
+        <select
+          value={v.fuelType}
+          onChange={(e) => set({ fuelType: e.target.value as VehicleDraft['fuelType'] })}
+        >
+          <option value="">Select</option>
+          {FUEL_TYPES.map((f) => (
+            <option key={f} value={f}>
+              {FUEL_LABELS[f]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {car && (
+        <>
+          <label>
+            Type of body
+            <select value={v.bodyType} onChange={(e) => set({ bodyType: e.target.value })}>
+              <option value="">Select</option>
+              {NIA_BODY_TYPES.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Seating capacity (including driver)
+            <input
+              value={v.seatingCapacity}
+              onChange={(e) => set({ seatingCapacity: e.target.value })}
+              inputMode="numeric"
+              maxLength={2}
+            />
+          </label>
+        </>
+      )}
+      <label>
+        Colour (as in the RC book)
+        <input
+          value={v.colour}
+          onChange={(e) => set({ colour: e.target.value })}
+          list="nia-colours"
+          maxLength={40}
+        />
+        <datalist id="nia-colours">
+          {NIA_COLOURS.map((colour) => (
+            <option key={colour} value={colour} />
+          ))}
+        </datalist>
+      </label>
+      {box('engineNumber', 'Engine number')}
+      {box('chassisNumber', 'Chassis number')}
+      <label>
+        Vehicle invoice value (₹)
+        <input
+          value={v.invoiceValueRupees}
+          onChange={(e) => set({ invoiceValueRupees: e.target.value.replace(/[,\s]/g, '') })}
+          inputMode="numeric"
+        />
+      </label>
     </fieldset>
   );
 }

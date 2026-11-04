@@ -1,8 +1,7 @@
 // Quote runs behind the IPC channel. Off unless the automation features are switched on. United
-// India only so far (health and motor calculators, the health, Overseas Travel and Overseas
-// Mediclaim e-proposals);
-// other insurers
-// are refused with a reason. Motor quotes are for a saved vehicle, the others for a saved client.
+// India: health and motor calculators, the health, Overseas Travel and Overseas Mediclaim
+// e-proposals. New India: motor only (the vehicle details of the Private Car and Two Wheeler
+// forms; run-nia-motor.ts). Other insurers and products are refused with a reason. Motor quotes are for a saved vehicle, the others for a saved client.
 import type { ClientService } from '../clients/service';
 import type { PortalPage } from '../insurers/portal-host';
 import { AppException } from '../ipc/dispatcher';
@@ -17,6 +16,7 @@ import {
   type QuoteRunResult,
 } from './run-uiic-health';
 import type { UiicProposalForm } from './uiic-health-proposal';
+import { runNiaMotorQuote } from './run-nia-motor';
 
 /** The e-proposal each product fills. */
 const PROPOSAL_FORM = {
@@ -47,7 +47,8 @@ export function createQuoteService(deps: {
     run: async (request) => {
       if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
       const { insurerId } = request;
-      if (insurerId !== 'united-india') {
+      const newIndiaMotor = insurerId === 'new-india' && request.product === 'motor';
+      if (insurerId !== 'united-india' && !newIndiaMotor) {
         return {
           outcome: 'refused',
           step: null,
@@ -82,7 +83,9 @@ export function createQuoteService(deps: {
         const windows = () => deps.windowsOf(insurerId);
         let result: QuoteRunResult;
         if (subject.kind === 'vehicle') {
-          result = await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
+          result = newIndiaMotor
+            ? await runNiaMotorQuote({ windows, vehicle: subject.vehicle, today })
+            : await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
         } else if (subject.kind === 'traveller') {
           const travel = {
             windows,

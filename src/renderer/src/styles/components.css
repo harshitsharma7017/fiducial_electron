@@ -805,3 +805,46 @@ code {
     transform: none;
   }
 }
+
+/* Wide dialog, for the import preview table. */
+
+.modal.modal-wide {
+  width: min(980px, 100%);
+}
+
+/* Client import */
+
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.import-table td ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--danger);
+}
+
+.import-table .line {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.status-warning {
+  --tone: var(--warning);
+  --tone-soft: var(--warning-soft);
+}
+
+.status-danger {
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
+}

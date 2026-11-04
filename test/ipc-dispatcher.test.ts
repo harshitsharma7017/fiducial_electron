@@ -48,6 +48,11 @@ const insurerStubs: Omit<IpcHandlers, 'app:get-info'> = {
   'portals:close': () => ({ closed: true }),
   'portals:set-bounds': () => ({ set: true }),
   'quotes:run': () => ({ outcome: 'refused', step: null, message: 'x', problems: [] }),
+  'imports:template': () => ({ saved: false }),
+  'imports:preview': () => {
+    throw new AppException('CANCELLED');
+  },
+  'imports:commit': () => ({ saved: 0, skipped: 0, failed: [] }),
 };
 
 function setup(handler: IpcHandlers['app:get-info'] = () => info) {

@@ -13,6 +13,8 @@ export function Modal(props: {
   open: boolean;
   title: string;
   onClose: () => void;
+  /** A wider dialog (for a table). */
+  wide?: boolean;
   children: ReactNode;
 }): React.JSX.Element | null {
   const { open, title, onClose, children } = props;
@@ -82,7 +84,7 @@ export function Modal(props: {
     >
       <div
         ref={dialogRef}
-        className="modal"
+        className={props.wide ? 'modal modal-wide' : 'modal'}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

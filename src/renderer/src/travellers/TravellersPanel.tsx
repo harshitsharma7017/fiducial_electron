@@ -6,6 +6,7 @@
 // Overseas Mediclaim (B&H, SCHENGEN, Studies) e-proposals from here.
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { ImportButton } from '../import/ImportDialog';
 import type { Gender, MaritalStatus } from '../../../shared/contracts/client';
 import { OMP_FORMS, type OmpForm, type TravelOccupation } from '../../../shared/contracts/travel';
 import type { TravellerRaw, TravellerSummary } from '../../../shared/contracts/traveller';
@@ -217,9 +218,12 @@ export function TravellersPanel(): React.JSX.Element | null {
         </p>
       )}
       {travellers && (
-        <button type="button" className="primary" onClick={() => setDraft({ ...EMPTY })}>
-          Add travel client
-        </button>
+        <div className="insurer-actions">
+          <button type="button" className="primary" onClick={() => setDraft({ ...EMPTY })}>
+            Add travel client
+          </button>
+          <ImportButton kind="travellers" onImported={() => void refresh()} />
+        </div>
       )}
       <Modal
         open={draft !== null}

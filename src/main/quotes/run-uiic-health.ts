@@ -45,7 +45,8 @@ export interface QuoteRunResult {
   toDo?: string[];
 }
 
-async function exec(wc: WebContents, op: PageOp): Promise<PageOpResult> {
+/** Performs one operation in the page (isolated world); shared with the New India runner. */
+export async function exec(wc: WebContents, op: PageOp): Promise<PageOpResult> {
   if (wc.isDestroyed()) return { ok: false, detail: 'window-closed' };
   try {
     return (await wc.executeJavaScriptInIsolatedWorld(WORLD_ID, [

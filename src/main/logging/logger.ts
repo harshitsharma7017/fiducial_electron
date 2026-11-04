@@ -8,6 +8,7 @@ import { FILL_OUTCOMES } from '../../shared/insurers/fill-outcomes';
 import { INSURER_PORTALS } from '../../shared/insurers/portals';
 import { APP_ERROR_CODES } from '../../shared/ipc/errors';
 import { STORE_PROBLEMS } from '../storage/store-problems';
+import { IMPORT_KINDS } from '../../shared/import/import-kinds';
 
 export const LOG_EVENTS = [
   'app.start',
@@ -42,6 +43,8 @@ export const LOG_EVENTS = [
   'storage.open-failed',
   'storage.write-failed',
   'quote.run',
+  'import.previewed',
+  'import.saved',
 ] as const;
 
 export type LogEvent = (typeof LOG_EVENTS)[number];
@@ -86,6 +89,10 @@ const FIELD_SCHEMAS = {
   storeProblem: z.enum(STORE_PROBLEMS),
   /** How a quote run ended (never client data). */
   quoteOutcome: z.enum(['ready', 'refused', 'failed']),
+  /** Which client import (never anything about the file or its rows). */
+  importKind: z.enum(IMPORT_KINDS),
+  /** How many rows an import read or saved. */
+  rowCount: z.number().int().min(0).max(100_000),
 } as const;
 
 export type LogFields = { [K in keyof typeof FIELD_SCHEMAS]?: z.infer<(typeof FIELD_SCHEMAS)[K]> };

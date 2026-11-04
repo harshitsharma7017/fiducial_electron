@@ -2,19 +2,26 @@
 // (src/main/insurers/service.ts), which is off unless switched on.
 import { app } from 'electron';
 import type { ClientService } from '../clients/service';
+import type { ImportService } from '../import/service';
 import type { PortalHost } from '../insurers/portal-host';
 import type { InsurerService } from '../insurers/service';
 import type { QuoteService } from '../quotes/service';
-import type { IpcHandlers } from './dispatcher';
+import { AppException, type IpcHandlers } from './dispatcher';
 
 export function createHandlers(deps: {
   insurers: InsurerService;
   clients: ClientService;
   quotes: QuoteService;
+  /** Client imports from .xlsx / .csv files (absent: refused, in tests). */
+  imports?: ImportService;
   /** Insurer pages as tabs of the app window (absent: no tabs, in tests). */
   portals?: PortalHost;
 }): IpcHandlers {
   const noTabs = { version: 1, tabs: [], active: null };
+  const imports = (): ImportService => {
+    if (!deps.imports) throw new AppException('UNSUPPORTED_FLOW');
+    return deps.imports;
+  };
   return {
     'app:get-info': () => ({
       name: app.getName(),
@@ -66,6 +73,9 @@ export function createHandlers(deps: {
       }),
     }),
     'travellers:delete': async ({ id }) => ({ deleted: await deps.clients.deleteTraveller(id) }),
+    'imports:template': ({ kind, format }) => imports().template(kind, format),
+    'imports:preview': ({ kind }) => imports().preview(kind),
+    'imports:commit': ({ token, includeDuplicates }) => imports().commit(token, includeDuplicates),
     'quotes:run': (request) => deps.quotes.run(request),
     'portals:tabs': async ({ since }) =>
       deps.portals ? deps.portals.waitForChange(since, 20_000) : noTabs,

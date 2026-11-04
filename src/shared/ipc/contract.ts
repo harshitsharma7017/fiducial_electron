@@ -29,6 +29,8 @@ import {
   LOGIN_METHODS,
 } from '../insurers/portals';
 import { IPC_CHANNELS, type IpcChannel } from './channels';
+import { IMPORT_KINDS } from '../import/import-kinds';
+import { APP_ERROR_CODES } from './errors';
 
 const shortText = (max: number) => z.string().min(1).max(max);
 
@@ -189,6 +191,52 @@ export const quoteRunResultSchema = z
   .strict();
 
 export type QuoteRunResultView = z.infer<typeof quoteRunResultSchema>;
+
+/** A client import (health clients, travel clients or vehicles), from an .xlsx or .csv file. */
+const importKindSchema = z.enum(IMPORT_KINDS);
+
+/**
+ * A checked import file: each row's name, a short description, and whether it is new, already
+ * saved, repeated earlier in the file, or has problems (by column; never a cell's value). The
+ * checked records stay in the main process under `token` until saved (null: nothing to save).
+ */
+export const importPreviewSchema = z
+  .object({
+    token: z.uuid().nullable(),
+    fileName: z.string().max(200),
+    /** Why the file as a whole could not be read (then there are no rows). */
+    problem: z.string().max(400).nullable(),
+    /** Headers in the file the import does not know (not imported). */
+    ignoredColumns: z.array(z.string().max(80)).max(50),
+    rows: z
+      .array(
+        z
+          .object({
+            line: z.int().min(1).max(1_048_576),
+            label: z.string().max(100),
+            detail: z.string().max(200),
+            status: z.enum(['new', 'saved-already', 'repeated', 'problems']),
+            problems: z.array(z.string().max(300)).max(20),
+          })
+          .strict(),
+      )
+      .max(2000),
+  })
+  .strict();
+export type ImportPreview = z.infer<typeof importPreviewSchema>;
+
+export const importCommitResultSchema = z
+  .object({
+    saved: z.int().min(0),
+    /** Duplicates left out. */
+    skipped: z.int().min(0),
+    /** Rows that could not be saved, by line, with the reason's code. */
+    failed: z
+      .array(z.object({ line: z.int().min(1), code: z.enum(APP_ERROR_CODES) }).strict())
+      .max(2000),
+  })
+  .strict();
+export type ImportCommitResult = z.infer<typeof importCommitResultSchema>;
 
 /**
  * A quote run: motor quotes are for a saved vehicle; health quotes and the health e-proposals
@@ -374,6 +422,19 @@ export const ipcContract = {
   [IPC_CHANNELS.travellersDelete]: {
     request: clientOnly,
     response: z.object({ deleted: z.boolean() }).strict(),
+  },
+  [IPC_CHANNELS.importsTemplate]: {
+    request: z.object({ kind: importKindSchema, format: z.enum(['xlsx', 'csv']) }).strict(),
+    response: z.object({ saved: z.boolean() }).strict(),
+  },
+  [IPC_CHANNELS.importsPreview]: {
+    /** Opens the file dialog; CANCELLED if the advisor closes it. */
+    request: z.object({ kind: importKindSchema }).strict(),
+    response: importPreviewSchema,
+  },
+  [IPC_CHANNELS.importsCommit]: {
+    request: z.object({ token: z.uuid(), includeDuplicates: z.boolean() }).strict(),
+    response: importCommitResultSchema,
   },
 } as const satisfies Record<IpcChannel, { request: z.ZodType; response: z.ZodType }>;
 

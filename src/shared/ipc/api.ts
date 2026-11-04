@@ -4,6 +4,8 @@ import type {
   AppInfo,
   ClientListResponse,
   ClientView,
+  ImportCommitResult,
+  ImportPreview,
   PortalTabsView,
   QuoteRunRequest,
   InsurerPortalList,
@@ -16,6 +18,7 @@ import type {
 import type { AppResult } from './result';
 import type { VehicleInputRaw, VehicleRecord, VehicleSummary } from '../contracts/vehicle';
 import type { TravellerSummary } from '../contracts/traveller';
+import type { ImportKind } from '../import/import-kinds';
 
 export interface FqfApi {
   app: {
@@ -76,6 +79,12 @@ export interface FqfApi {
     save(request: { id?: string; saved: VehicleInputRaw }): Promise<AppResult<{ id: string }>>;
     delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
   };
+  /** Client imports from an .xlsx or .csv file (main process dialogs; numbers stay in main). */
+  imports: {
+    template(kind: ImportKind, format: 'xlsx' | 'csv'): Promise<AppResult<{ saved: boolean }>>;
+    preview(kind: ImportKind): Promise<AppResult<ImportPreview>>;
+    commit(token: string, includeDuplicates: boolean): Promise<AppResult<ImportCommitResult>>;
+  };
 }
 
 export const API_SHAPE = {
@@ -86,4 +95,5 @@ export const API_SHAPE = {
   portals: ['tabs', 'show', 'close', 'setBounds'],
   travellers: ['list', 'get', 'save', 'delete'],
   vehicles: ['list', 'get', 'save', 'delete'],
+  imports: ['template', 'preview', 'commit'],
 } as const satisfies { [K in keyof FqfApi]: readonly (keyof FqfApi[K])[] };
