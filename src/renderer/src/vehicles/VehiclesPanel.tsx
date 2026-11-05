@@ -3,9 +3,13 @@
 // name the advisor chooses and the details United India's Motor calculator asks for, and can be
 // quoted from here ("Motor quote"): United India's premium, or (private cars and two-wheelers)
 // New India's vehicle details filled in its quote form.
+import { Car, Pencil, Tag, Trash2, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
-import { ImportButton } from '../import/ImportDialog';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { RecordPage, type RecordItem } from '../ui/RecordPage';
+import { toast } from '../ui/toast';
+import { QuoteWorkspace } from '../quote/QuoteWorkspace';
 import type { VehicleSummary } from '../../../shared/contracts/vehicle';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
 import { showAppScreens } from '../insurers/PortalTabs';
@@ -24,16 +28,13 @@ interface Draft {
   vehicle: VehicleDraft;
 }
 
-function relativeDate(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 export function VehiclesPanel(): React.JSX.Element | null {
   const [vehicles, setVehicles] = useState<VehicleSummary[] | null>(null);
   const [hidden, setHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  /** The quote workspace is open for this record. */
   const [quoting, setQuoting] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -73,36 +74,81 @@ export function VehiclesPanel(): React.JSX.Element | null {
     setConfirmDelete(null);
     const result = await window.fqf.vehicles.delete(id);
     if (!result.ok) setError(result.error.message);
+    else toast('Vehicle deleted.');
     await refresh();
   };
+  const quoteFor = quoting ? (vehicles?.find((v) => v.id === quoting) ?? null) : null;
+  const toDelete = confirmDelete ? vehicles?.find((v) => v.id === confirmDelete) : undefined;
+  const items: RecordItem[] | null =
+    vehicles?.map((v) => ({
+      id: v.id,
+      title: v.name,
+      subtitle: 'Vehicle',
+      icon: Car,
+      hue: 2,
+      meta: [{ icon: Tag, text: VEHICLE_CLASS_LABELS[v.vehicleClass] }],
+      badge:
+        v.condition === 'new'
+          ? { label: 'New', tone: 'info' as const }
+          : { label: 'Pre-owned', tone: 'neutral' as const },
+      updatedAt: v.updatedAt,
+      primary: { label: 'Motor quote', icon: Zap, onClick: () => setQuoting(v.id) },
+      menu: [
+        { label: 'Motor quote', icon: Zap, onSelect: () => setQuoting(v.id) },
+        'separator',
+        { label: 'Edit vehicle', icon: Pencil, onSelect: () => void edit(v) },
+        {
+          label: 'Delete vehicle',
+          icon: Trash2,
+          danger: true,
+          onSelect: () => setConfirmDelete(v.id),
+        },
+      ],
+      search: `${v.name} ${VEHICLE_CLASS_LABELS[v.vehicleClass]}`,
+    })) ?? null;
 
   return (
-    <section className="panel insurers" aria-labelledby="vehicles-heading">
-      <h2 id="vehicles-heading">Vehicles</h2>
-      <p className="lead">
-        Saved vehicles are used for motor quotes. They are kept on their own, not as part of a
-        client, stored encrypted on this computer until you delete them.
-      </p>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {vehicles && (
-        <div className="insurer-actions">
-          <button
-            type="button"
-            className="primary"
-            onClick={() => setDraft({ id: null, name: '', vehicle: EMPTY_VEHICLE })}
-          >
-            Add vehicle
-          </button>
-          <ImportButton kind="vehicles" onImported={() => void refresh()} />
-        </div>
-      )}
+    <RecordPage
+      view="vehicles"
+      icon={Car}
+      title="Vehicles"
+      subtitle="Saved vehicles for motor quotes, kept apart from clients and stored encrypted on this computer."
+      noun={{ one: 'vehicle', many: 'vehicles' }}
+      addLabel="Add vehicle"
+      onAdd={() => setDraft({ id: null, name: '', vehicle: EMPTY_VEHICLE })}
+      importKind="vehicles"
+      onImported={() => void refresh()}
+      items={items}
+      failed={!vehicles && !!error}
+      filters={[
+        {
+          id: 'new',
+          label: 'New',
+          test: (id) => vehicles?.find((v) => v.id === id)?.condition === 'new',
+        },
+        {
+          id: 'pre-owned',
+          label: 'Pre-owned',
+          test: (id) => vehicles?.find((v) => v.id === id)?.condition !== 'new',
+        },
+      ]}
+      empty={{
+        icon: Car,
+        title: 'No vehicles yet',
+        text: 'Add a vehicle to quote United India and New India motor policies, or import a list.',
+      }}
+      alerts={
+        error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )
+      }
+    >
       <Modal
         open={draft !== null}
         title={draft?.id ? 'Edit vehicle' : 'New vehicle'}
+        subtitle="Vehicle"
         onClose={() => setDraft(null)}
       >
         {draft && (
@@ -111,54 +157,39 @@ export function VehiclesPanel(): React.JSX.Element | null {
             onChange={setDraft}
             onCancel={() => setDraft(null)}
             onSaved={() => {
+              toast(draft.id ? 'Vehicle updated.' : 'Vehicle saved.');
               setDraft(null);
               void refresh();
             }}
           />
         )}
       </Modal>
-      {vehicles && vehicles.length > 0 && (
-        <ul className="insurer-list">
-          {vehicles.map((v) => (
-            <li key={v.id} className="insurer-row">
-              <div className="insurer-main">
-                <div>
-                  <strong>{v.name}</strong>
-                  <span className="insurer-mode">
-                    {VEHICLE_CLASS_LABELS[v.vehicleClass]} ·{' '}
-                    {v.condition === 'new' ? 'new' : 'pre-owned'} · updated{' '}
-                    {relativeDate(v.updatedAt)}
-                  </span>
-                </div>
-                <div className="insurer-actions">
-                  <button type="button" onClick={() => setQuoting(quoting === v.id ? null : v.id)}>
-                    Motor quote
-                  </button>
-                  <button type="button" onClick={() => void edit(v)}>
-                    Edit
-                  </button>
-                  {confirmDelete === v.id ? (
-                    <>
-                      <button type="button" className="danger" onClick={() => void remove(v.id)}>
-                        Confirm delete
-                      </button>
-                      <button type="button" onClick={() => setConfirmDelete(null)}>
-                        Keep
-                      </button>
-                    </>
-                  ) : (
-                    <button type="button" className="danger" onClick={() => setConfirmDelete(v.id)}>
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-              {quoting === v.id && <MotorQuotePanel vehicle={v} />}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+      <QuoteWorkspace
+        open={quoteFor !== null}
+        subject={quoteFor?.name ?? ''}
+        options={[
+          {
+            key: 'motor',
+            insurer: 'United India',
+            label: 'Motor quote',
+            description: 'United India premium, and New India for new cars and two-wheelers',
+          },
+        ]}
+        selected="motor"
+        onSelect={() => undefined}
+        onClose={() => setQuoting(null)}
+      >
+        {quoteFor && <MotorQuotePanel vehicle={quoteFor} />}
+      </QuoteWorkspace>
+      <ConfirmDialog
+        open={toDelete !== undefined}
+        title="Delete this vehicle?"
+        message={`${toDelete?.name ?? 'The vehicle'} will be deleted from this computer. This cannot be undone.`}
+        confirmLabel="Delete vehicle"
+        onConfirm={() => confirmDelete && void remove(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
+    </RecordPage>
   );
 }
 

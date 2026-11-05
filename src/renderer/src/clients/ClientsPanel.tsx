@@ -5,9 +5,15 @@
 // and so on) are for e-proposal forms; the Aadhaar number is kept apart, in the secret vault, and
 // only its last four digits are ever shown. Vehicles are not part of a client: see
 // ../vehicles/VehiclesPanel.tsx.
+import { HeartPulse, MapPin, Pencil, Trash2, Users, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
-import { ImportButton } from '../import/ImportDialog';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { plural } from '../ui/format';
+import type { MenuEntry } from '../ui/Menu';
+import { RecordPage, type RecordItem } from '../ui/RecordPage';
+import { toast } from '../ui/toast';
+import { QuoteWorkspace, type QuoteOption } from '../quote/QuoteWorkspace';
 import {
   ageOn,
   type ClientInputRaw,
@@ -138,16 +144,13 @@ function toInput(d: Draft): ClientInputRaw {
   };
 }
 
-function relativeDate(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 export function ClientsPanel(): React.JSX.Element | null {
   const [list, setList] = useState<ClientListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [quoting, setQuoting] = useState<string | null>(null);
+  /** The quote workspace: for which client, and which product is chosen (null: none yet). */
+  const [quote, setQuote] = useState<{ id: string; product: string | null } | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await window.fqf.clients.list().catch(() => null);
@@ -159,14 +162,8 @@ export function ClientsPanel(): React.JSX.Element | null {
     void refresh();
   }, [refresh]);
 
-  if (!list?.enabled) {
-    return error ? (
-      <section className="panel insurers">
-        <h2>Clients</h2>
-        <p className="error">{error}</p>
-      </section>
-    ) : null;
-  }
+  // The automation features are off (FQF_INSURER_PORTALS): no clients screen.
+  if (list && !list.enabled) return null;
 
   const edit = async (summary: ClientSummary) => {
     setError(null);
@@ -206,44 +203,111 @@ export function ClientsPanel(): React.JSX.Element | null {
     setConfirmDelete(null);
     const result = await window.fqf.clients.delete(id);
     if (!result.ok) setError(result.error.message);
+    else toast('Client deleted.');
     await refresh();
   };
+  const clients = list?.clients ?? null;
+  const quoteClient = quote ? (clients?.find((c) => c.id === quote.id) ?? null) : null;
+  const toDelete = confirmDelete ? clients?.find((c) => c.id === confirmDelete) : undefined;
+  const items: RecordItem[] | null =
+    clients?.map((c) => {
+      const options = healthQuoteOptions(c);
+      const menu: MenuEntry[] = [
+        { heading: 'Quote with' },
+        ...options.map((o) => ({
+          label: `${o.insurer}: ${o.label}`,
+          disabled: !!o.unavailable,
+          ...(o.unavailable ? { hint: o.unavailable } : {}),
+          onSelect: () => setQuote({ id: c.id, product: o.key }),
+        })),
+        'separator',
+        { label: 'Edit client', icon: Pencil, onSelect: () => void edit(c) },
+        {
+          label: 'Delete client',
+          icon: Trash2,
+          danger: true,
+          onSelect: () => setConfirmDelete(c.id),
+        },
+      ];
+      return {
+        id: c.id,
+        title: c.name,
+        subtitle: 'Health client',
+        icon: HeartPulse,
+        hue: 4,
+        meta: [
+          { icon: MapPin, text: `Pincode ${c.pincode}` },
+          { icon: Users, text: plural(c.memberCount, 'member', 'members') },
+        ],
+        badge: c.hasPreferences
+          ? { label: 'Ready to quote', tone: 'success' as const }
+          : { label: 'Quote details missing', tone: 'warning' as const },
+        updatedAt: c.updatedAt,
+        primary: {
+          label: 'Quote',
+          icon: Zap,
+          onClick: () => setQuote({ id: c.id, product: null }),
+        },
+        menu,
+        search: `${c.name} ${c.pincode}`,
+      };
+    }) ?? null;
 
   return (
-    <section className="panel insurers" aria-labelledby="clients-heading">
-      <h2 id="clients-heading">Health clients</h2>
-      <p className="lead">
-        Health clients are reused for health quotes and health e-proposals (travel clients are kept
-        apart, under Travel clients). They are stored encrypted on this computer and kept until you
-        delete them.
-      </p>
-      {list.storageError && (
-        <p className="error" role="alert">
-          {list.storageError === 'SECRET_STORE_UNAVAILABLE'
-            ? 'Secure storage is unavailable, so clients cannot be saved or shown.'
-            : 'The client database could not be opened. Nothing was changed; contact support.'}
-        </p>
-      )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {!list.storageError && (
-        <div className="insurer-actions">
-          <button
-            type="button"
-            className="primary"
-            onClick={() => setDraft({ ...EMPTY, members: [...EMPTY.members] })}
-          >
-            Add client
-          </button>
-          <ImportButton kind="clients" onImported={() => void refresh()} />
-        </div>
-      )}
+    <RecordPage
+      view="clients"
+      icon={HeartPulse}
+      title="Health clients"
+      subtitle="Clients for health quotes and health e-proposals. Stored encrypted on this computer; Aadhaar numbers are kept in the secure vault."
+      noun={{ one: 'client', many: 'clients' }}
+      {...(list?.storageError
+        ? {}
+        : {
+            addLabel: 'Add client',
+            onAdd: () => setDraft({ ...EMPTY, members: [...EMPTY.members] }),
+            importKind: 'clients' as const,
+            onImported: () => void refresh(),
+          })}
+      items={list?.storageError ? [] : items}
+      failed={!list && !!error}
+      filters={[
+        {
+          id: 'ready',
+          label: 'Ready to quote',
+          test: (id) => !!clients?.find((c) => c.id === id)?.hasPreferences,
+        },
+        {
+          id: 'missing',
+          label: 'Details missing',
+          test: (id) => !clients?.find((c) => c.id === id)?.hasPreferences,
+        },
+      ]}
+      empty={{
+        icon: Users,
+        title: 'No health clients yet',
+        text: 'Add a client with their family members, or import them from an Excel or CSV file.',
+      }}
+      alerts={
+        <>
+          {list?.storageError && (
+            <p className="error" role="alert">
+              {list.storageError === 'SECRET_STORE_UNAVAILABLE'
+                ? 'Secure storage is unavailable, so clients cannot be saved or shown.'
+                : 'The client database could not be opened. Nothing was changed; contact support.'}
+            </p>
+          )}
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+        </>
+      }
+    >
       <Modal
         open={draft !== null}
         title={draft?.id ? 'Edit client' : 'New client'}
+        subtitle="Health client"
         onClose={() => setDraft(null)}
       >
         {draft && (
@@ -252,110 +316,93 @@ export function ClientsPanel(): React.JSX.Element | null {
             onChange={setDraft}
             onCancel={() => setDraft(null)}
             onSaved={() => {
+              toast(draft.id ? 'Client updated.' : 'Client saved.');
               setDraft(null);
               void refresh();
             }}
           />
         )}
       </Modal>
-      {list.clients.length > 0 && (
-        <ul className="insurer-list">
-          {list.clients.map((c) => (
-            <li key={c.id} className="insurer-row">
-              <div className="insurer-main">
-                <div>
-                  <strong>{c.name}</strong>
-                  <span className="insurer-mode">
-                    Pincode {c.pincode} · {c.memberCount}{' '}
-                    {c.memberCount === 1 ? 'member' : 'members'} · updated{' '}
-                    {relativeDate(c.updatedAt)}
-                  </span>
-                </div>
-                <div className="insurer-actions">
-                  <span className={c.hasPreferences ? 'badge saved' : 'badge'}>
-                    {c.hasPreferences ? 'Ready to quote' : 'Quote details missing'}
-                  </span>
-                  {c.memberCount > 0 &&
-                    PROPOSAL_FORMS.map((f) => (
-                      <button
-                        key={f.product}
-                        type="button"
-                        onClick={() =>
-                          setQuoting(
-                            quoting === `${f.product}:${c.id}` ? null : `${f.product}:${c.id}`,
-                          )
-                        }
-                      >
-                        {f.name} proposal
-                      </button>
-                    ))}
-                  {c.hasPreferences && c.memberCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setQuoting(quoting === c.id ? null : c.id)}
-                    >
-                      Get quote
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setQuoting(quoting === `nia-health:${c.id}` ? null : `nia-health:${c.id}`)
-                    }
-                  >
-                    New India health quote
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setQuoting(quoting === `nia-pa:${c.id}` ? null : `nia-pa:${c.id}`)
-                    }
-                  >
-                    New India PA quote
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setQuoting(quoting === `niva-health:${c.id}` ? null : `niva-health:${c.id}`)
-                    }
-                  >
-                    Niva Bupa health quote
-                  </button>
-                  <button type="button" onClick={() => void edit(c)}>
-                    Edit
-                  </button>
-                  {confirmDelete === c.id ? (
-                    <>
-                      <button type="button" className="danger" onClick={() => void remove(c.id)}>
-                        Confirm delete
-                      </button>
-                      <button type="button" onClick={() => setConfirmDelete(null)}>
-                        Keep
-                      </button>
-                    </>
-                  ) : (
-                    <button type="button" className="danger" onClick={() => setConfirmDelete(c.id)}>
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-              {quoting === c.id && <QuotePanel clientId={c.id} />}
-              {quoting === `nia-health:${c.id}` && <NiaHealthPanel clientId={c.id} />}
-              {quoting === `nia-pa:${c.id}` && <NiaPaPanel clientId={c.id} />}
-              {quoting === `niva-health:${c.id}` && <NivaHealthPanel clientId={c.id} />}
-              {PROPOSAL_FORMS.map(
-                (f) =>
-                  quoting === `${f.product}:${c.id}` && (
-                    <ProposalPanel key={f.product} clientId={c.id} form={f} />
-                  ),
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+      <QuoteWorkspace
+        open={quote !== null && quoteClient !== null}
+        subject={quoteClient?.name ?? ''}
+        options={quoteClient ? healthQuoteOptions(quoteClient) : []}
+        selected={quote?.product ?? null}
+        onSelect={(product) => quote && setQuote({ id: quote.id, product })}
+        onClose={() => setQuote(null)}
+      >
+        {quote && quoteClient && (
+          <>
+            {quote.product === 'uiic-health' && <QuotePanel clientId={quote.id} />}
+            {quote.product === 'nia-health' && <NiaHealthPanel clientId={quote.id} />}
+            {quote.product === 'nia-pa' && <NiaPaPanel clientId={quote.id} />}
+            {quote.product === 'niva-health' && <NivaHealthPanel clientId={quote.id} />}
+            {PROPOSAL_FORMS.map(
+              (f) =>
+                quote.product === f.product && (
+                  <ProposalPanel key={f.product} clientId={quote.id} form={f} />
+                ),
+            )}
+          </>
+        )}
+      </QuoteWorkspace>
+      <ConfirmDialog
+        open={toDelete !== undefined}
+        title="Delete this client?"
+        message={`${toDelete?.name ?? 'The client'}, their members and their Aadhaar number will be deleted from this computer. This cannot be undone.`}
+        confirmLabel="Delete client"
+        onConfirm={() => confirmDelete && void remove(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
+    </RecordPage>
   );
+}
+
+/**
+ * What a health client can be quoted or filled into, by insurer. The conditions are the ones the
+ * client list always applied (members for every form; quote details for United India's
+ * calculator).
+ */
+function healthQuoteOptions(c: ClientSummary): QuoteOption[] {
+  const noMembers = c.memberCount > 0 ? {} : { unavailable: 'Add members to this client first.' };
+  return [
+    {
+      key: 'uiic-health',
+      insurer: 'United India',
+      label: 'Health calculator',
+      description: 'Fills the premium calculator',
+      ...(c.memberCount === 0
+        ? noMembers
+        : c.hasPreferences
+          ? {}
+          : { unavailable: 'Add the quote details (cover, sum insured) first.' }),
+    },
+    ...PROPOSAL_FORMS.map((f) => ({
+      key: f.product,
+      insurer: 'United India',
+      label: `${f.name} e-proposal`,
+      description: 'Fills the proposer and nominee',
+      ...noMembers,
+    })),
+    {
+      key: 'nia-health',
+      insurer: 'New India Assurance',
+      label: 'Health quote',
+      description: 'Fills the health quote form',
+    },
+    {
+      key: 'nia-pa',
+      insurer: 'New India Assurance',
+      label: 'Personal accident',
+      description: 'Fills the PA quote form',
+    },
+    {
+      key: 'niva-health',
+      insurer: 'Niva Bupa',
+      label: 'Health premium',
+      description: 'Calculates and reads the premium',
+    },
+  ];
 }
 
 function ClientForm(props: {

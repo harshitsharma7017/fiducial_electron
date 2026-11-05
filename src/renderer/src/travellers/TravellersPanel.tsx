@@ -5,9 +5,15 @@
 // characters are shown. Each travel client can be filled into United India's Overseas Travel and
 // Overseas Mediclaim (B&H, SCHENGEN, Studies) e-proposals, and New India's overseas travel quote
 // forms, from here.
+import { Cake, MapPin, Pencil, Plane, Trash2, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
-import { ImportButton } from '../import/ImportDialog';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { shortDate } from '../ui/format';
+import type { MenuEntry } from '../ui/Menu';
+import { RecordPage, type RecordItem } from '../ui/RecordPage';
+import { toast } from '../ui/toast';
+import { QuoteWorkspace, type QuoteOption } from '../quote/QuoteWorkspace';
 import type { Gender, MaritalStatus } from '../../../shared/contracts/client';
 import { OMP_FORMS, type OmpForm, type TravelOccupation } from '../../../shared/contracts/travel';
 import type { TravellerRaw, TravellerSummary } from '../../../shared/contracts/traveller';
@@ -130,10 +136,6 @@ function describeField(path: string): string {
   );
 }
 
-function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 /** What a travel client can be filled into: Overseas Travel, then the three Overseas Mediclaim. */
 const PROPOSALS: { key: string; label: string; ompForm?: OmpForm }[] = [
   { key: 'travel', label: 'Overseas Travel proposal' },
@@ -150,7 +152,8 @@ export function TravellersPanel(): React.JSX.Element | null {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
+  /** The quote workspace: for which travel client, and which product is chosen (null: none). */
+  const [quote, setQuote] = useState<{ id: string; product: string | null } | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await window.fqf.travellers.list().catch(() => null);
@@ -203,33 +206,79 @@ export function TravellersPanel(): React.JSX.Element | null {
     setConfirmDelete(null);
     const result = await window.fqf.travellers.delete(id);
     if (!result.ok) setError(result.error.message);
+    else toast('Travel client deleted.');
     await refresh();
   };
+  const quoteFor = quote ? (travellers?.find((t) => t.id === quote.id) ?? null) : null;
+  const toDelete = confirmDelete ? travellers?.find((t) => t.id === confirmDelete) : undefined;
+  const items: RecordItem[] | null =
+    travellers?.map((t) => {
+      const menu: MenuEntry[] = [
+        { heading: 'Quote with' },
+        ...TRAVEL_OPTIONS.map((o) => ({
+          label: `${o.insurer}: ${o.label}`,
+          onSelect: () => setQuote({ id: t.id, product: o.key }),
+        })),
+        'separator',
+        { label: 'Edit travel client', icon: Pencil, onSelect: () => void edit(t) },
+        {
+          label: 'Delete travel client',
+          icon: Trash2,
+          danger: true,
+          onSelect: () => setConfirmDelete(t.id),
+        },
+      ];
+      return {
+        id: t.id,
+        title: t.name,
+        subtitle: 'Travel client',
+        icon: Plane,
+        hue: 5,
+        meta: [
+          { icon: MapPin, text: `Pincode ${t.pincode}` },
+          { icon: Cake, text: `Born ${shortDate(t.dateOfBirth)}` },
+        ],
+        updatedAt: t.updatedAt,
+        primary: {
+          label: 'Quote',
+          icon: Zap,
+          onClick: () => setQuote({ id: t.id, product: null }),
+        },
+        menu,
+        search: `${t.name} ${t.pincode}`,
+      };
+    }) ?? null;
 
   return (
-    <section className="panel insurers" aria-labelledby="travellers-heading">
-      <h2 id="travellers-heading">Travel clients</h2>
-      <p className="lead">
-        Travel clients are for travel e-proposals: each is one traveller, kept apart from health
-        clients. They are stored encrypted on this computer until you delete them; passport and
-        Aadhaar numbers are kept in the secure vault.
-      </p>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {travellers && (
-        <div className="insurer-actions">
-          <button type="button" className="primary" onClick={() => setDraft({ ...EMPTY })}>
-            Add travel client
-          </button>
-          <ImportButton kind="travellers" onImported={() => void refresh()} />
-        </div>
-      )}
+    <RecordPage
+      view="travellers"
+      icon={Plane}
+      title="Travel clients"
+      subtitle="One traveller each, for travel quotes and e-proposals. Passport and Aadhaar numbers are kept in the secure vault."
+      noun={{ one: 'travel client', many: 'travel clients' }}
+      addLabel="Add travel client"
+      onAdd={() => setDraft({ ...EMPTY })}
+      importKind="travellers"
+      onImported={() => void refresh()}
+      items={items}
+      failed={!travellers && !!error}
+      empty={{
+        icon: Plane,
+        title: 'No travel clients yet',
+        text: 'Add a traveller with their passport details, or import them from an Excel or CSV file.',
+      }}
+      alerts={
+        error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )
+      }
+    >
       <Modal
         open={draft !== null}
         title={draft?.id ? 'Edit travel client' : 'New travel client'}
+        subtitle="Travel client"
         onClose={() => setDraft(null)}
       >
         {draft && (
@@ -238,81 +287,64 @@ export function TravellersPanel(): React.JSX.Element | null {
             onChange={setDraft}
             onCancel={() => setDraft(null)}
             onSaved={() => {
+              toast(draft.id ? 'Travel client updated.' : 'Travel client saved.');
               setDraft(null);
               void refresh();
             }}
           />
         )}
       </Modal>
-      {travellers && travellers.length > 0 && (
-        <ul className="insurer-list">
-          {travellers.map((t) => (
-            <li key={t.id} className="insurer-row">
-              <div className="insurer-main">
-                <div>
-                  <strong>{t.name}</strong>
-                  <span className="insurer-mode">
-                    Pincode {t.pincode} · born {shortDate(t.dateOfBirth)} · updated{' '}
-                    {shortDate(t.updatedAt)}
-                  </span>
-                </div>
-                <div className="insurer-actions">
-                  {PROPOSALS.map((p) => (
-                    <button
-                      key={p.key}
-                      type="button"
-                      onClick={() =>
-                        setOpen(open === `${p.key}:${t.id}` ? null : `${p.key}:${t.id}`)
-                      }
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setOpen(open === `nia-travel:${t.id}` ? null : `nia-travel:${t.id}`)
-                    }
-                  >
-                    New India travel quote
-                  </button>
-                  <button type="button" onClick={() => void edit(t)}>
-                    Edit
-                  </button>
-                  {confirmDelete === t.id ? (
-                    <>
-                      <button type="button" className="danger" onClick={() => void remove(t.id)}>
-                        Confirm delete
-                      </button>
-                      <button type="button" onClick={() => setConfirmDelete(null)}>
-                        Keep
-                      </button>
-                    </>
-                  ) : (
-                    <button type="button" className="danger" onClick={() => setConfirmDelete(t.id)}>
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-              {PROPOSALS.map(
-                (p) =>
-                  open === `${p.key}:${t.id}` && (
-                    <TravelProposalPanel
-                      key={p.key}
-                      travellerId={t.id}
-                      {...(p.ompForm ? { ompForm: p.ompForm } : {})}
-                    />
-                  ),
-              )}
-              {open === `nia-travel:${t.id}` && <NiaTravelPanel travellerId={t.id} />}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+      <QuoteWorkspace
+        open={quote !== null && quoteFor !== null}
+        subject={quoteFor?.name ?? ''}
+        options={TRAVEL_OPTIONS}
+        selected={quote?.product ?? null}
+        onSelect={(product) => quote && setQuote({ id: quote.id, product })}
+        onClose={() => setQuote(null)}
+      >
+        {quote && quoteFor && (
+          <>
+            {PROPOSALS.map(
+              (p) =>
+                quote.product === p.key && (
+                  <TravelProposalPanel
+                    key={p.key}
+                    travellerId={quote.id}
+                    {...(p.ompForm ? { ompForm: p.ompForm } : {})}
+                  />
+                ),
+            )}
+            {quote.product === 'nia-travel' && <NiaTravelPanel travellerId={quote.id} />}
+          </>
+        )}
+      </QuoteWorkspace>
+      <ConfirmDialog
+        open={toDelete !== undefined}
+        title="Delete this travel client?"
+        message={`${toDelete?.name ?? 'The travel client'} and their passport and Aadhaar numbers will be deleted from this computer. This cannot be undone.`}
+        confirmLabel="Delete travel client"
+        onConfirm={() => confirmDelete && void remove(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
+    </RecordPage>
   );
 }
+
+/** What a travel client can be filled into, by insurer (the list's actions, in its order). */
+const TRAVEL_OPTIONS: QuoteOption[] = [
+  ...PROPOSALS.map((p) => ({
+    key: p.key,
+    insurer: 'United India',
+    label: p.label.replace(/ proposal$/, ''),
+    description: p.ompForm ? 'Mediclaim e-proposal' : 'Overseas Travel e-proposal',
+  })),
+  {
+    key: 'nia-travel',
+    insurer: 'New India Assurance',
+    label: 'Overseas travel quote',
+    description: 'Fills the travel quote form',
+  },
+];
 
 function TravellerForm(props: {
   draft: Draft;

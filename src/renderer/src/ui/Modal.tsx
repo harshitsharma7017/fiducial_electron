@@ -1,6 +1,6 @@
-// Glass dialog. Rendered into document.body (a backdrop-filter ancestor would otherwise become the
-// containing block of the fixed overlay). Handles Escape, backdrop click, focus trap and focus
-// return, and keeps the last content on screen for the short exit animation.
+// Dialog and drawer. Rendered into document.body. Handles Escape, backdrop click, focus trap and
+// focus return, and keeps the last content on screen for the short exit animation.
+// variant 'drawer' docks it to the right edge (quote workspaces); 'dialog' centres it.
 import { X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -12,14 +12,22 @@ const FOCUSABLE =
 export function Modal(props: {
   open: boolean;
   title: string;
+  /** A line under the title (for example the client a quote is for). */
+  subtitle?: string;
   onClose: () => void;
-  /** A wider dialog (for a table). */
+  variant?: 'dialog' | 'drawer';
+  /** Width: narrow (confirmations), default, or wide (tables). */
+  size?: 'narrow' | 'default' | 'wide';
+  /** Kept for older callers: the same as size="wide". */
   wide?: boolean;
   children: ReactNode;
 }): React.JSX.Element | null {
-  const { open, title, onClose, children } = props;
+  const { open, title, subtitle, onClose, children } = props;
   const [mounted, setMounted] = useState(open);
-  const last = useRef<{ title: string; children: ReactNode }>({ title, children });
+  const last = useRef<{ title: string; subtitle?: string; children: ReactNode }>({
+    title,
+    children,
+  });
   const dialogRef = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const titleId = useId();
@@ -27,7 +35,7 @@ export function Modal(props: {
 
   useEffect(() => {
     onCloseRef.current = onClose;
-    if (open) last.current = { title, children };
+    if (open) last.current = { title, ...(subtitle ? { subtitle } : {}), children };
   });
 
   useEffect(() => {
@@ -43,7 +51,9 @@ export function Modal(props: {
     if (!open) return;
     returnFocus.current = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
-    const first = dialog?.querySelector<HTMLElement>('input, select, textarea');
+    const first = dialog?.querySelector<HTMLElement>(
+      '.modal-body input, .modal-body select, .modal-body textarea',
+    );
     (first ?? dialog)?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -72,19 +82,21 @@ export function Modal(props: {
   }, [open]);
 
   if (!mounted && !open) return null;
-  const content = open ? { title, children } : last.current;
+  const content = open ? { title, subtitle, children } : last.current;
+  const size = props.wide ? 'wide' : (props.size ?? 'default');
 
   return createPortal(
     <div
       className="modal-backdrop"
       data-state={open ? 'open' : 'closing'}
+      data-variant={props.variant ?? 'dialog'}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <div
         ref={dialogRef}
-        className={props.wide ? 'modal modal-wide' : 'modal'}
+        className={size === 'default' ? 'modal' : `modal modal-${size}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -92,7 +104,10 @@ export function Modal(props: {
         inert={!open}
       >
         <header className="modal-header">
-          <h2 id={titleId}>{content.title}</h2>
+          <div>
+            <h2 id={titleId}>{content.title}</h2>
+            {content.subtitle && <p>{content.subtitle}</p>}
+          </div>
           <button type="button" className="icon-button" aria-label="Close" onClick={onClose}>
             <X size={18} aria-hidden="true" />
           </button>

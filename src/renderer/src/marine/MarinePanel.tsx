@@ -2,8 +2,13 @@
 // business or an individual), kept apart from the other clients (decision of 4 November 2026) and
 // encrypted on this computer until the advisor deletes them. The shipment is entered for each
 // quote and not saved.
+import { Briefcase, MapPin, Pencil, Ship, Trash2, User, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { RecordPage, type RecordItem } from '../ui/RecordPage';
+import { toast } from '../ui/toast';
+import { QuoteWorkspace } from '../quote/QuoteWorkspace';
 import type { Gender, MaritalStatus } from '../../../shared/contracts/client';
 import {
   NIA_ORGANISATION_TYPES,
@@ -103,7 +108,8 @@ export function MarinePanel(): React.JSX.Element | null {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
+  /** The quote workspace is open for this record. */
+  const [quoting, setQuoting] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await window.fqf.marine.list().catch(() => null);
@@ -137,32 +143,81 @@ export function MarinePanel(): React.JSX.Element | null {
     setConfirmDelete(null);
     const result = await window.fqf.marine.delete(id);
     if (!result.ok) setError(result.error.message);
+    else toast('Marine client deleted.');
     await refresh();
   };
+  const quoteFor = quoting ? (list?.find((m) => m.id === quoting) ?? null) : null;
+  const toDelete = confirmDelete ? list?.find((m) => m.id === confirmDelete) : undefined;
+  const items: RecordItem[] | null =
+    list?.map((m) => ({
+      id: m.id,
+      title: m.name,
+      subtitle:
+        m.kind === 'organization' ? 'Marine client · business' : 'Marine client · individual',
+      icon: Ship,
+      hue: 0,
+      meta: [
+        { icon: MapPin, text: `Pincode ${m.pincode}` },
+        m.kind === 'organization'
+          ? { icon: Briefcase, text: 'Business' }
+          : { icon: User, text: 'Individual' },
+      ],
+      updatedAt: m.updatedAt,
+      primary: { label: 'Quote', icon: Zap, onClick: () => setQuoting(m.id) },
+      menu: [
+        { label: 'New India: Specific Voyage quote', icon: Zap, onSelect: () => setQuoting(m.id) },
+        'separator',
+        { label: 'Edit marine client', icon: Pencil, onSelect: () => void edit(m) },
+        {
+          label: 'Delete marine client',
+          icon: Trash2,
+          danger: true,
+          onSelect: () => setConfirmDelete(m.id),
+        },
+      ],
+      search: `${m.name} ${m.pincode}`,
+    })) ?? null;
 
   return (
-    <section className="panel insurers" aria-labelledby="marine-heading">
-      <h2 id="marine-heading">Marine clients</h2>
-      <p className="lead">
-        Marine clients are the policy holders of voyages (a business or a person), for New
-        India&rsquo;s Specific Voyage form. They are stored encrypted on this computer until you
-        delete them; each shipment is entered when you quote it.
-      </p>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {list && (
-        <div className="insurer-actions">
-          <button type="button" className="primary" onClick={() => setDraft(EMPTY())}>
-            Add marine client
-          </button>
-        </div>
-      )}
+    <RecordPage
+      view="marine"
+      icon={Ship}
+      title="Marine clients"
+      subtitle="Policy holders of voyages, for New India's Specific Voyage form. Each shipment is entered when you quote it."
+      noun={{ one: 'marine client', many: 'marine clients' }}
+      addLabel="Add marine client"
+      onAdd={() => setDraft(EMPTY())}
+      items={items}
+      failed={!list && !!error}
+      filters={[
+        {
+          id: 'business',
+          label: 'Business',
+          test: (id) => list?.find((m) => m.id === id)?.kind === 'organization',
+        },
+        {
+          id: 'individual',
+          label: 'Individual',
+          test: (id) => list?.find((m) => m.id === id)?.kind !== 'organization',
+        },
+      ]}
+      empty={{
+        icon: Ship,
+        title: 'No marine clients yet',
+        text: 'Add the business or person shipping goods to quote New India Specific Voyage cover.',
+      }}
+      alerts={
+        error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )
+      }
+    >
       <Modal
         open={draft !== null}
         title={draft?.id ? 'Edit marine client' : 'New marine client'}
+        subtitle="Marine client"
         onClose={() => setDraft(null)}
       >
         {draft && (
@@ -171,52 +226,39 @@ export function MarinePanel(): React.JSX.Element | null {
             onChange={setDraft}
             onCancel={() => setDraft(null)}
             onSaved={() => {
+              toast(draft.id ? 'Marine client updated.' : 'Marine client saved.');
               setDraft(null);
               void refresh();
             }}
           />
         )}
       </Modal>
-      {list && list.length > 0 && (
-        <ul className="insurer-list">
-          {list.map((m) => (
-            <li key={m.id} className="insurer-row">
-              <div className="insurer-main">
-                <div>
-                  <strong>{m.name}</strong>
-                  <span className="insurer-mode">
-                    {m.kind === 'organization' ? 'Business' : 'Individual'} · pincode {m.pincode}
-                  </span>
-                </div>
-                <div className="insurer-actions">
-                  <button type="button" onClick={() => setOpen(open === m.id ? null : m.id)}>
-                    New India Specific Voyage quote
-                  </button>
-                  <button type="button" onClick={() => void edit(m)}>
-                    Edit
-                  </button>
-                  {confirmDelete === m.id ? (
-                    <>
-                      <button type="button" className="danger" onClick={() => void remove(m.id)}>
-                        Confirm delete
-                      </button>
-                      <button type="button" onClick={() => setConfirmDelete(null)}>
-                        Keep
-                      </button>
-                    </>
-                  ) : (
-                    <button type="button" className="danger" onClick={() => setConfirmDelete(m.id)}>
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-              {open === m.id && <NiaMarinePanel marineId={m.id} />}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+      <QuoteWorkspace
+        open={quoteFor !== null}
+        subject={quoteFor?.name ?? ''}
+        options={[
+          {
+            key: 'nia-marine',
+            insurer: 'New India Assurance',
+            label: 'Specific Voyage quote',
+            description: 'Enter the shipment, then fill the form',
+          },
+        ]}
+        selected="nia-marine"
+        onSelect={() => undefined}
+        onClose={() => setQuoting(null)}
+      >
+        {quoteFor && <NiaMarinePanel marineId={quoteFor.id} />}
+      </QuoteWorkspace>
+      <ConfirmDialog
+        open={toDelete !== undefined}
+        title="Delete this marine client?"
+        message={`${toDelete?.name ?? 'The marine client'} will be deleted from this computer. This cannot be undone.`}
+        confirmLabel="Delete marine client"
+        onConfirm={() => confirmDelete && void remove(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
+    </RecordPage>
   );
 }
 

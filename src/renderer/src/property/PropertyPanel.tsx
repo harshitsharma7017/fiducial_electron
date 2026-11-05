@@ -1,8 +1,13 @@
 // Property clients, for New India's fire forms: an owner (a person or a business, as a marine
 // client) and their home or business premises, kept apart from the other clients (decision of 4
 // November 2026) and encrypted on this computer until the advisor deletes them.
+import { Building, Flame, House, MapPin, Pencil, Trash2, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { RecordPage, type RecordItem } from '../ui/RecordPage';
+import { toast } from '../ui/toast';
+import { QuoteWorkspace } from '../quote/QuoteWorkspace';
 import {
   CLAIM_RATIOS,
   type PropertyClientRaw,
@@ -169,7 +174,8 @@ export function PropertyPanel(): React.JSX.Element | null {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
+  /** The quote workspace is open for this record. */
+  const [quoting, setQuoting] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await window.fqf.properties.list().catch(() => null);
@@ -241,42 +247,80 @@ export function PropertyPanel(): React.JSX.Element | null {
     setConfirmDelete(null);
     const result = await window.fqf.properties.delete(id);
     if (!result.ok) setError(result.error.message);
+    else toast('Property client deleted.');
     await refresh();
   };
+  const quoteFor = quoting ? (list?.find((p) => p.id === quoting) ?? null) : null;
+  const toDelete = confirmDelete ? list?.find((p) => p.id === confirmDelete) : undefined;
+  const add = () => {
+    setEditId(null);
+    setDraft({ holder: { ...EMPTY_HOLDER, kind: 'individual' }, property: EMPTY_PROPERTY });
+  };
+  const items: RecordItem[] | null =
+    list?.map((p) => ({
+      id: p.id,
+      title: p.name,
+      subtitle: p.use === 'home' ? 'Property client · home' : 'Property client · business premises',
+      icon: Flame,
+      hue: 3,
+      meta: [
+        { icon: MapPin, text: `Pincode ${p.pincode}` },
+        p.use === 'home'
+          ? { icon: House, text: 'Home' }
+          : { icon: Building, text: 'Business premises' },
+      ],
+      updatedAt: p.updatedAt,
+      primary: { label: 'Quote', icon: Zap, onClick: () => setQuoting(p.id) },
+      menu: [
+        { label: 'New India: fire quote', icon: Zap, onSelect: () => setQuoting(p.id) },
+        'separator',
+        { label: 'Edit property client', icon: Pencil, onSelect: () => void edit(p) },
+        {
+          label: 'Delete property client',
+          icon: Trash2,
+          danger: true,
+          onSelect: () => setConfirmDelete(p.id),
+        },
+      ],
+      search: `${p.name} ${p.pincode}`,
+    })) ?? null;
 
   return (
-    <section className="panel insurers" aria-labelledby="property-heading">
-      <h2 id="property-heading">Property clients</h2>
-      <p className="lead">
-        Property clients are for New India&rsquo;s fire forms: an owner (a person or a business) and
-        their home or business premises, with its sums insured and the answers to the fire
-        forms&rsquo; questions. They are stored encrypted on this computer until you delete them.
-      </p>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {list && (
-        <div className="insurer-actions">
-          <button
-            type="button"
-            className="primary"
-            onClick={() => {
-              setEditId(null);
-              setDraft({
-                holder: { ...EMPTY_HOLDER, kind: 'individual' },
-                property: EMPTY_PROPERTY,
-              });
-            }}
-          >
-            Add property client
-          </button>
-        </div>
-      )}
+    <RecordPage
+      view="properties"
+      icon={Flame}
+      title="Property clients"
+      subtitle="Owners and their home or business premises, with sums insured and risk answers, for New India's fire forms."
+      noun={{ one: 'property client', many: 'property clients' }}
+      addLabel="Add property client"
+      onAdd={add}
+      items={items}
+      failed={!list && !!error}
+      filters={[
+        { id: 'home', label: 'Home', test: (id) => list?.find((p) => p.id === id)?.use === 'home' },
+        {
+          id: 'business',
+          label: 'Business',
+          test: (id) => list?.find((p) => p.id === id)?.use !== 'home',
+        },
+      ]}
+      empty={{
+        icon: Flame,
+        title: 'No property clients yet',
+        text: 'Add an owner and their home or business premises to quote New India fire policies.',
+      }}
+      alerts={
+        error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )
+      }
+    >
       <Modal
         open={draft !== null}
         title={editId ? 'Edit property client' : 'New property client'}
+        subtitle="Property client"
         onClose={() => setDraft(null)}
       >
         {draft && (
@@ -286,52 +330,39 @@ export function PropertyPanel(): React.JSX.Element | null {
             onChange={setDraft}
             onCancel={() => setDraft(null)}
             onSaved={() => {
+              toast(editId ? 'Property client updated.' : 'Property client saved.');
               setDraft(null);
               void refresh();
             }}
           />
         )}
       </Modal>
-      {list && list.length > 0 && (
-        <ul className="insurer-list">
-          {list.map((p) => (
-            <li key={p.id} className="insurer-row">
-              <div className="insurer-main">
-                <div>
-                  <strong>{p.name}</strong>
-                  <span className="insurer-mode">
-                    {p.use === 'home' ? 'Home' : 'Business premises'} · pincode {p.pincode}
-                  </span>
-                </div>
-                <div className="insurer-actions">
-                  <button type="button" onClick={() => setOpen(open === p.id ? null : p.id)}>
-                    New India fire quote
-                  </button>
-                  <button type="button" onClick={() => void edit(p)}>
-                    Edit
-                  </button>
-                  {confirmDelete === p.id ? (
-                    <>
-                      <button type="button" className="danger" onClick={() => void remove(p.id)}>
-                        Confirm delete
-                      </button>
-                      <button type="button" onClick={() => setConfirmDelete(null)}>
-                        Keep
-                      </button>
-                    </>
-                  ) : (
-                    <button type="button" className="danger" onClick={() => setConfirmDelete(p.id)}>
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-              {open === p.id && <NiaFirePanel propertyId={p.id} use={p.use} />}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+      <QuoteWorkspace
+        open={quoteFor !== null}
+        subject={quoteFor?.name ?? ''}
+        options={[
+          {
+            key: 'nia-fire',
+            insurer: 'New India Assurance',
+            label: 'Fire quote',
+            description: 'Choose the policy and cover, then fill the form',
+          },
+        ]}
+        selected="nia-fire"
+        onSelect={() => undefined}
+        onClose={() => setQuoting(null)}
+      >
+        {quoteFor && <NiaFirePanel propertyId={quoteFor.id} use={quoteFor.use} />}
+      </QuoteWorkspace>
+      <ConfirmDialog
+        open={toDelete !== undefined}
+        title="Delete this property client?"
+        message={`${toDelete?.name ?? 'The property client'} and their property details will be deleted from this computer. This cannot be undone.`}
+        confirmLabel="Delete property client"
+        onConfirm={() => confirmDelete && void remove(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
+    </RecordPage>
   );
 }
 

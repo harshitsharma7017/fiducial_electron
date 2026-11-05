@@ -10,6 +10,8 @@ import { PropertyPanel } from './property/PropertyPanel';
 import { InsurerPortals } from './insurers/InsurerPortals';
 import { AppShell, type ViewId } from './shell/AppShell';
 import { Overview, type AppStatus } from './shell/Overview';
+import { PageHeader } from './ui/PageHeader';
+import { FlaskConical } from 'lucide-react';
 
 // DEVELOPMENT ONLY: the M3 Quote Comparison demo with synthetic data. It wraps the home screen
 // and adds its own launcher, so all of its text lives in the dev chunk. `import.meta.env.DEV` is
@@ -107,7 +109,12 @@ export function App(): React.JSX.Element {
         version={status.state === 'ready' ? status.info.version : null}
       >
         <div hidden={shown !== 'overview'}>
-          <Overview active={shown === 'overview'} status={status} automation={automation} />
+          <Overview
+            active={shown === 'overview'}
+            status={status}
+            automation={automation}
+            onNavigate={setView}
+          />
         </div>
         {status.state === 'ready' && (
           <>
@@ -136,13 +143,11 @@ export function App(): React.JSX.Element {
         )}
         {dev && (
           <div className="page" hidden={shown !== 'development'}>
-            <header className="page-header">
-              <h1>Development</h1>
-              <p className="lead">
-                Tools for development builds only. They use synthetic data and are not part of the
-                installed app.
-              </p>
-            </header>
+            <PageHeader
+              icon={FlaskConical}
+              title="Development"
+              subtitle="Tools for development builds only. They use synthetic data and are not part of the installed app."
+            />
             {dev}
           </div>
         )}

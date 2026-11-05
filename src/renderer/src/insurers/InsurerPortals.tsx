@@ -4,7 +4,21 @@
 //
 // This screen can save and forget sign-in details but never reads them back. A typed password
 // is held only while the form is open and is cleared after saving or cancelling.
+import {
+  Building2,
+  Circle,
+  ExternalLink,
+  KeyRound,
+  LogOut,
+  Square,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { ActionMenu, type MenuEntry } from '../ui/Menu';
+import { PageHeader, SkeletonCards } from '../ui/PageHeader';
+import { toast } from '../ui/toast';
 import type { FillOutcome } from '../../../shared/insurers/fill-outcomes';
 import { SESSION_HOURS } from '../../../shared/insurers/session';
 import type { InsurerPortalList, InsurerPortalView } from '../../../shared/ipc/contract';
@@ -70,6 +84,8 @@ export function InsurerPortals(): React.JSX.Element | null {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [editing, setEditing] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; problem: boolean } | null>(null);
+  const [forgetting, setForgetting] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -98,12 +114,27 @@ export function InsurerPortals(): React.JSX.Element | null {
     return () => clearInterval(timer);
   }, [anyOpen, refresh]);
 
-  if (load.state === 'loading') return null;
+  const header = (
+    <PageHeader
+      icon={Building2}
+      title="Insurer portals"
+      subtitle={`Save each insurer's sign-in once: the app fills it into the insurer's own page and you complete any CAPTCHA. Each portal opens as a tab of this window; a session lasts up to ${SESSION_HOURS} hours, even across restarts. Sign-ins are stored encrypted on this computer.`}
+    />
+  );
+  if (load.state === 'loading')
+    return (
+      <section aria-label="Insurer portals">
+        {header}
+        <SkeletonCards count={4} />
+      </section>
+    );
   if (load.state === 'error') {
     return (
-      <section className="panel insurers" aria-labelledby="insurers-heading">
-        <h2 id="insurers-heading">Insurer portals</h2>
-        <p className="error">{load.message}</p>
+      <section aria-label="Insurer portals">
+        {header}
+        <p className="error" role="alert">
+          {load.message}
+        </p>
       </section>
     );
   }
@@ -117,17 +148,38 @@ export function InsurerPortals(): React.JSX.Element | null {
     await refresh();
   };
 
+  const forgetPortal = load.list.portals.find((p) => p.id === forgetting);
+  /** The portal's other actions, under its "more" menu (each shown when it applies). */
+  const portalMenu = (portal: InsurerPortalView): MenuEntry[] => {
+    const entries: { label: string; icon: LucideIcon; onSelect: () => void; danger?: boolean }[] =
+      [];
+    if (portal.sessionEndsAt)
+      entries.push({
+        label: 'Sign out',
+        icon: LogOut,
+        onSelect: () => void run(() => window.fqf.insurers.signOut(portal.id)),
+      });
+    if (portal.windowOpen)
+      entries.push({
+        label: portal.recording?.active ? 'Stop recording' : 'Record form',
+        icon: portal.recording?.active ? Square : Circle,
+        onSelect: () =>
+          void run(() =>
+            window.fqf.insurers.record(portal.id, portal.recording?.active ? 'stop' : 'start'),
+          ),
+      });
+    if (portal.loginSaved)
+      entries.push({
+        label: 'Forget sign-in',
+        icon: Trash2,
+        danger: true,
+        onSelect: () => setForgetting(portal.id),
+      });
+    return entries;
+  };
   return (
-    <section className="panel insurers" aria-labelledby="insurers-heading">
-      <h2 id="insurers-heading">Insurer portals</h2>
-      <p className="lead">
-        Save each insurer&rsquo;s sign-in once. When you open a portal, the app fills your user ID
-        and password into the insurer&rsquo;s own page; you complete any CAPTCHA and press the
-        sign-in button. Each portal opens as a tab at the top of this window, and the pages it opens
-        (calculators, proposal forms) as more tabs. Details are stored encrypted on this computer
-        only. Once signed in, the session stays for up to {SESSION_HOURS} hours, even if you hide
-        the insurer&rsquo;s tab or restart the app; an insurer may end it sooner.
-      </p>
+    <section aria-label="Insurer portals">
+      {header}
       {load.list.vaultError && (
         <p className="error" role="alert">
           {load.list.vaultError === 'SECRET_STORE_UNAVAILABLE'
@@ -144,7 +196,11 @@ export function InsurerPortals(): React.JSX.Element | null {
         {load.list.portals.map((portal) => {
           const fill = portal.lastFill ? FILL_MESSAGES[portal.lastFill] : null;
           return (
-            <li key={portal.id} className="insurer-row insurer-card">
+            <li
+              key={portal.id}
+              className="insurer-row insurer-card"
+              data-menu-open={menuOpen === portal.id}
+            >
               <div className="insurer-main">
                 <div className="insurer-identity">
                   <InsurerAvatar name={portal.displayName} />
@@ -199,47 +255,24 @@ export function InsurerPortals(): React.JSX.Element | null {
               <div className="insurer-actions">
                 <button
                   type="button"
-                  className="primary"
+                  className="primary btn-sm"
                   onClick={() => void run(() => window.fqf.insurers.openPortal(portal.id))}
                 >
+                  <ExternalLink size={14} aria-hidden="true" />
                   {portal.windowOpen ? 'Show portal' : 'Open portal'}
                 </button>
                 {usesLogin(portal) && !load.list.vaultError && (
-                  <button type="button" onClick={() => setEditing(portal.id)}>
+                  <button type="button" className="btn-sm" onClick={() => setEditing(portal.id)}>
+                    <KeyRound size={14} aria-hidden="true" />
                     {portal.loginSaved ? 'Change sign-in' : 'Save sign-in'}
                   </button>
                 )}
-                {portal.sessionEndsAt && (
-                  <button
-                    type="button"
-                    onClick={() => void run(() => window.fqf.insurers.signOut(portal.id))}
-                  >
-                    Sign out
-                  </button>
-                )}
-                {portal.windowOpen && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void run(() =>
-                        window.fqf.insurers.record(
-                          portal.id,
-                          portal.recording?.active ? 'stop' : 'start',
-                        ),
-                      )
-                    }
-                  >
-                    {portal.recording?.active ? 'Stop recording' : 'Record form'}
-                  </button>
-                )}
-                {portal.loginSaved && (
-                  <button
-                    type="button"
-                    className="danger"
-                    onClick={() => void run(() => window.fqf.insurers.forgetLogin(portal.id))}
-                  >
-                    Forget sign-in
-                  </button>
+                {portalMenu(portal).length > 0 && (
+                  <ActionMenu
+                    label={`More for ${portal.displayName}`}
+                    items={portalMenu(portal)}
+                    onOpenChange={(open) => setMenuOpen(open ? portal.id : null)}
+                  />
                 )}
               </div>
               <Modal
@@ -252,7 +285,8 @@ export function InsurerPortals(): React.JSX.Element | null {
                     portal={portal}
                     onDone={(text) => {
                       setEditing(null);
-                      if (text) setMessage(text);
+                      if (text && !text.problem) toast(text.text);
+                      else if (text) setMessage(text);
                       void refresh();
                     }}
                   />
@@ -262,6 +296,23 @@ export function InsurerPortals(): React.JSX.Element | null {
           );
         })}
       </ul>
+      <ConfirmDialog
+        open={forgetPortal !== undefined}
+        title="Forget this sign-in?"
+        message={`The saved user ID and password for ${forgetPortal?.displayName ?? 'this insurer'} will be deleted from this computer. You can save them again at any time.`}
+        confirmLabel="Forget sign-in"
+        onConfirm={() => {
+          const id = forgetting;
+          setForgetting(null);
+          if (id)
+            void run(async () => {
+              const result = await window.fqf.insurers.forgetLogin(id);
+              if (result.ok) toast('Sign-in forgotten.');
+              return result;
+            });
+        }}
+        onCancel={() => setForgetting(null)}
+      />
     </section>
   );
 }

@@ -3,8 +3,14 @@
 // rural client is a farmer: their details and nominee, their animals (cattle and livestock forms)
 // and their farm house and contents (Farmers Package). Each can be filled into New India's four
 // rural forms from here.
+import { Home, MapPin, PawPrint, Pencil, Tractor, Trash2, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { plural } from '../ui/format';
+import { RecordPage, type RecordItem } from '../ui/RecordPage';
+import { toast } from '../ui/toast';
+import { QuoteWorkspace } from '../quote/QuoteWorkspace';
 import type { Gender, MaritalStatus } from '../../../shared/contracts/client';
 import {
   ANIMAL_KINDS,
@@ -215,7 +221,8 @@ export function RuralPanel(): React.JSX.Element | null {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
+  /** The quote workspace is open for this record. */
+  const [quoting, setQuoting] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await window.fqf.rural.list().catch(() => null);
@@ -289,32 +296,74 @@ export function RuralPanel(): React.JSX.Element | null {
     setConfirmDelete(null);
     const result = await window.fqf.rural.delete(id);
     if (!result.ok) setError(result.error.message);
+    else toast('Rural client deleted.');
     await refresh();
   };
+  const quoteFor = quoting ? (list?.find((r) => r.id === quoting) ?? null) : null;
+  const toDelete = confirmDelete ? list?.find((r) => r.id === confirmDelete) : undefined;
+  const items: RecordItem[] | null =
+    list?.map((r) => ({
+      id: r.id,
+      title: r.name,
+      subtitle: 'Rural client',
+      icon: Tractor,
+      hue: 1,
+      meta: [
+        { icon: MapPin, text: `Pincode ${r.pincode}` },
+        { icon: PawPrint, text: plural(r.animalCount, 'animal', 'animals') },
+        ...(r.hasFarm ? [{ icon: Home, text: 'Farm house' }] : []),
+      ],
+      updatedAt: r.updatedAt,
+      primary: { label: 'Quote', icon: Zap, onClick: () => setQuoting(r.id) },
+      menu: [
+        { label: 'New India: rural quote', icon: Zap, onSelect: () => setQuoting(r.id) },
+        'separator',
+        { label: 'Edit rural client', icon: Pencil, onSelect: () => void edit(r) },
+        {
+          label: 'Delete rural client',
+          icon: Trash2,
+          danger: true,
+          onSelect: () => setConfirmDelete(r.id),
+        },
+      ],
+      search: `${r.name} ${r.pincode}`,
+    })) ?? null;
 
   return (
-    <section className="panel insurers" aria-labelledby="rural-heading">
-      <h2 id="rural-heading">Rural clients</h2>
-      <p className="lead">
-        Rural clients are for New India&rsquo;s rural forms: a farmer with their animals and farm
-        house, kept apart from health and travel clients. They are stored encrypted on this computer
-        until you delete them.
-      </p>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {list && (
-        <div className="insurer-actions">
-          <button type="button" className="primary" onClick={() => setDraft({ ...EMPTY })}>
-            Add rural client
-          </button>
-        </div>
-      )}
+    <RecordPage
+      view="rural"
+      icon={Tractor}
+      title="Rural clients"
+      subtitle="Farmers with their animals and farm house, for New India's rural forms. Stored encrypted on this computer."
+      noun={{ one: 'rural client', many: 'rural clients' }}
+      addLabel="Add rural client"
+      onAdd={() => setDraft({ ...EMPTY })}
+      items={items}
+      failed={!list && !!error}
+      filters={[
+        {
+          id: 'farm',
+          label: 'With farm house',
+          test: (id) => !!list?.find((r) => r.id === id)?.hasFarm,
+        },
+      ]}
+      empty={{
+        icon: Tractor,
+        title: 'No rural clients yet',
+        text: 'Add a farmer with their animals or farm house to quote New India rural policies.',
+      }}
+      alerts={
+        error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )
+      }
+    >
       <Modal
         open={draft !== null}
         title={draft?.id ? 'Edit rural client' : 'New rural client'}
+        subtitle="Rural client"
         onClose={() => setDraft(null)}
       >
         {draft && (
@@ -323,54 +372,39 @@ export function RuralPanel(): React.JSX.Element | null {
             onChange={setDraft}
             onCancel={() => setDraft(null)}
             onSaved={() => {
+              toast(draft.id ? 'Rural client updated.' : 'Rural client saved.');
               setDraft(null);
               void refresh();
             }}
           />
         )}
       </Modal>
-      {list && list.length > 0 && (
-        <ul className="insurer-list">
-          {list.map((r) => (
-            <li key={r.id} className="insurer-row">
-              <div className="insurer-main">
-                <div>
-                  <strong>{r.name}</strong>
-                  <span className="insurer-mode">
-                    Pincode {r.pincode} · {r.animalCount}{' '}
-                    {r.animalCount === 1 ? 'animal' : 'animals'}
-                    {r.hasFarm ? ' · farm house' : ''}
-                  </span>
-                </div>
-                <div className="insurer-actions">
-                  <button type="button" onClick={() => setOpen(open === r.id ? null : r.id)}>
-                    New India rural quote
-                  </button>
-                  <button type="button" onClick={() => void edit(r)}>
-                    Edit
-                  </button>
-                  {confirmDelete === r.id ? (
-                    <>
-                      <button type="button" className="danger" onClick={() => void remove(r.id)}>
-                        Confirm delete
-                      </button>
-                      <button type="button" onClick={() => setConfirmDelete(null)}>
-                        Keep
-                      </button>
-                    </>
-                  ) : (
-                    <button type="button" className="danger" onClick={() => setConfirmDelete(r.id)}>
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-              {open === r.id && <NiaRuralPanel ruralId={r.id} />}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+      <QuoteWorkspace
+        open={quoteFor !== null}
+        subject={quoteFor?.name ?? ''}
+        options={[
+          {
+            key: 'nia-rural',
+            insurer: 'New India Assurance',
+            label: 'Rural quote',
+            description: 'Cattle, livestock and farmers package forms',
+          },
+        ]}
+        selected="nia-rural"
+        onSelect={() => undefined}
+        onClose={() => setQuoting(null)}
+      >
+        {quoteFor && <NiaRuralPanel ruralId={quoteFor.id} />}
+      </QuoteWorkspace>
+      <ConfirmDialog
+        open={toDelete !== undefined}
+        title="Delete this rural client?"
+        message={`${toDelete?.name ?? 'The rural client'}, their animals and farm house details will be deleted from this computer. This cannot be undone.`}
+        confirmLabel="Delete rural client"
+        onConfirm={() => confirmDelete && void remove(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
+    </RecordPage>
   );
 }
 

@@ -1,139 +1,168 @@
-/* Design tokens. Every colour, shadow and radius used by the app comes from here, so a theme is
- * just a different set of values. Light is the default; the theme script (theme/theme.ts) sets
- * data-theme="dark" on <html> for dark. Components never hard-code colours. */
+/* Design tokens: every colour, size, radius, shadow and duration the app uses. A theme is only a
+ * different set of values; components never hard-code colours. Light is the default; the theme
+ * store (theme/theme.ts) sets data-theme="dark" on <html> for dark. */
 
 :root {
+  /* Type */
   --font-sans:
     -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI',
     system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  --text-xs: 0.75rem; /* 12 */
+  --text-sm: 0.8125rem; /* 13 */
+  --text-md: 0.875rem; /* 14: body */
+  --text-lg: 1rem; /* 16 */
+  --text-xl: 1.125rem; /* 18: section titles */
+  --text-2xl: 1.5rem; /* 24: page titles */
+  --text-3xl: 1.875rem; /* 30: figures */
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 650;
 
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
+  /* Spacing (4 px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
   --radius-pill: 999px;
 
-  --blur-md: 16px;
-  --blur-lg: 24px;
-  --glass-saturate: 140%;
+  /* Control heights */
+  --control-sm: 30px;
+  --control-md: 36px;
 
+  /* Motion */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --dur-fast: 140ms;
-  --dur: 240ms;
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 280ms;
 
-  --sidebar-width: 248px;
-  --sidebar-width-collapsed: 72px;
-  --topbar-height: 56px;
-  --shell-gap: 12px;
+  /* Layout */
+  --sidebar-width: 244px;
+  --sidebar-width-collapsed: 64px;
+  --topbar-height: 52px;
+  --content-width: 1240px;
+  --drawer-width: 640px;
+  --blur: 18px;
 
-  /* Light (default) */
+  /* Light theme */
   color-scheme: light;
-  --bg: #eef2f8;
-  --glow-1: rgba(86, 104, 200, 0.2);
-  --glow-2: rgba(167, 139, 250, 0.16);
-  --glow-3: rgba(13, 148, 136, 0.09);
+  --bg: #f3f6fc;
+  --glow-1: rgba(69, 99, 216, 0.1);
+  --glow-2: rgba(124, 58, 237, 0.06);
 
-  --surface: rgba(255, 255, 255, 0.72);
-  --surface-hover: rgba(255, 255, 255, 0.86);
-  --surface-inset: rgba(255, 255, 255, 0.62);
-  --surface-sunken: rgba(23, 32, 51, 0.045);
-  --surface-raised: rgba(255, 255, 255, 0.96);
-  --surface-modal: rgba(255, 255, 255, 0.9);
-  --sidebar: rgba(255, 255, 255, 0.78);
-  --sheen: rgba(255, 255, 255, 0.45);
-  --field: rgba(255, 255, 255, 0.85);
-  --scrim: rgba(23, 32, 51, 0.3);
+  --surface: #ffffff;
+  --surface-2: #ffffff;
+  --surface-muted: #f8fafd;
+  --surface-hover: #f5f7fc;
+  --surface-active: #eef2fb;
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(226, 232, 240, 0.9);
+  --field: #ffffff;
+  --scrim: rgba(15, 23, 42, 0.32);
 
-  --glass-border: rgba(255, 255, 255, 0.85);
-  --edge: rgba(23, 32, 51, 0.07);
-  --border: rgba(23, 32, 51, 0.1);
-  --border-strong: rgba(23, 32, 51, 0.18);
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
 
   --text: #172033;
   --text-2: #64748b;
+  --text-3: #94a3b8;
 
-  --primary: #4056a1;
-  --primary-hover: #364b92;
-  --primary-soft: rgba(64, 86, 161, 0.11);
+  --primary: #4563d8;
+  --primary-hover: #3a55c4;
+  --primary-soft: rgba(69, 99, 216, 0.1);
+  --primary-text: #3651c4;
   --on-primary: #ffffff;
-  --accent: #0d9488;
-  --accent-text: #0f766e;
-  --accent-soft: rgba(13, 148, 136, 0.12);
 
-  --danger: #b42318;
-  --danger-soft: rgba(180, 35, 24, 0.09);
-  --warning: #a05a07;
-  --warning-soft: rgba(217, 119, 6, 0.13);
+  --success: #0f7a55;
+  --success-soft: rgba(16, 150, 100, 0.11);
+  --warning: #a15c07;
+  --warning-soft: rgba(217, 119, 6, 0.12);
+  --danger: #c0262d;
+  --danger-soft: rgba(220, 38, 38, 0.09);
+  --neutral-soft: rgba(100, 116, 139, 0.1);
 
-  --focus-ring: rgba(64, 86, 161, 0.45);
-  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  --shadow-sm: 0 1px 2px rgba(23, 32, 51, 0.04), 0 4px 14px rgba(23, 32, 51, 0.05);
-  --shadow-md:
-    0 1px 2px rgba(23, 32, 51, 0.05), 0 8px 24px rgba(23, 32, 51, 0.08),
-    0 24px 48px -16px rgba(23, 32, 51, 0.1);
-  --shadow-lg:
-    0 2px 4px rgba(23, 32, 51, 0.06), 0 16px 40px rgba(23, 32, 51, 0.14),
-    0 40px 80px -20px rgba(23, 32, 51, 0.2);
-  --scroll-thumb: rgba(23, 32, 51, 0.22);
+  --focus-ring: rgba(69, 99, 216, 0.4);
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 8px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 2px 4px rgba(15, 23, 42, 0.05), 0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 8px 16px rgba(15, 23, 42, 0.08), 0 24px 60px rgba(15, 23, 42, 0.16);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --scroll-thumb: rgba(15, 23, 42, 0.2);
 
-  --avatar-bg: 70% 91%;
-  --avatar-fg: 45% 32%;
-}
-
-/* Names used before the redesign. The development-only launchers still read them. */
-:root {
-  --fg: var(--text);
-  --muted: var(--text-2);
-  --panel: var(--surface-raised);
-  --error: var(--danger);
+  /* Monogram tiles (hue comes from the tile) */
+  --avatar-bg: 72% 93%;
+  --avatar-fg: 45% 34%;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0b1120;
-  --glow-1: rgba(99, 102, 241, 0.2);
-  --glow-2: rgba(79, 70, 229, 0.12);
-  --glow-3: rgba(45, 212, 191, 0.1);
+  --bg: #0b1020;
+  --glow-1: rgba(113, 139, 255, 0.1);
+  --glow-2: rgba(45, 212, 191, 0.05);
 
-  --surface: rgba(30, 41, 59, 0.65);
-  --surface-hover: rgba(40, 53, 76, 0.75);
-  --surface-inset: rgba(148, 163, 184, 0.07);
-  --surface-sunken: rgba(148, 163, 184, 0.08);
-  --surface-raised: rgba(24, 34, 53, 0.97);
-  --surface-modal: rgba(24, 34, 53, 0.9);
-  --sidebar: rgba(15, 23, 42, 0.78);
-  --sheen: rgba(255, 255, 255, 0.04);
-  --field: rgba(11, 17, 32, 0.55);
-  --scrim: rgba(3, 7, 18, 0.6);
+  --surface: #111827;
+  --surface-2: #151e30;
+  --surface-muted: #0e1526;
+  --surface-hover: #172135;
+  --surface-active: #1b2740;
+  --glass: rgba(17, 24, 39, 0.78);
+  --glass-border: rgba(39, 52, 73, 0.9);
+  --field: #0e1526;
+  --scrim: rgba(2, 6, 18, 0.62);
 
-  --glass-border: rgba(148, 163, 184, 0.16);
-  --edge: rgba(0, 0, 0, 0.35);
-  --border: rgba(148, 163, 184, 0.16);
-  --border-strong: rgba(148, 163, 184, 0.3);
+  --border: #273449;
+  --border-strong: #34445f;
 
   --text: #f1f5f9;
   --text-2: #94a3b8;
+  --text-3: #64748b;
 
-  --primary: #8195e5;
-  --primary-hover: #95a7ee;
-  --primary-soft: rgba(129, 149, 229, 0.16);
-  --on-primary: #0b1120;
-  --accent: #2dd4bf;
-  --accent-text: #2dd4bf;
-  --accent-soft: rgba(45, 212, 191, 0.13);
+  --primary: #718bff;
+  --primary-hover: #8399ff;
+  --primary-soft: rgba(113, 139, 255, 0.15);
+  --primary-text: #93a6ff;
+  --on-primary: #0b1020;
 
-  --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.14);
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.13);
   --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.14);
+  --warning-soft: rgba(251, 191, 36, 0.13);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.13);
+  --neutral-soft: rgba(148, 163, 184, 0.12);
 
-  --focus-ring: rgba(129, 149, 229, 0.6);
-  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.22);
-  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px rgba(0, 0, 0, 0.32);
-  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.4), 0 20px 50px rgba(0, 0, 0, 0.5);
-  --scroll-thumb: rgba(148, 163, 184, 0.3);
+  --focus-ring: rgba(113, 139, 255, 0.55);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.35), 0 24px 60px rgba(0, 0, 0, 0.55);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --scroll-thumb: rgba(148, 163, 184, 0.28);
 
-  --avatar-bg: 40% 24%;
+  --avatar-bg: 40% 22%;
   --avatar-fg: 80% 82%;
+}
+
+/* Names older styles (and the development-only demos) still read. */
+:root {
+  --fg: var(--text);
+  --muted: var(--text-2);
+  --panel: var(--surface);
+  --error: var(--danger);
+  --surface-raised: var(--surface-2);
+  --surface-sunken: var(--surface-muted);
+  --accent: var(--success);
+  --accent-text: var(--success);
+  --accent-soft: var(--success-soft);
 }

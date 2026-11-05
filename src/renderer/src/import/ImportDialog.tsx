@@ -3,11 +3,12 @@
 // repeated in the file, or with problems), then save. The file is read and checked in the main
 // process; this screen sees names and short descriptions only, never Aadhaar or passport numbers.
 import { FileSpreadsheet, Upload } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ERROR_INFO } from '../../../shared/ipc/errors';
 import type { ImportKind } from '../../../shared/import/import-kinds';
 import type { ImportCommitResult, ImportPreview } from '../../../shared/ipc/contract';
 import { Modal } from '../ui/Modal';
+import { toast } from '../ui/toast';
 
 const NOUNS: Record<ImportKind, { one: string; many: string; title: string }> = {
   clients: { one: 'client', many: 'clients', title: 'Import health clients' },
@@ -33,6 +34,8 @@ type Step =
 export function ImportButton(props: {
   kind: ImportKind;
   onImported: () => void;
+  /** Opens the dialog whenever this number goes up (a request from another screen). */
+  openRequest?: number;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>({ step: 'start' });
@@ -41,6 +44,7 @@ export function ImportButton(props: {
   const [notice, setNotice] = useState<string | null>(null);
   const [includeDuplicates, setIncludeDuplicates] = useState(false);
   const noun = NOUNS[props.kind];
+  const seenRequest = useRef(props.openRequest ?? 0);
 
   const close = () => {
     setOpen(false);
@@ -52,6 +56,14 @@ export function ImportButton(props: {
     setNotice(null);
     setIncludeDuplicates(false);
   };
+
+  useEffect(() => {
+    if ((props.openRequest ?? 0) > seenRequest.current) {
+      seenRequest.current = props.openRequest ?? 0;
+      reset();
+      setOpen(true);
+    }
+  });
 
   const template = async (format: 'xlsx' | 'csv') => {
     setError(null);
@@ -87,7 +99,10 @@ export function ImportButton(props: {
           ? 'This preview has expired or was already saved. Choose the file again.'
           : r.error.message,
       );
-    else setStep({ step: 'done', result: r.data });
+    else {
+      setStep({ step: 'done', result: r.data });
+      if (r.data.saved > 0) toast(`Imported ${count(r.data.saved, noun.one, noun.many)}.`);
+    }
   };
 
   return (
