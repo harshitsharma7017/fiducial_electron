@@ -20,6 +20,9 @@ files:
   # node-addon-api headers are left out. (Platform-level "files" lists are not used: one holding
   # only exclusions makes electron-builder include the whole repository.)
   - '!node_modules/better-sqlite3-multiple-ciphers/{deps,src}/**'
+  # The module loads its prebuilt binary (prebuilds/); a compile on the build machine (Windows
+  # runners leave project files and logs there) is never used.
+  - '!node_modules/better-sqlite3-multiple-ciphers/build/**'
   - '!node_modules/better-sqlite3-multiple-ciphers/prebuilds/{linux,linuxmusl}-*.node'
   - '!node_modules/node-addon-api/**'
 asar: true
