@@ -54,6 +54,8 @@ import {
   NIVA_SUMS_INSURED,
   type NivaHealthPlan,
 } from '../../../shared/insurers/niva-health';
+import type { HdfcMstRun } from '../../../shared/insurers/hdfc';
+import { HdfcRetailPanel } from '../insurers/HdfcPanels';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
 
 const RELATIONSHIP_LABELS: Record<Relationship, string> = {
@@ -337,6 +339,8 @@ export function ClientsPanel(): React.JSX.Element | null {
             {quote.product === 'nia-health' && <NiaHealthPanel clientId={quote.id} />}
             {quote.product === 'nia-pa' && <NiaPaPanel clientId={quote.id} />}
             {quote.product === 'niva-health' && <NivaHealthPanel clientId={quote.id} />}
+            {quote.product === 'hdfc-mst' && <HdfcMstPanel clientId={quote.id} />}
+            {quote.product === 'hdfc-retail' && <HdfcRetailPanel clientId={quote.id} />}
             {PROPOSAL_FORMS.map(
               (f) =>
                 quote.product === f.product && (
@@ -402,7 +406,108 @@ function healthQuoteOptions(c: ClientSummary): QuoteOption[] {
       label: 'Health premium',
       description: 'Calculates and reads the premium',
     },
+    {
+      key: 'hdfc-mst',
+      insurer: 'HDFC ERGO',
+      label: 'MST (Medisure Super Top-up) premium',
+      description: 'Fills PIE and reads the premium',
+      ...noMembers,
+    },
+    {
+      key: 'hdfc-retail',
+      insurer: 'HDFC ERGO',
+      label: 'Optima Secure, Optima Restore, Energy premium',
+      description: 'Fills PIE and reads the premium',
+      ...noMembers,
+    },
   ];
+}
+
+/** HDFC ERGO: fills PIE's MST form for the client's members and reads the premium. */
+function HdfcMstPanel(props: { clientId: string }): React.JSX.Element {
+  const [cover, setCover] = useState<HdfcMstRun['cover']>('family-floater');
+  const [years, setYears] = useState<HdfcMstRun['years']>(1);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    const r = await window.fqf.quotes
+      .run({
+        clientId: props.clientId,
+        insurerId: 'hdfc-ergo',
+        product: 'hdfc-mst',
+        run: { cover, years },
+      })
+      .catch(() => null);
+    setBusy(false);
+    setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
+  };
+  return (
+    <div className="quote-panel">
+      <p className="insurer-note">
+        <strong>HDFC ERGO, MST (Medisure Super Top-up), PIE.</strong> Sign in to HDFC and open any
+        product from 1up once (Issue Quotes &amp; Policy), so the tab is signed in to PIE. The app
+        opens the MST form, fills the cover, term and members, and reads the premium PIE works out.
+        It never presses Generate Quote.
+      </p>
+      <label>
+        Cover{' '}
+        <select value={cover} onChange={(e) => setCover(e.target.value as HdfcMstRun['cover'])}>
+          <option value="family-floater">Family Floater</option>
+          <option value="individual">Individual (one member)</option>
+        </select>
+      </label>{' '}
+      <label>
+        Term{' '}
+        <select
+          value={years}
+          onChange={(e) => setYears(Number(e.target.value) as HdfcMstRun['years'])}
+        >
+          <option value={1}>1 year</option>
+          <option value={2}>2 years</option>
+          <option value={3}>3 years</option>
+        </select>
+      </label>
+      <div className="insurer-actions">
+        <button type="button" disabled={busy} onClick={() => void run()}>
+          {busy ? 'Working on PIE…' : 'Get HDFC ERGO MST premium'}
+        </button>
+      </div>
+      {result && 'error' in result && (
+        <p className="error" role="alert">
+          {result.error}
+        </p>
+      )}
+      {result && 'outcome' in result && (
+        <div role="status">
+          {result.premium && (
+            <p>
+              <strong>₹{result.premium.amount}</strong> &mdash; {result.premium.label}
+            </p>
+          )}
+          <p className={result.outcome === 'ready' ? undefined : 'error'}>
+            {result.step ? `${result.step}: ` : ''}
+            {result.message}
+          </p>
+          {result.problems.length > 0 && (
+            <ul>
+              {result.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          {result.toDo && result.toDo.length > 0 && (
+            <ul>
+              {result.toDo.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ClientForm(props: {

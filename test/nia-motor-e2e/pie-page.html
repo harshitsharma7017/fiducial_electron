@@ -1,0 +1,494 @@
+<!doctype html>
+<!--
+  A local copy of HDFC ERGO's PIE forms, drawn from the recordings hdfc-ergo-2026-11-05T11-37-58-944Z
+  (Private Car, Two Wheeler Blaze) and hdfc-ergo-2026-11-05T11-50-09-251Z (MST). Served at
+  /PrivateCar/CreateQuote, /TwoWheelerBlaze/CreateQuote, /MST/CreateQuote and
+  /WrapperApi/RedirectToDashboardGet (a PIE page the run moves from). Motor: product and customer
+  type buttons, transaction type labels, the registration number boxes (two disabled for a new
+  vehicle), make, model and RTO boxes suggesting PIE's lists (uib-typeahead: aria-owns, li
+  role=option with a link), dates typed dd/mm/yyyy, year of manufacture filled after the
+  registration date, IDV checked against a range ("User Idv should be in between …"), the previous
+  policy for a renewal, Personal Details folded until its heading is pressed, Calculate Premium
+  (#btnSubmit) showing Premium Details. MST: plan labels, Member Detail, Adult and Child counters
+  (input buttons), member tabs with date of birth and relation, Cover Detail showing the premium.
+  Generate Quote sets window.__saved (never to be pressed by the run).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>PIE</title>
+    <style>
+      body {
+        font: 14px sans-serif;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .dropdown-menu {
+        border: 1px solid #888;
+        list-style: none;
+        padding: 2px;
+        margin: 0;
+      }
+      .dropdown-menu li {
+        padding: 2px;
+      }
+      label,
+      button {
+        margin: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      const $ = (s, r = document) => r.querySelector(s);
+      const path = location.pathname.toLowerCase();
+      Object.assign(window, { __saved: false, __calculated: 0, __picked: {} });
+      const app = $('#app');
+      const fmt = (n) => n.toLocaleString('en-IN');
+
+      // A box suggesting PIE's list, as uib-typeahead draws it.
+      let lists = 0;
+      function typeahead(input, items, onPick) {
+        const id = `typeahead-${++lists}`;
+        const ul = document.createElement('ul');
+        ul.className = 'dropdown-menu hidden';
+        ul.id = id;
+        input.after(ul);
+        const show = () => {
+          const typed = input.value.trim().toLowerCase();
+          const shown = items().filter((i) => typed.length > 0 && i.toLowerCase().includes(typed));
+          ul.innerHTML = shown
+            .map((i, k) => `<li role="option" id="${id}-option-${k}"><a href="#">${i}</a></li>`)
+            .join('');
+          ul.classList.toggle('hidden', shown.length === 0);
+          if (shown.length) input.setAttribute('aria-owns', id);
+          else input.removeAttribute('aria-owns');
+          ul.querySelectorAll('li').forEach((li) =>
+            li.addEventListener('click', (e) => {
+              e.preventDefault();
+              input.value = li.textContent;
+              ul.classList.add('hidden');
+              onPick(li.textContent);
+            }),
+          );
+        };
+        input.addEventListener('input', show);
+        input.addEventListener('focus', show);
+      }
+
+      if (path.includes('/wrapperapi/')) {
+        app.innerHTML = '<h3>PIE Dashboard</h3><p>Redirecting…</p>';
+      } else if (path === '/privatecar/createquote' || path === '/twowheelerblaze/createquote') {
+        const car = path.startsWith('/privatecar');
+        const productIds = car ? 'ProductType' : 'TwPolicyType';
+        const MAKES = ['ASHOK LEYLAND', 'HONDA', 'MARUTI', 'MAHINDRA'];
+        const MODELS = {
+          MARUTI: ['SWIFT DZIRE - VXI', 'SWIFT - LXI', 'SWIFT - VXI'],
+          HONDA: ['ACTIVA 6G - STD', 'CITY - V'],
+        };
+        const RTOS = ['ABOHAR - PUNJAB', 'AHMEDNAGAR - MAHARASHTRA', 'AHMEDABAD - GUJARAT'];
+        app.innerHTML = `
+          <h3>Quote - ${car ? 'PRIVATE CAR POLICY' : 'TWO WHEELER POLICY'}</h3>
+          <form name="${car ? 'PrivateCarForm' : 'TwoWheelerBlazeForm'}" onsubmit="return false;">
+            <div id="headingOne">Vehicle Details</div>
+            <div id="Risk">
+              ${['Comprehensive', 'Liability', 'Standalone OD'].map((t, i) => `<button type="button" id="${productIds}${i + 1}" name="${car ? 'PcProductType' : 'TwProductType'}">${t}</button>`).join('')}
+              ${['Individual', 'Corporate', 'Govt. Undertaking'].map((t) => `<button type="button" id="option1" name="CustomerType">${t}</button>`).join('')}
+              <label id="option1" name="TransactionType">Renew ${car ? 'Motor' : 'TwoWheeler'} Policy from other Insurer</label>
+              <label id="option2" name="TransactionType">Buy Insurance for New ${car ? 'Car' : 'Vehicle'}</label>
+              <div>${[29, 30, 31, 32].map((n) => `<input type="text" id="RegistrationNumber${n}" name="RegistrationNumber${n}">`).join(' - ')}</div>
+              <div><input type="text" id="ManufacturerName" name="ManufacturerName" placeholder="Type i.e. HON"></div>
+              <div><input type="text" id="ModelName" name="ModelName" placeholder="Type i.e. CIV"></div>
+              <div><input type="text" id="RtoLocation" name="RtoLocation" placeholder="Type i.e. Ahm"></div>
+              <div><input type="text" id="Risk1" name="Risk1" placeholder="DD/MM/YYYY"><button type="button" id="RegDate">&#128197;</button></div>
+              <select id="YearOfManufacturer" name="YearOfManufacturer"><option value="">--Select--</option></select>
+              <input type="text" id="IDV_SumInsured" name="IDV_SumInsured">
+              <input type="text" id="EngineNumber" name="EngineNumber"><input type="text" id="ChassisNumber" name="ChassisNumber">
+              <div id="previous" class="hidden">
+                <select id="Company" name="Company"><option value="">-- Choose Company Name --</option>${['BAJAJ ALLIANZ GENERAL INSURANCE CO.LTD', 'ICICI LOMBARD'].map((c) => `<option value="${c}">${c}</option>`).join('')}</select>
+                <input type="text" id="PolicyEffectiveFromDate" name="PrevPolicyEndDate" placeholder="DD/MM/YYYY">
+                <select name="PrevPolicyType"><option value="">-- Choose Prev. Policy Type --</option><option value="string:Comprehensive Policy">Comprehensive Policy</option><option value="string:TP">TP</option></select>
+                <select name="PrevNcbPercentage"><option value="">--</option>${[0, 20, 25, 35, 45, 50, 55, 65].map((n) => `<option value="${n}">${n}</option>`).join('')}</select>
+                <label name="PrevClaims">Yes</label><label name="PrevClaims">No</label>
+              </div>
+            </div>
+            <div id="headingFive">Personal Details</div>
+            <div id="personal" class="hidden">
+              <input type="text" id="CustomerName" name="CustomerName">
+              <input type="text" id="CustomerEmailMask" name="CustomerEmailMask">
+              <input type="text" id="CustomerMobileMask" name="CustomerMobileMask">
+            </div>
+            <p id="complaint"></p>
+            <button type="button" id="btnSubmit" name="name">Calculate Premium <span>Premium Details</span></button>
+            <div id="premium" class="hidden"><p>Net Premium <strong id="net"></strong></p><p>Total Payable Premium <strong id="total"></strong></p></div>
+            <button type="button" id="generate" name="name">Generate Quote</button>
+          </form>`;
+        const form = (window.__form = {
+          cover: null,
+          customer: null,
+          business: null,
+          make: null,
+          model: null,
+          rto: null,
+          prevClaims: null,
+        });
+        document.querySelectorAll(`[id^="${productIds}"]`).forEach((b) =>
+          b.addEventListener('click', () => {
+            form.cover = b.textContent;
+          }),
+        );
+        document.querySelectorAll('[name="CustomerType"]').forEach((b) =>
+          b.addEventListener('click', () => {
+            form.customer = b.textContent;
+          }),
+        );
+        const renewal = (on) => {
+          $('#previous').classList.toggle('hidden', !on);
+          $('#RegistrationNumber30').disabled = !on;
+          $('#RegistrationNumber31').disabled = !on;
+        };
+        renewal(false);
+        document.querySelectorAll('label[name="TransactionType"]').forEach((l) =>
+          l.addEventListener('click', () => {
+            setTimeout(() => {
+              form.business = l.textContent.startsWith('Renew') ? 'renewal' : 'new';
+              renewal(form.business === 'renewal');
+            }, 300);
+          }),
+        );
+        document.querySelectorAll('label[name="PrevClaims"]').forEach((l) =>
+          l.addEventListener('click', () => {
+            form.prevClaims = l.textContent;
+          }),
+        );
+        typeahead(
+          $('#ManufacturerName'),
+          () => MAKES,
+          (m) => {
+            form.make = m;
+          },
+        );
+        typeahead(
+          $('#ModelName'),
+          () => MODELS[form.make] ?? [],
+          (m) => {
+            form.model = m;
+          },
+        );
+        typeahead(
+          $('#RtoLocation'),
+          () => RTOS,
+          (r) => {
+            form.rto = r;
+          },
+        );
+        $('#Risk1').addEventListener('input', () => {
+          const y = Number($('#Risk1').value.split('/')[2] || 0);
+          if (!y) return;
+          setTimeout(() => {
+            $('#YearOfManufacturer').innerHTML =
+              '<option value="">--Select--</option>' +
+              [y, y - 1, y - 2].map((v) => `<option value="${v}">${v}</option>`).join('');
+          }, 300);
+        });
+        $('#headingFive').addEventListener('click', () =>
+          $('#personal').classList.toggle('hidden'),
+        );
+        $('#generate').addEventListener('click', () => {
+          window.__saved = true;
+        });
+        $('#btnSubmit').addEventListener('click', () => {
+          window.__calculated += 1;
+          $('#premium').classList.add('hidden');
+          const idv = Number($('#IDV_SumInsured').value || 0);
+          const missing =
+            !form.make ||
+            !form.model ||
+            !form.rto ||
+            !$('#Risk1').value ||
+            !$('#YearOfManufacturer').value ||
+            !$('#CustomerName').value ||
+            !$('#CustomerMobileMask').value;
+          if (missing) {
+            $('#complaint').innerHTML = '<label>Name is required</label>';
+            return;
+          }
+          if (form.cover !== 'Liability' && (idv < 700000 || idv > 1300000)) {
+            $('#complaint').innerHTML =
+              '<label>User Idv should be in between 700000 - 1300000</label>';
+            return;
+          }
+          $('#complaint').innerHTML = '';
+          setTimeout(() => {
+            const net =
+              form.cover === 'Liability'
+                ? 3416
+                : Math.round(idv * 0.021) + (form.business === 'renewal' ? 0 : 1500);
+            $('#net').textContent = `Rs${net}`;
+            $('#total').textContent = `Rs${Math.round(net * 1.18)}`;
+            $('#premium').classList.remove('hidden');
+          }, 800);
+        });
+      } else if (path === '/mst/createquote') {
+        app.innerHTML = `
+          <h3>Quote - MEDISURE SUPER TOPUP</h3>
+          <form name="MSTForm" onsubmit="return false;">
+            <label id="TransactionType1" name="TransactionType">New Business</label><label id="TransactionType3" name="TransactionType">Renew</label>
+            ${['Individual', 'Family', 'Family Floater'].map((t) => `<label name="Risk101">${t}</label>`).join('')}
+            ${['1 Year', '2 Years', '3 Years'].map((t, i) => `<label id="Risk102_${i + 1}" name="Risk102">${t}</label>`).join('')}
+            <button type="button" name="name" id="memberButton">Member Detail</button>
+            <div id="memberDetails" class="hidden">
+              <div><span>Adult</span><input type="button" id="buttonMinusAdult" value="-"><input type="text" id="adultCount" value="1" disabled><input type="button" id="buttonPlusAdult" value="+"></div>
+              <div><span>Child</span><input type="button" id="buttonMinusChild" value="-"><input type="text" id="childCount" value="0" disabled><input type="button" id="buttonPlusChild" value="+"></div>
+              <ul id="memberDetail"></ul>
+              <div id="memberForms"></div>
+              <button type="button" name="name" id="coverButton">Cover Detail</button>
+            </div>
+            <div id="summary" class="hidden"><h4 id="headline"></h4><div id="headingTwo">Quote Summary</div><p>Net Premium <span id="net"></span></p><p>Total Payable Premium <span id="total"></span></p></div>
+            <p id="complaint"></p>
+            <button type="button" name="name" id="generate">Generate Quote</button>
+          </form>`;
+        const plan = (window.__plan = { business: null, cover: null, term: null });
+        document.querySelectorAll('[name="TransactionType"]').forEach((l) =>
+          l.addEventListener('click', () => {
+            plan.business = l.textContent;
+          }),
+        );
+        document.querySelectorAll('[name="Risk101"]').forEach((l) =>
+          l.addEventListener('click', () => {
+            plan.cover = l.textContent;
+          }),
+        );
+        document.querySelectorAll('[name="Risk102"]').forEach((l) =>
+          l.addEventListener('click', () => {
+            plan.term = l.textContent;
+          }),
+        );
+        $('#memberButton').addEventListener('click', () =>
+          $('#memberDetails').classList.remove('hidden'),
+        );
+        const RELATIONS = [
+          '--Select--',
+          'Dependent Daughter',
+          'Dependent Son',
+          'Father',
+          'Father in Law',
+          'Mother',
+          'Mother in Law',
+          'Self',
+          'Spouse',
+        ];
+        const members = () => {
+          const a = Number($('#adultCount').value),
+            c = Number($('#childCount').value);
+          const tabs = [
+            ...Array.from({ length: a }, (_, i) => `Adult${i + 1}`),
+            ...Array.from({ length: c }, (_, i) => `Child${i + 1}`),
+          ];
+          const kept = Array.from(document.querySelectorAll('[id^="Info02_"]')).map((i) => i.value);
+          const keptRel = Array.from(document.querySelectorAll('[id^="Info12_"]')).map(
+            (s) => s.value,
+          );
+          $('#memberDetail').innerHTML = tabs
+            .map((t) => `<li><a href="#" id="${t}">${t[0]}${t.replace(/\D/g, '')}</a></li>`)
+            .join('');
+          $('#memberForms').innerHTML = tabs
+            .map(
+              (t, n) =>
+                `<div class="member${n ? ' hidden' : ''}" data-n="${n}"><input type="text" id="Info02_${n}" name="Info02" placeholder="DD/MM/YYYY"><select id="Info12_${n}" name="Info12">${RELATIONS.map((r) => `<option value="${r === '--Select--' ? '' : 'string:' + r}">${r}</option>`).join('')}</select></div>`,
+            )
+            .join('');
+          tabs.forEach((t, n) => {
+            if (kept[n]) $(`#Info02_${n}`).value = kept[n];
+            if (keptRel[n]) $(`#Info12_${n}`).value = keptRel[n];
+            $(`#${t}`).addEventListener('click', (e) => {
+              e.preventDefault();
+              document
+                .querySelectorAll('.member')
+                .forEach((m) => m.classList.toggle('hidden', m.dataset.n !== String(n)));
+            });
+          });
+        };
+        const counter = (box, by, min, max) => () => {
+          const n = Number(box.value) + by;
+          if (n < min || n > max) return;
+          setTimeout(() => {
+            box.value = String(n);
+            members();
+          }, 150);
+        };
+        $('#buttonPlusAdult').addEventListener('click', counter($('#adultCount'), 1, 1, 6));
+        $('#buttonMinusAdult').addEventListener('click', counter($('#adultCount'), -1, 1, 6));
+        $('#buttonPlusChild').addEventListener('click', counter($('#childCount'), 1, 0, 4));
+        $('#buttonMinusChild').addEventListener('click', counter($('#childCount'), -1, 0, 4));
+        members();
+        $('#generate').addEventListener('click', () => {
+          window.__saved = true;
+        });
+        $('#coverButton').addEventListener('click', () => {
+          const dobs = Array.from(document.querySelectorAll('[id^="Info02_"]')).map((i) => i.value);
+          const rels = Array.from(document.querySelectorAll('[id^="Info12_"]')).map((s) => s.value);
+          if (dobs.some((d) => !/^\d{2}\/\d{2}\/\d{4}$/.test(d)) || rels.some((r) => !r)) {
+            $('#complaint').innerHTML = '<label>Date Of Birth is required</label>';
+            return;
+          }
+          $('#complaint').innerHTML = '';
+          setTimeout(() => {
+            const total = 1800 * dobs.length + (plan.term === '2 Years' ? 1500 : 0);
+            $('#headline').textContent = `Rs${total}`;
+            $('#net').textContent = `Rs${total}`;
+            $('#total').textContent = `Rs${total}`;
+            $('#summary').classList.remove('hidden');
+          }, 800);
+        });
+      } else if (path === '/optimasecure/createquote') {
+        // Boxes that open a list of links when pressed (PIE's retail health forms).
+        const listBox = (input, items) => {
+          const ul = document.createElement('ul');
+          ul.className = 'dropdown-menu hidden';
+          ul.innerHTML = items.map((i) => `<li><a href="#">${i}</a></li>`).join('');
+          input.after(ul);
+          input.addEventListener('click', () => ul.classList.remove('hidden'));
+          ul.querySelectorAll('a').forEach((a) =>
+            a.addEventListener('click', (e) => {
+              e.preventDefault();
+              input.value = a.textContent;
+              ul.classList.add('hidden');
+              input.dispatchEvent(new Event('change'));
+            }),
+          );
+        };
+        app.innerHTML = `
+          <h3>Optima Secure</h3>
+          <form name="OptimaSecureForm" onsubmit="return false;">
+            <p>I would like to Insure</p>
+            <button type="button" id="ProductType_Individual" name="ProductType">Individual</button>
+            <button type="button" id="ProductType_Family" name="ProductType">Family</button>
+            <div><input type="text" id="BusinessType" name="BusinessType" placeholder="Business" readonly></div>
+            <div><input type="text" id="OptimaSecurePlanType" name="OptimaSecurePlanType" placeholder="Optima Secure" readonly></div>
+            <div><input type="text" id="AgeOfIndividual" name="AgeOfIndividual" placeholder="Age"></div>
+            <div><input type="text" name="PolicyPeriod" placeholder="1 Year" readonly></div>
+            <div><input type="text" name="SumInsuredInLacs" placeholder="Sum Insured" readonly></div>
+            <button type="button" name="name" id="productDetails">PRODUCT DETAILS</button>
+            <div id="product" class="hidden">
+              <div><input type="text" name="IndividualFamilyPlan" readonly></div>
+              <div><input type="text" id="PospType" name="PospType" placeholder="Type i.e. POSP" readonly></div>
+              <div><input type="text" id="VcSppospName" name="VcSppospName" placeholder="SP\\POSP Name or Code"></div>
+              <button type="button" name="name" id="basicDetails">BASIC DETAILS</button>
+            </div>
+            <p id="complaint"></p>
+            <div id="premium" class="hidden"><p>Total Premium <strong id="total"></strong></p></div>
+            <button type="button" name="name" id="generate">Generate Quote</button>
+          </form>`;
+        const plan = (window.__plan = { cover: null, posp: null });
+        document.querySelectorAll('[name="ProductType"]').forEach((b) =>
+          b.addEventListener('click', () => {
+            plan.cover = b.textContent;
+          }),
+        );
+        listBox($('#BusinessType'), ['New Business', 'Renewal Business']);
+        listBox($('#OptimaSecurePlanType'), [
+          'Optima Secure',
+          'Optima Super Secure',
+          'Optima Secure Global',
+        ]);
+        listBox($('[name="PolicyPeriod"]'), ['1 Year', '2 Year', '3 Year']);
+        listBox($('[name="SumInsuredInLacs"]'), ['5', '10', '15', '20', '50']);
+        listBox($('[name="IndividualFamilyPlan"]'), [
+          '1Adult+1Child',
+          '2Adult',
+          '2Adult+1Child',
+          '2Adult+2Child',
+        ]);
+        listBox($('#PospType'), ['POSP', 'Non POSP']);
+        typeahead(
+          $('#VcSppospName'),
+          () => ['SYNTHETIC POSP - 1234', 'OTHER POSP - 9876'],
+          (p) => {
+            plan.posp = p;
+          },
+        );
+        $('#productDetails').addEventListener('click', () => {
+          if ($('#BusinessType').value !== 'New Business' || !$('#AgeOfIndividual').value) {
+            $('#complaint').innerHTML = '<label>Age is required</label>';
+            return;
+          }
+          $('#complaint').innerHTML = '';
+          setTimeout(() => $('#product').classList.remove('hidden'), 300);
+        });
+        $('#generate').addEventListener('click', () => {
+          window.__saved = true;
+        });
+        $('#basicDetails').addEventListener('click', () => {
+          if (!plan.posp) {
+            $('#complaint').innerHTML = '<label>Please select POSP Name.</label>';
+            return;
+          }
+          setTimeout(() => {
+            const total =
+              Number($('[name="SumInsuredInLacs"]').value) * 1200 +
+              Number($('#AgeOfIndividual').value) * 100 +
+              ($('[name="PolicyPeriod"]').value === '2 Year' ? 9000 : 0);
+            $('#total').textContent = `Rs${total}`;
+            $('#premium').classList.remove('hidden');
+          }, 800);
+        });
+      } else if (path === '/travel/createquote') {
+        app.innerHTML = `
+          <h3>Quote - RETAIL TRAVEL POLICY</h3>
+          <form name="TravelForm" onsubmit="return false;">
+            <button type="button" id="TransactionType1" name="TransactionType">New</button>
+            <button type="button" id="TransactionType2" name="TransactionType">Renew</button>
+            <button type="button" name="CoverType">Individual</button><button type="button" name="CoverType">Family Floater</button>
+            <input type="text" id="PolicyEffectiveFromDate" name="PolicyEffectiveFromDate" placeholder="DD/MM/YYYY">
+            <input type="text" id="PolicyEffectiveToDate" name="PolicyEffectiveToDate" placeholder="DD/MM/YYYY">
+            <div><input type="text" id="Risk103" name="Risk103" placeholder="Type i.e. Gold"></div>
+            <button type="button" name="name" id="memberButton">Member Detail</button>
+            <div id="members" class="hidden">
+              <ul><li><a href="#" id="Adult1">A1</a></li></ul>
+              <input type="text" id="Info02_0" name="Info02" placeholder="DD/MM/YYYY">
+              <select id="Info12_0" name="Info12"><option value="">--Select--</option><option value="string:Self">Self</option><option value="string:Spouse">Spouse</option></select>
+              <button type="button" name="name" id="calc">Calculate Premium <span>Premium Details</span></button>
+            </div>
+            <div id="premium" class="hidden"><p>Total Payable Premium <strong id="total"></strong></p></div>
+            <button type="button" name="name" id="generate">Generate Quote</button>
+          </form>`;
+        const plan = (window.__plan = { business: null, cover: null, plan: null });
+        document.querySelectorAll('[name="TransactionType"]').forEach((b) =>
+          b.addEventListener('click', () => {
+            plan.business = b.textContent;
+          }),
+        );
+        document.querySelectorAll('[name="CoverType"]').forEach((b) =>
+          b.addEventListener('click', () => {
+            plan.cover = b.textContent;
+          }),
+        );
+        typeahead(
+          $('#Risk103'),
+          () => ['Gold', 'Gold Plus', 'Silver', 'Platinum'],
+          (p) => {
+            plan.plan = p;
+          },
+        );
+        $('#memberButton').addEventListener('click', () =>
+          $('#members').classList.remove('hidden'),
+        );
+        $('#generate').addEventListener('click', () => {
+          window.__saved = true;
+        });
+        $('#calc').addEventListener('click', () => {
+          if (!plan.plan || !$('#Info02_0').value || !$('#PolicyEffectiveToDate').value) return;
+          setTimeout(() => {
+            $('#total').textContent = 'Rs1888';
+            $('#premium').classList.remove('hidden');
+          }, 800);
+        });
+      } else {
+        app.innerHTML = '<h3>404 Page Not Found</h3>';
+      }
+    </script>
+  </body>
+</html>

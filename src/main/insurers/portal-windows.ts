@@ -26,9 +26,11 @@
 //   out: its tabs are closed, the partition's cookies, storage and caches are wiped and the
 //   kept session cookies deleted, so the next open starts at the login page. Sessions with no
 //   clock are wiped at start-up.
-// - The insurer's own server may end a session sooner (for example after inactivity). The app does
-//   not keep sessions alive artificially: the portal then shows its login page, and the app fills
-//   it again.
+// - While a session runs, the app keeps the portal from signing the advisor out for inactivity
+//   (session-alive.ts, decision of 5 November 2026): activity in its pages and a background fetch
+//   of its page when it has been quiet, and "Stay signed in" pressed on its session warnings. A
+//   portal that ends a session anyway (a fixed limit of its own) shows its login page, and the app
+//   fills it again.
 // Sign-in details are read from the vault just before a fill and are never logged or sent to
 // the renderer.
 import { session, type Session } from 'electron';
@@ -53,6 +55,7 @@ import { keyboardFill } from './keyboard-fill';
 import { keyboardTargetFor } from './keyboard-target';
 import { insurerLoginAgent, type FillCommand, type FillResult } from './login-agent';
 import type { SessionClock } from './session-clock';
+import { createSessionAlive } from './session-alive';
 
 /** The isolated world the agent runs in, apart from the portal's own scripts. */
 const WORLD_ID = 1801;
@@ -107,6 +110,8 @@ export function createPortalWindows(deps: {
   keeper?: SessionKeeper;
   /** Where the pages are shown: tabs of the app window. */
   host: PortalHost;
+  /** Told whether any insurer session runs (the app is kept from being suspended meanwhile). */
+  onSessionsRunning?: (any: boolean) => void;
 }): PortalWindows {
   const host = deps.host;
   /** Fill again on demand (Show portal): the agent keeps anything already in the boxes. */
@@ -121,6 +126,21 @@ export function createPortalWindows(deps: {
   /** Where each window reopens after a restart (the page it was on), until it is opened. */
   const reopenAt = new Map<string, string>();
   const watched = new WeakSet<Session>();
+  // Keeping sessions alive while the advisor is away (session-alive.ts).
+  const alive = createSessionAlive({
+    running: () =>
+      INSURER_PORTALS.map((p) => p.id).filter(
+        (id) => deps.clock.startedAt(id) !== null && host.portalOf(id) !== null,
+      ),
+    pagesOf: (id) => host.pagesOf(id),
+    signedIn: (id, url) => {
+      const portal = findPortal(id);
+      return !!portal && mayNavigate(portal, url, true) && !mayFillLogin(portal, url);
+    },
+    logger: deps.logger,
+    ...(deps.onSessionsRunning ? { onRunning: deps.onSessionsRunning } : {}),
+  });
+  alive.start();
   const scheduleSave = (id: string): void => {
     const keeper = deps.keeper;
     if (!keeper || deps.clock.startedAt(id) === null) return;
@@ -151,6 +171,7 @@ export function createPortalWindows(deps: {
     if (!watched.has(ses)) {
       watched.add(ses);
       ses.cookies.on('changed', () => scheduleSave(id));
+      alive.watchSession(id, ses);
     }
     const portal = findPortal(id);
     if (portal) {
@@ -194,6 +215,7 @@ export function createPortalWindows(deps: {
     host.closeInsurer(id);
     lastFill.delete(id);
     forgetKept(id);
+    alive.forget(id);
     await wipe(sessionOf(id));
     deps.clock.stop(id);
     if (hadSession) {

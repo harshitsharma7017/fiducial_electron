@@ -12,6 +12,12 @@ import { toast } from '../ui/toast';
 import { QuoteWorkspace } from '../quote/QuoteWorkspace';
 import type { VehicleSummary } from '../../../shared/contracts/vehicle';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
+import {
+  HDFC_MOTOR_NAMES,
+  HDFC_PREVIOUS_INSURERS,
+  hdfcProductFor,
+  type HdfcMotorRun,
+} from '../../../shared/insurers/hdfc';
 import { showAppScreens } from '../insurers/PortalTabs';
 import {
   EMPTY_VEHICLE,
@@ -299,6 +305,7 @@ function MotorQuotePanel(props: { vehicle: VehicleSummary }): React.JSX.Element 
           </div>
         </>
       )}
+      <HdfcMotorSection vehicle={vehicle} />
       {result && 'error' in result && (
         <p className="error" role="alert">
           {result.error}
@@ -332,5 +339,190 @@ function MotorQuotePanel(props: { vehicle: VehicleSummary }): React.JSX.Element 
         </div>
       )}
     </div>
+  );
+}
+
+/** HDFC ERGO: fills PIE's motor form for the vehicle and reads the premium (src/main/quotes/run-hdfc.ts). */
+function HdfcMotorSection(props: { vehicle: VehicleSummary }): React.JSX.Element | null {
+  const { vehicle } = props;
+  const product = hdfcProductFor(vehicle.vehicleClass);
+  const renewal = vehicle.condition === 'pre-owned';
+  const twoOrCar = product === 'private-car' || product === 'two-wheeler';
+  const [cover, setCover] = useState<HdfcMotorRun['cover']>('comprehensive');
+  const [customerType, setCustomerType] = useState<HdfcMotorRun['customerType']>('individual');
+  const [rtoCity, setRtoCity] = useState('');
+  const [registrationNumber, setRegistrationNumber] = useState('');
+  const [previousInsurer, setPreviousInsurer] = useState('');
+  const [previousEnd, setPreviousEnd] = useState('');
+  const [previousType, setPreviousType] = useState<'comprehensive' | 'tp'>('comprehensive');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  if (!product) return null;
+  const ready =
+    rtoCity.trim() !== '' &&
+    name.trim() !== '' &&
+    email.trim() !== '' &&
+    mobile.trim() !== '' &&
+    (!renewal || (registrationNumber.trim() !== '' && previousEnd !== ''));
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    const r = await window.fqf.quotes
+      .run({
+        product: 'hdfc-motor',
+        vehicleId: vehicle.id,
+        insurerId: 'hdfc-ergo',
+        run: {
+          product,
+          cover,
+          customerType,
+          rtoCity,
+          ...(registrationNumber.trim() ? { registrationNumber } : {}),
+          ...(renewal
+            ? {
+                previous: {
+                  endDate: previousEnd,
+                  policyType: previousType,
+                  ...(previousInsurer ? { insurer: previousInsurer } : {}),
+                },
+              }
+            : {}),
+          customer: { name, email, mobile },
+        },
+      })
+      .catch(() => null);
+    setBusy(false);
+    setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
+    if (r?.ok && r.data.premium) showAppScreens();
+  };
+  return (
+    <>
+      <p className="insurer-note">
+        <strong>HDFC ERGO, {HDFC_MOTOR_NAMES[product]} (PIE).</strong> Sign in to HDFC and open any
+        product from 1up once (Issue Quotes &amp; Policy), so the tab is signed in to PIE. The app
+        opens the {HDFC_MOTOR_NAMES[product]} form, fills it, presses Calculate Premium and reads
+        the premium. It never presses Generate Quote. PIE asks the customer&rsquo;s name, email and
+        mobile before it works the premium out; they are not saved.
+      </p>
+      <div className="form-grid">
+        <label>
+          Cover{' '}
+          <select value={cover} onChange={(e) => setCover(e.target.value as HdfcMotorRun['cover'])}>
+            <option value="comprehensive">Comprehensive</option>
+            <option value="liability">Liability only</option>
+            {twoOrCar && renewal && <option value="own-damage">Own damage only</option>}
+          </select>
+        </label>
+        <label>
+          Customer{' '}
+          <select
+            value={customerType}
+            onChange={(e) => setCustomerType(e.target.value as HdfcMotorRun['customerType'])}
+          >
+            <option value="individual">Individual</option>
+            <option value="corporate">Corporate</option>
+          </select>
+        </label>
+        <label>
+          RTO / registration city{' '}
+          <input
+            value={rtoCity}
+            onChange={(e) => setRtoCity(e.target.value)}
+            placeholder="Ahmedabad"
+          />
+        </label>
+        <label>
+          Registration number{renewal ? '' : ' (if known)'}{' '}
+          <input
+            value={registrationNumber}
+            onChange={(e) => setRegistrationNumber(e.target.value)}
+            placeholder="MH01AB1234"
+          />
+        </label>
+        {renewal && (
+          <>
+            <label>
+              Previous insurer{' '}
+              <select value={previousInsurer} onChange={(e) => setPreviousInsurer(e.target.value)}>
+                <option value="">(leave as PIE sets it)</option>
+                {HDFC_PREVIOUS_INSURERS.map((i) => (
+                  <option key={i} value={i}>
+                    {i}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Previous policy ends{' '}
+              <input
+                type="date"
+                value={previousEnd}
+                onChange={(e) => setPreviousEnd(e.target.value)}
+              />
+            </label>
+            <label>
+              Previous policy type{' '}
+              <select
+                value={previousType}
+                onChange={(e) => setPreviousType(e.target.value as 'comprehensive' | 'tp')}
+              >
+                <option value="comprehensive">Comprehensive</option>
+                <option value="tp">Third party (TP)</option>
+              </select>
+            </label>
+          </>
+        )}
+        <label>
+          Customer name <input value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label>
+          Email <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label>
+          Mobile <input value={mobile} onChange={(e) => setMobile(e.target.value)} maxLength={10} />
+        </label>
+      </div>
+      <div className="insurer-actions">
+        <button type="button" disabled={busy || !ready} onClick={() => void run()}>
+          {busy ? 'Working on PIE…' : 'Get HDFC ERGO premium'}
+        </button>
+      </div>
+      {result && 'error' in result && (
+        <p className="error" role="alert">
+          {result.error}
+        </p>
+      )}
+      {result && 'outcome' in result && (
+        <div role="status">
+          {result.premium && (
+            <p className="premium">
+              Total payable premium: <strong>₹{result.premium.amount}</strong> &mdash;{' '}
+              {result.premium.label}
+            </p>
+          )}
+          <p className={result.outcome === 'ready' ? undefined : 'error'}>
+            {result.step ? `${result.step}: ` : ''}
+            {result.message}
+          </p>
+          {result.problems.length > 0 && (
+            <ul>
+              {result.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          {result.toDo && result.toDo.length > 0 && (
+            <ul>
+              {result.toDo.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </>
   );
 }

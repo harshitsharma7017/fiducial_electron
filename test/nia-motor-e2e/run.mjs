@@ -5,7 +5,8 @@
 // npm run test:nia -- travel (overseas travel quote forms), npm run test:nia -- rural (rural forms),
 // npm run test:nia -- marine (Marine Specific Voyage), npm run test:nia -- pa (Personal Accident),
 // npm run test:nia -- fire (the nine fire forms), npm run test:nia -- niva (Niva Bupa's premium
-// calculator, and the recorder on its Ionic controls)
+// calculator, and the recorder on its Ionic controls), npm run test:nia -- alive (keeping portals
+// signed in: the in-page agent), npm run test:nia -- pie (HDFC ERGO's PIE motor forms and MST)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -44,6 +45,8 @@ const harness =
     pa: 'pa-harness.cjs',
     fire: 'fire-harness.cjs',
     niva: 'niva-harness.cjs',
+    alive: 'alive-harness.cjs',
+    pie: 'pie-harness.cjs',
   }[process.argv[2]] ?? 'harness.cjs';
 const child = spawn(electron, [join(HERE, harness)], { env, stdio: 'inherit' });
 child.on('exit', (code) => process.exit(code ?? 1));

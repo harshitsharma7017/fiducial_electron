@@ -34,6 +34,7 @@ import {
   TravelProposalPanel,
 } from './TravelProposalPanel';
 import { NiaTravelPanel } from './NiaTravelPanel';
+import { HdfcTravelPanel } from '../insurers/HdfcPanels';
 
 /** The passport number, kept apart (secret vault): the form only knows its last four characters. */
 interface PassportDraft {
@@ -315,6 +316,7 @@ export function TravellersPanel(): React.JSX.Element | null {
                 ),
             )}
             {quote.product === 'nia-travel' && <NiaTravelPanel travellerId={quote.id} />}
+            {quote.product === 'hdfc-travel' && <HdfcTravelPanel travellerId={quote.id} />}
           </>
         )}
       </QuoteWorkspace>
@@ -343,6 +345,12 @@ const TRAVEL_OPTIONS: QuoteOption[] = [
     insurer: 'New India Assurance',
     label: 'Overseas travel quote',
     description: 'Fills the travel quote form',
+  },
+  {
+    key: 'hdfc-travel',
+    insurer: 'HDFC ERGO',
+    label: 'Retail travel premium',
+    description: 'Fills PIE and reads the premium',
   },
 ];
 

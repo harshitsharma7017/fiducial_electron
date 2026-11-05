@@ -87,6 +87,8 @@ describe('the insurer portal registry', () => {
       { ...good, loginMethod: 'otp' }, // OTP is never filled
       { ...good, form: { ...good.form, username: 'input{color:red}' } },
       { ...good, extra: true },
+      { ...portal('hdfc-ergo'), allowedDomains: ['com'] }, // not a domain of its own
+      { ...portal('hdfc-ergo'), allowedDomains: ['example.com'] }, // not the login's domain
     ];
     for (const entry of bad) expect(insurerPortalSchema.safeParse(entry).success).toBe(false);
     expect(insurerPortalSchema.safeParse(good).success).toBe(true);
@@ -147,6 +149,31 @@ describe('mayNavigate', () => {
     expect(mayNavigate(bajaj, 'http://partner.bajajgeneral.com/', true)).toBe(false);
     expect(mayNavigate(bajaj, 'file:///etc/hosts', true)).toBe(false);
     expect(mayNavigate(bajaj, 'about:blank', true)).toBe(false);
+  });
+
+  it('lets HDFC ERGO reach its other hdfcergo.com addresses (its tiles), nothing else', () => {
+    const hdfc = portal('hdfc-ergo');
+    for (const url of [
+      'https://ams.hdfcergo.com/redirection?token=x',
+      'https://pie.hdfcergo.com/',
+      'https://heapp21.hdfcergo.com/GenericPaymentUI/x.aspx',
+      'https://hdfcergo.com/',
+    ]) {
+      expect(mayNavigate(hdfc, url, true)).toBe(true);
+    }
+    for (const url of [
+      'http://ams.hdfcergo.com/',
+      'https://ams.hdfcergo.com:8443/',
+      'https://hdfcergo.com.evil.example/',
+      'https://evilhdfcergo.com/',
+      'https://user:pw@ams.hdfcergo.com/',
+    ]) {
+      expect(mayNavigate(hdfc, url, true)).toBe(false);
+    }
+    // Other insurers keep exact origins only.
+    expect(mayNavigate(portal('bajaj-allianz'), 'https://www.bajajgeneral.com/', true)).toBe(false);
+    // The sign-in form is still filled on 1up.hdfcergo.com only.
+    expect(mayFillLogin(hdfc, 'https://ams.hdfcergo.com/')).toBe(false);
   });
 
   it('lets only sub-frames reach the CAPTCHA provider, and only for that insurer', () => {

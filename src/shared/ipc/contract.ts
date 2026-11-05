@@ -32,6 +32,12 @@ import { niaPaRunSchema } from '../insurers/nia-pa';
 import { niaFireRunSchema } from '../insurers/nia-fire';
 import { nivaRunSchema } from '../insurers/niva-health';
 import {
+  hdfcMotorRunSchema,
+  hdfcMstRunSchema,
+  hdfcRetailRunSchema,
+  hdfcTravelRunSchema,
+} from '../insurers/hdfc';
+import {
   propertyClientSchema,
   propertyRecordSchema,
   propertySummarySchema,
@@ -315,6 +321,42 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       policy: z.enum(NIA_HEALTH_POLICIES),
       /** The advisor confirms, for this quote, that no member has a listed condition. */
       goodHealthConfirmed: z.boolean(),
+    })
+    .strict(),
+  // HDFC ERGO's PIE motor forms, for a saved vehicle: the form and its choices for this run.
+  z
+    .object({
+      product: z.literal('hdfc-motor'),
+      vehicleId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      run: hdfcMotorRunSchema,
+    })
+    .strict(),
+  // HDFC ERGO's PIE retail health forms (Energy, Optima Secure, Optima Restore), for a health client.
+  z
+    .object({
+      product: z.literal('hdfc-retail'),
+      clientId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      run: hdfcRetailRunSchema,
+    })
+    .strict(),
+  // HDFC ERGO's PIE Retail Travel form, for a travel client.
+  z
+    .object({
+      product: z.literal('hdfc-travel'),
+      travellerId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      run: hdfcTravelRunSchema,
+    })
+    .strict(),
+  // HDFC ERGO's PIE MST (Medisure Super Top-up) form, for a health client.
+  z
+    .object({
+      product: z.literal('hdfc-mst'),
+      clientId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      run: hdfcMstRunSchema,
     })
     .strict(),
   // Niva Bupa's premium calculator, for a health client: the plan and its options for this run.

@@ -124,7 +124,39 @@ export type PageOp =
       options: string[];
       timeoutMs: number;
       last?: boolean;
+      /** A suggestion that starts with an option will do (PIE's "ABOHAR - PUNJAB" for "Abohar"). */
+      startsWith?: boolean;
     }
+  /**
+   * Presses the first shown element matching `selector` (and, if given, whose text reads `text`,
+   * or matches `pattern`, ignoring case and spacing): a button or label by id or name (HDFC PIE's
+   * product type, transaction type, Yes/No labels, Calculate Premium).
+   */
+  | { op: 'clickSelector'; selector: string; text?: string; pattern?: string; timeoutMs: number }
+  /**
+   * Makes `show` shown, pressing `by` (a fold-out section's heading) only if it is not: an open
+   * section is never closed.
+   */
+  | { op: 'reveal'; show: string; by: string; timeoutMs: number }
+  /**
+   * Reads the amount written after `label` ("Total Payable Premium Rs7106"), once shown. If the page
+   * instead shows a message matching `errorPattern` (its own validation), fails `page-says: …`.
+   */
+  | {
+      op: 'readAmount';
+      label: string;
+      timeoutMs: number;
+      errorPattern?: string;
+      /** Other captions the amount may follow, tried after `label`. */
+      alsoLabels?: string[];
+    }
+  /**
+   * A box that opens a list of links or items when pressed (HDFC PIE's retail health forms:
+   * Business Type, I stay in, Plan Type, Policy Period): presses it, then the shown item reading
+   * `option` (ignoring case and spacing) nearest the box, and checks the box then shows it. A box
+   * already showing it is left alone.
+   */
+  | { op: 'pickFromList'; input: string; option: string; timeoutMs: number }
   /**
    * Waits until the box holds a value other than `rejectValues` (for example an age box that shows
    * "0" until the portal has worked the age out from the date of birth).
@@ -330,17 +362,23 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
     root: Element;
     box: HTMLInputElement | null;
   }[] => {
-    const isMinus = (b: Element) => ['-', '−', '–'].includes(text(b));
+    // A button, or an input button (HDFC's PIE: <input type="button" value="+">).
+    const BUTTONS = 'button, input[type="button"]';
+    const face = (b: Element) => text(b) || (b as HTMLInputElement).value || '';
+    const isMinus = (b: Element) => ['-', '\u2212', '\u2013'].includes(face(b).trim());
     const found = [];
-    for (const plus of Array.from(document.querySelectorAll<HTMLElement>('button'))) {
-      if (!visible(plus) || text(plus) !== '+') continue;
+    for (const plus of Array.from(document.querySelectorAll<HTMLElement>(BUTTONS))) {
+      if (!visible(plus) || face(plus).trim() !== '+') continue;
       let root: Element | null = plus.parentElement;
       for (let up = 0; root && up < 3; up += 1, root = root.parentElement) {
-        const minus = Array.from(root.querySelectorAll<HTMLElement>('button')).find(
+        const minus = Array.from(root.querySelectorAll<HTMLElement>(BUTTONS)).find(
           (b) => visible(b) && isMinus(b),
         );
         if (minus) {
-          found.push({ plus, minus, root, box: root.querySelector('input') });
+          const box = root.querySelector<HTMLInputElement>(
+            'input:not([type="button"]):not([type="submit"])',
+          );
+          found.push({ plus, minus, root, box });
           break;
         }
       }
@@ -1515,7 +1553,11 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       if (!shown) return { ok: false, detail: 'no-match (no suggestions)' };
       let match: HTMLElement | undefined;
       for (const option of command.options) {
-        match = items().find((o) => loose(text(o)) === loose(option));
+        match = items().find((o) =>
+          command.startsWith
+            ? loose(text(o)).startsWith(loose(option))
+            : loose(text(o)) === loose(option),
+        );
         if (match) break;
       }
       if (!match) {
@@ -1534,6 +1576,124 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       return kept && loose(kept.value) === loose(chosen)
         ? { ok: true, value: chosen }
         : { ok: false, detail: `not-kept: box shows "${kept?.value ?? ''}"` };
+    }
+    case 'clickSelector': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const pattern = command.pattern ? new RegExp(command.pattern, 'i') : null;
+      const face = (el: Element) => loose(text(el) || (el as HTMLInputElement).value || '');
+      const target = await until(
+        () =>
+          Array.from(document.querySelectorAll<HTMLElement>(command.selector)).find(
+            (el) =>
+              visible(el) &&
+              (command.text === undefined || face(el) === loose(command.text)) &&
+              (!pattern || pattern.test(face(el))),
+          ) ?? null,
+        command.timeoutMs,
+      );
+      if (!target) return { ok: false, detail: 'not-found' };
+      if ((target as HTMLButtonElement).disabled) return { ok: false, detail: 'disabled' };
+      target.click();
+      await sleep(400);
+      return { ok: true };
+    }
+    case 'reveal': {
+      if (first(document, command.show)) return { ok: true, detail: 'already-shown' };
+      const opener = first(document, command.by);
+      if (!opener) return { ok: false, detail: 'opener-not-found' };
+      opener.click();
+      const shown = await until(() => first(document, command.show), command.timeoutMs);
+      return shown ? { ok: true } : { ok: false, detail: 'not-shown-after-click' };
+    }
+    case 'readAmount': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim();
+      const labels = [command.label, ...(command.alsoLabels ?? [])].map((l) => l.toLowerCase());
+      const errors = command.errorPattern ? new RegExp(command.errorPattern, 'i') : null;
+      const AMOUNT = /(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i;
+      const amount = (): string | null => {
+        for (const label of labels) {
+          const holders = Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(
+            (el) =>
+              el.children.length <= 3 &&
+              visible(el) &&
+              loose(text(el)).toLowerCase().includes(label),
+          );
+          for (const el of holders) {
+            // The amount after the label in its own text, else in its row (the next cell).
+            for (let n: Element | null = el, up = 0; n && up < 3; n = n.parentElement, up += 1) {
+              const t = loose(text(n));
+              const at = t.toLowerCase().indexOf(label);
+              if (at < 0) continue;
+              const m = AMOUNT.exec(t.slice(at + label.length));
+              if (m && /\d/.test(m[1]!) && m[1]!.replace(/\D/g, '').length >= 2) return m[1]!;
+            }
+          }
+        }
+        return null;
+      };
+      const complaint = (): string | null => {
+        if (!errors) return null;
+        const hit = Array.from(
+          document.querySelectorAll<HTMLElement>('label, span, div, p, li, strong'),
+        ).find((el) => el.children.length === 0 && visible(el) && errors.test(text(el)));
+        return hit ? text(hit).slice(0, 200) : null;
+      };
+      const found = await until(
+        () => amount() ?? (complaint() ? 'complaint' : null),
+        command.timeoutMs,
+      );
+      if (found && found !== 'complaint') return { ok: true, value: found };
+      const said = complaint();
+      return said
+        ? { ok: false, detail: `page-says: ${said}` }
+        : { ok: false, detail: 'not-shown' };
+    }
+    case 'pickFromList': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const want = loose(command.option);
+      const box = await until(() => first(document, command.input), command.timeoutMs);
+      if (!box) return { ok: false, detail: 'not-found' };
+      const shows = () => {
+        const b = first(document, command.input) as HTMLInputElement | null;
+        return b ? loose(b.value || text(b)) : '';
+      };
+      if (shows() === want) return { ok: true, detail: 'already-chosen', value: command.option };
+      pressEl(box);
+      // The item nearest the box (lists of several boxes may all be on the page).
+      const ancestors = new Map<Element, number>();
+      for (let n: Element | null = box, d = 0; n; n = n.parentElement, d += 1) ancestors.set(n, d);
+      const distance = (el: Element): number => {
+        for (let n: Element | null = el; n; n = n.parentElement) {
+          const d = ancestors.get(n);
+          if (d !== undefined) return d;
+        }
+        return Number.MAX_SAFE_INTEGER;
+      };
+      const items = (): HTMLElement[] =>
+        Array.from(document.querySelectorAll<HTMLElement>('a, li, button, [role="option"], label'))
+          .filter((el) => el !== box && visible(el) && loose(text(el)) === want)
+          // The innermost (the link inside a list item: PIE listens on the link).
+          .filter((el, _i, all) => !all.some((o) => o !== el && el.contains(o)))
+          .sort((a, b) => distance(a) - distance(b));
+      const shown = await until(() => (items().length > 0 ? items() : null), 4000);
+      if (!shown) {
+        const near = Array.from(
+          (box.parentElement?.parentElement ?? document).querySelectorAll<HTMLElement>('a, li'),
+        )
+          .filter(visible)
+          .map((el) => text(el))
+          .filter(Boolean)
+          .slice(0, 12);
+        return {
+          ok: false,
+          detail: `no-match${near.length ? ` (offered: ${near.join('; ')})` : ''}`,
+        };
+      }
+      pressEl(shown[0]!);
+      const kept = await until(() => (shows().includes(want) ? true : null), 2500);
+      return kept
+        ? { ok: true, value: command.option }
+        : { ok: false, detail: `not-kept: box shows "${shows()}"` };
     }
   }
 }

@@ -480,77 +480,158 @@ and the dashboard (`npm run test:nia -- fire`). Checked for:
 
 **Not yet run on the live portal.**
 
-## Niva Bupa: premium calculator, ReAssure 2.0, ReAssure 3.0 and Health Recharge (filled, never calculated)
+## Niva Bupa: premium calculator, ReAssure 2.0, ReAssure 3.0 and Health Recharge (premium worked out)
 
-Built from the recording of 5 November 2026 (`niva-bupa-2026-11-05T07-37-29-027Z`). In it, the
-advisor walked through UNO's premium calculator (`#/new-premiumcalculator`) several times:
-- individual and family cover;
-- a top-up (Health Recharge);
-- plan lists, the policy period step and Calculate Premium.
+Built from the advisor's path in the recording of 5 November 2026
+(`niva-bupa-2026-11-05T08-20-27-977Z`), made with the recorder that sees Ionic's controls. The
+earlier recording (`07-37-29-027Z`) and the advisor's screenshots show the same first step. The
+calculator is built with Ionic and Angular Material:
+0. **UNO's home page** (`#/landing-page`): the **Premium Calculator** tile.
+1. **Basic Details:**
+   - **I Know My Plan:** the toggle then reads "Plan Recommendation". The plan is chosen by name in
+     a box suggesting plans: "ReAssure2.0 Individual", "ReAssure2.0 Family Floater".
+   - **Members:** Adult and Child counters. The date of birth boxes are read-only, so the date is
+     picked in Material's calendar, and Niva Bupa then shows it month first without zeros
+     (8/1/1981). An Individual plan asks one box per member ("Adult1 DOB"); a Family Floater asks
+     only one ("Eldest Member DOB").
+   - **Customer's details:** the city (suggested) and "Phone no. (optional)".
+   - **Three NO/YES questions:** transferring a current policy (YES adds "Previous Policy End
+     Date"), a medical practitioner among the insured, "Only for Child Policy". Then Continue.
+2. **Customize Your Plan** (`third-step`):
+   - the sum insured (₹ 500,000 to ₹ 10,000,000);
+   - the policy period, whose radios show the premium ("1 Year ₹…");
+   - the Acute Care Option, Room Category and Deductable dropdowns;
+   - **Key Add-Ons:** "+ Add" in each add-on's row. Tiered Network's row has "Show more", which
+     opens a list to opt in.
 
-The calculator is built with Ionic and Angular Material. The advisor's screenshots of the same day
-show UNO's home page and the first step:
-0. **UNO's home page** (`#/landing-page`): the **Premium Calculator** tile opens the calculator.
-1. **Basic Details:** plan-type tiles (Individual Plan, Family Floater, Benefit Plan, Top-Up Plan,
-   Family First, Combo Product). Under "Who would you like to insure today?": Adult and Child
-   counters and one date of birth per member ("Adult1 DOB"). The date boxes are read-only and take
-   a date from Material's calendar only; Niva Bupa then shows it month first without zeros
-   (8/1/1981). Then the city and "Phone no. (optional)", and Continue.
-2. **Premium Details:** Ionic dropdowns whose lists name each plan "… Individual" (one member) or
-   "… Family Floater" (several).
-3. **Customize Your Plan:** policy period, add-ons and terms, then Calculate Premium, which leads to
-   4. **Plan Summary**.
+   The footer reads Continue, and Calculate Premium once Key Add-Ons is scrolled to. Calculate
+   Premium works the premium out again and shows it by the policy period. The Continue after it
+   leads to a summary asking the customer's name, email and phone.
 
-The recorder of that day did not see Ionic's own controls: the dropdowns, plan cards, radios and
-checkboxes. Steps 2 and 3 are therefore known only from the lists Niva Bupa opened. The recorder
-(src/main/insurers/form-recorder-agent.ts) now notes such controls (Ionic's and Material's
-dropdowns, radios, checkboxes, toggles and tabs: what each shows and whether it is ticked), clicks
-on them and on other clickable cards, and Ionic's changes. It also notes a field's caption written
-beside it.
+A health client has a **Niva Bupa health quote** button. The advisor chooses:
+- the plan, sum insured and policy period;
+- the add-ons: the two seen in the recording (Safeguard, Prolonged treatment assistance cover), or
+  others typed as Niva Bupa names them;
+- Tiered Network, a medical practitioner, and a transfer with the previous policy's end date.
 
-A health client has a **Niva Bupa health quote** button; the advisor picks the plan. From UNO's
-home page (or the calculator's first step), the app:
-- presses **Premium Calculator** (from the home page);
-- chooses the plan-type tile: Individual Plan for one member, Family Floater for several, Top-Up
-  Plan for Health Recharge. Choosing it draws the members' boxes again once Niva Bupa's server
-  answers, late enough on 5 November 2026 to undo counts set a second after the click. So it comes
-  first, and the app waits for that redraw before it counts;
-- sets the Adult and Child counters (adults: self, spouse, parents, parents-in-law; children: sons
-  and daughters);
-- picks each date of birth in Material's calendar (year, month, day);
-- checks the counters and dates once more, filling again anything a late redraw cleared;
-- chooses the city from Niva Bupa's suggestions and types the phone number when the client has one;
-- presses the calculator's **Continue** (nothing is saved);
-- chooses the plan in the plan list ("ReAssure2.0 …" or "ReAssure3.0 …").
+From UNO's home page (or the calculator's first step), the app does all of the above, presses
+**Calculate Premium** and reads the premium with its policy period. It never presses the Continue
+after it.
+- **Plan:** Individual for one member, Family Floater for several.
+- **Dates of birth:** eldest first. On a Family Floater only the eldest member's box is asked, and
+  the app skips the boxes Niva Bupa does not show.
+- **Questions:** answered from the advisor's choices; "Only for Child Policy" is answered NO.
+- **Left as Niva Bupa sets them:** Acute Care Option, Room Category and Deductable. They are listed
+  for the advisor to check.
 
-Left to the advisor: the plan card (sum insured and options) and its Continue, the policy period,
-add-ons, the Terms & Conditions box, and **Calculate Premium**, which the app never presses.
+**Health Recharge (top-up):** not in the recording. The app picks "HealthRechargeV2 …" (or "Health
+Recharge …") in the plan box when Niva Bupa offers it. Boxes of its own that the app does not know
+stop the run at Continue, with Niva Bupa's message.
 
-**Health Recharge (top-up):** the Top-Up Plan tile shows boxes of its own: in the recording, an
-amount and a date, whose labels were not captured. The app chooses Top-Up Plan and fills the
-members, city and phone, then stops before Continue. The advisor fills the top-up boxes, presses
-Continue and chooses HealthRechargeV2.
-
-The run refuses:
+The run refuses or stops with the reason:
 - a page that is neither UNO's home page nor the calculator's first step;
-- a client without an adult or without dates of birth;
-- an "adult" under 18 (Niva Bupa's adult calendar starts 18 years back).
+- a client without an adult or without dates of birth, or an "adult" under 18;
+- a plan, sum insured or policy period Niva Bupa does not offer (with what it does offer);
+- the counters' limit.
 
-A plan Niva Bupa does not offer for these members (on the recorded lists, ReAssure 3.0 appeared for
-family cover only) stops the run with the plans it does offer.
+An add-on not found as written is listed for the advisor, and the run goes on.
 
-**Verified:** against a local copy of the calculator, with Material calendars and Ionic dropdowns as
-custom elements with shadow roots (`npm run test:nia -- niva`). Checked for:
-- the start from UNO's home page and from the open calculator;
-- family and single cover;
-- each plan, with its plan-type tile;
-- dates shown month first without zeros;
-- counts left from an earlier run;
-- a plan-type tile that redraws the members' boxes late;
-- a plan not offered;
-- the counter's limit;
+**Verified:** against a local copy of the calculator, with Material calendars and Ionic dropdowns
+and radios as custom elements with shadow roots (`npm run test:nia -- niva`). Checked for:
+- a family floater from the home page, with add-ons and Tiered Network;
+- an individual with a transfer and a practitioner;
+- a plan and a sum insured not offered;
+- the counters' limit;
 - a refusal on another step;
-- the recorder seeing the dropdowns and a click on one.
+- the premium read matching the one shown;
+- the recorder seeing the dropdowns, their captions and a click on one.
+
+**Not yet run on the live portal.**
+
+## HDFC ERGO: PIE motor, health and travel forms, new business (premium worked out, never saved)
+
+Built from the recordings of 5 November 2026 (`hdfc-ergo-2026-11-05T11-37-58-944Z`, motor;
+`hdfc-ergo-2026-11-05T11-50-09-251Z`, health). HDFC's 1up portal draws its tiles on a canvas, which
+the app cannot press. A tile signs the tab in to **PIE** (`pie.hdfcergo.com`), where the quote
+forms are ordinary AngularJS forms.
+
+**Opening a form:** the advisor opens any product from 1up once (Issue Quotes & Policy). The app then
+opens the form it needs by its PIE address in that tab, for example `/PrivateCar/CreateQuote`. A tab
+not on PIE is refused with that instruction.
+
+**Motor**, for a saved vehicle (its HDFC section in the vehicle's quote panel):
+- **Forms:** Private Car, Two Wheeler (PIE's Blaze form; `/TwoWheeler/CreateQuote` answers "404 Page
+  Not Found"), GCV, PCV, Tractor. The form follows the vehicle class.
+- **New vehicle,** or **renewal from another insurer** (pre-owned). A renewal takes the previous
+  policy's end date and type, and optionally the insurer, from the panel; claims and NCB come from
+  the vehicle. HDFC's own renewals need the old policy number and are not covered.
+- **The app fills:**
+  - the product type (Comprehensive, Liability, Standalone OD), customer type and transaction type;
+  - the registration number, in PIE's four boxes;
+  - the make, model (with variant) and RTO city, picked in PIE's suggestion lists;
+  - the first registration date (typed dd/mm/yyyy), year of manufacture, IDV, engine and chassis
+    numbers;
+  - the previous policy;
+  - the customer's name, email and mobile. PIE asks for these before it works the premium out;
+    they are entered for the run and not saved.
+- **Then:** it presses **Calculate Premium** and reads **Total Payable Premium**. If PIE complains
+  instead (for example "User Idv should be in between 794295 - 1323825"), the run stops with PIE's
+  words.
+- **Recorded vs borrowed:** only the Private Car form was filled in the recording. The other forms
+  share its names, and their steps are taken from it, with optional steps listed for the advisor
+  when a form does not take them. GCV and PCV work the IDV out from body and chassis IDV (left to
+  the advisor). GCV also takes the gross vehicle weight; PCV takes the bus type.
+- **Covers and add-ons** are left as PIE sets them and listed for the advisor.
+
+**MST (Medisure Super Top-up)**, for a health client:
+- **The app fills:** New business, the cover (Individual, Family Floater), the term, Member Detail
+  (Adult and Child counters; each member's tab, date of birth and relation; adults first), then
+  Cover Detail.
+- **Then:** PIE shows the premium there (it did in the recording, before any customer detail), and
+  the app reads it. The sum insured and deductible are left as PIE sets them (the recording did not
+  change them) and are listed.
+
+**Never pressed:** **Generate Quote** (it saved a quote in the recording: "Success"), **Generate
+Proposal**, or anything after Calculate Premium.
+
+**Energy, Optima Secure, Optima Restore** (new business), for a health client:
+- **Layout:** one shared layout. A questionnaire, then PRODUCT DETAILS, then BASIC DETAILS. Most
+  answers are boxes that open a list of links when pressed: Business Type, Plan Type, Policy
+  Period, sum insured in lakh, I stay in, members ("2Adult+1Child"), POSP or not.
+- **The app answers:** New Business; Individual or Family; the plan (Optima Secure's variants,
+  Energy's Silver/Gold plans); the eldest member's age; the city; the period and sum insured;
+  Energy's existing health insurance; the members; and the advisor's SP/POSP name or code, which
+  the panel remembers on this computer.
+- **Then:** BASIC DETAILS, and it reads the premium.
+- **Unrecorded parts:** the recording reached BASIC DETAILS on Energy and Optima Secure but no
+  premium, and showed Optima Restore for renewals only. So the premium is read under the captions
+  PIE uses elsewhere ("Total Payable Premium", "Total Premium", "Net Premium"), and steps the
+  recording did not show are optional and listed for the advisor. Riders and add-ons are left as
+  PIE sets them.
+
+**Retail Travel** (new business), for a travel client (one traveller):
+- **The app fills:** New, Individual, the dates of departure and return, the plan (PIE's suggestion
+  list, for example "Gold"), Member Detail, and the traveller's date of birth and relation
+  (borrowed from MST).
+- **Then:** it presses Calculate Premium and reads the premium.
+- **Unrecorded parts:** the recording opened the form for a renewal only, so these steps follow
+  PIE's other forms.
+
+**Not automated:**
+- **HDFC's own renewals** (they need the old policy number).
+- **health.hdfcergo.com** (it registers each quote as a lead under the customer's email and
+  mobile).
+
+**Verified:** against a local copy of PIE's Private Car, Two Wheeler, MST, Optima Secure and Retail
+Travel forms (`npm run test:nia -- pie`). Checked for:
+- a new car, opened from another PIE page;
+- a renewal from another insurer;
+- PIE's IDV complaint;
+- a liability-only two-wheeler;
+- the refusal off PIE;
+- an MST family floater;
+- an Optima Secure family;
+- a Retail Travel trip.
 
 **Not yet run on the live portal.**
 
@@ -612,9 +693,30 @@ needed:
 
   Lasting cookies, site storage and the 12-hour clock are kept on disk as before. Expired sessions
   are wiped at start-up.
-- **The insurer's own timeout still applies.** If a portal signs the advisor out after inactivity,
-  it shows its login page and the app fills it again. The app does not keep sessions alive
-  artificially.
+- **Kept signed in while the advisor is away** (decision of 5 November 2026, replacing "the app
+  does not keep sessions alive artificially"; `src/main/insurers/session-alive.ts`). Portals end
+  idle sessions in two ways, and the app answers both while a session runs and the portal is past
+  its login page:
+  - **Their page counts down** from the last mouse or key event, often with a "Your session is
+    about to expire" warning. Every 30 seconds the app presses a shown session warning's
+    **Continue** / **Stay signed in** / **OK**. It never presses Log out, Sign out, No or Cancel,
+    never a pop-up that is not about the session, and never Yes to "Are you sure you want to log
+    out?". After 4 minutes without the advisor's own mouse or keys in that portal, it sends
+    harmless activity (mouse movement, Shift pressed and released) to every page of the insurer,
+    and again every 4 minutes after that.
+  - **Their server forgets a quiet session** (often after 15 to 30 minutes without a request).
+    When neither the advisor nor the portal has sent a request for 4 minutes, the app fetches the
+    portal's current page again in the background, with its cookies. The page shown does not
+    change. Only a page opened with GET and answered normally is fetched, never one reached by
+    sending a form (a second request could send it again) or an address with a one-time code.
+  - **While any session runs,** macOS is kept from suspending the app (App Nap would hold back its
+    timers).
+
+  It cannot change a portal that ends every session after a fixed time of its own, or the app's
+  12-hour limit, which still ends the session. A portal that signs the advisor out anyway shows
+  its login page, which the app fills as usual. Each answered warning is logged with the insurer's
+  id only. Checked against a local page that signs out after 3 seconds without activity
+  (`npm run test:nia -- alive`). Not yet observed on a live portal.
 
 Verified in the built app (scratch profile; Bajaj and New India login pages only, no sign-in):
 - **Session clock:** it starts on open.
@@ -662,7 +764,13 @@ Without the variable the screen is hidden and every insurer channel refuses (`UN
   - **Permissions:** permissions and downloads are denied; pop-ups are allowed only within the
     insurer's own origins, as tabs.
   - **Navigation:** pages may navigate only within the insurer's own origins, and sub-frames
-    also to its CAPTCHA provider.
+    also to its CAPTCHA provider. HDFC ERGO also has its own domain (decision of 5 November
+    2026): its tiles go through other HDFC ERGO addresses handed out by its server at the time
+    (`ams.hdfcergo.com` for policy issuance, PIE, payment, KYC), which were blocked. Any https
+    address on `hdfcergo.com` (default port) is allowed for it. Look-alikes such as
+    `hdfcergo.com.evil.example`, plain http and other ports are not. Its sign-in details are still
+    typed on `1up.hdfcergo.com` only. A domain must be the login address's own
+    (`allowedDomains` in `src/shared/insurers/portals.ts`); other insurers keep exact origins.
 - **Logs:** only the insurer id and what happened (for example `filled`, `field-not-found`).
   Never a user ID, password or URL.
 

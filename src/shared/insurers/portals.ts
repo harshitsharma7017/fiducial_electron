@@ -104,6 +104,16 @@ export const insurerPortalSchema = z
     allowedOrigins: z.array(httpsOrigin).min(1).max(10),
     /** Extra origins allowed in sub-frames only (for example a CAPTCHA provider). */
     subframeOrigins: z.array(httpsOrigin).max(5),
+    /**
+     * The insurer's own domain, for a portal whose buttons lead to many addresses of it (HDFC
+     * ERGO's tiles go through ams., pie. and other hdfcergo.com hosts, handed out by its server at
+     * the time): any https address on it (the domain itself or a host under it, default port) is
+     * allowed like allowedOrigins. It must be the login origin's own domain.
+     */
+    allowedDomains: z
+      .array(z.string().regex(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/))
+      .max(3)
+      .optional(),
     loginMethod: z.enum(LOGIN_METHODS),
     automation: z.enum(LOGIN_AUTOMATION),
     barrier: z.enum(LOGIN_BARRIERS),
@@ -119,6 +129,10 @@ export const insurerPortalSchema = z
     advisorNote: z.string().max(240),
   })
   .refine((p) => p.allowedOrigins.includes(p.loginOrigin), 'loginOrigin must be allowed')
+  .refine(
+    (p) => (p.allowedDomains ?? []).every((d) => new URL(p.loginOrigin).hostname.endsWith(`.${d}`)),
+    "allowedDomains must be the login origin's own domain",
+  )
   .refine((p) => p.allowedOrigins.includes(new URL(p.startUrl).origin), 'startUrl must be allowed')
   .refine((p) => (p.automation === 'autofill') === (p.form !== undefined), 'autofill needs a form')
   .refine(
@@ -178,6 +192,9 @@ const PORTALS: readonly InsurerPortal[] = [
     loginOrigin: 'https://1up.hdfcergo.com',
     allowedOrigins: ['https://1up.hdfcergo.com'],
     subframeOrigins: [],
+    // Its tiles go through HDFC ERGO's other addresses (ams.hdfcergo.com for policy issuance, PIE,
+    // payment), handed out by its server (5 November 2026: they were blocked).
+    allowedDomains: ['hdfcergo.com'],
     loginMethod: 'password',
     automation: 'shortcut',
     barrier: 'none',
@@ -329,8 +346,13 @@ export function mayNavigate(portal: InsurerPortal, url: string, isMainFrame: boo
   }
   if (!isMainFrame && (url === 'about:blank' || url === 'about:srcdoc')) return true;
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return false;
+  const host = parsed.hostname;
+  const onOwnDomain =
+    parsed.port === '' &&
+    (portal.allowedDomains ?? []).some((d) => host === d || host.endsWith(`.${d}`));
   return (
     portal.allowedOrigins.includes(parsed.origin) ||
+    onOwnDomain ||
     (!isMainFrame && portal.subframeOrigins.includes(parsed.origin))
   );
 }

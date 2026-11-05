@@ -6,7 +6,9 @@
 // (run-nia-rural.ts), the Marine Specific Voyage form for a marine client (run-nia-marine.ts),
 // three Personal Accident forms for a health client's proposer (run-nia-pa.ts), and nine fire
 // forms for a property client (run-nia-fire.ts). Niva Bupa: the premium calculator for
-// ReAssure 2.0, ReAssure 3.0 and Health Recharge, for a health client (run-niva-health.ts).
+// ReAssure 2.0, ReAssure 3.0 and Health Recharge, for a health client (run-niva-health.ts). HDFC
+// ERGO: PIE's motor forms for a saved vehicle, its MST, Energy, Optima Secure and Optima Restore
+// forms for a health client and its Retail Travel form for a travel client (run-hdfc.ts).
 // Other
 // insurers and products are refused with a reason. Motor quotes are for a saved vehicle, travel
 // e-proposals for a travel client, the others for a saved client.
@@ -32,6 +34,12 @@ import { runNiaFireQuote } from './run-nia-fire';
 import { runNiaRuralQuote } from './run-nia-rural';
 import { runNiaTravelQuote } from './run-nia-travel';
 import { runNivaHealthQuote } from './run-niva-health';
+import {
+  runHdfcMotorQuote,
+  runHdfcMstQuote,
+  runHdfcRetailQuote,
+  runHdfcTravelQuote,
+} from './run-hdfc';
 
 /** The e-proposal each product fills. */
 const PROPOSAL_FORM = {
@@ -78,11 +86,16 @@ export function createQuoteService(deps: {
         request.product === 'nia-pa' ||
         request.product === 'nia-fire';
       const wrongInsurer =
-        request.product === 'niva-health'
-          ? insurerId !== 'niva-bupa'
-          : newIndiaOnly
-            ? insurerId !== 'new-india'
-            : insurerId !== 'united-india' && !newIndiaMotor;
+        request.product === 'hdfc-motor' ||
+        request.product === 'hdfc-mst' ||
+        request.product === 'hdfc-retail' ||
+        request.product === 'hdfc-travel'
+          ? insurerId !== 'hdfc-ergo'
+          : request.product === 'niva-health'
+            ? insurerId !== 'niva-bupa'
+            : newIndiaOnly
+              ? insurerId !== 'new-india'
+              : insurerId !== 'united-india' && !newIndiaMotor;
       if (wrongInsurer) {
         return {
           outcome: 'refused',
@@ -149,14 +162,15 @@ export function createQuoteService(deps: {
         }
       }
       const subject =
-        request.product === 'motor'
+        request.product === 'motor' || request.product === 'hdfc-motor'
           ? {
               kind: 'vehicle' as const,
               vehicle: (await deps.clients.getVehicle(request.vehicleId)).saved.vehicle,
             }
           : request.product === 'travel-proposal' ||
               request.product === 'omp-proposal' ||
-              request.product === 'nia-travel'
+              request.product === 'nia-travel' ||
+              request.product === 'hdfc-travel'
             ? {
                 kind: 'traveller' as const,
                 record: await deps.clients.getTraveller(request.travellerId),
@@ -168,9 +182,12 @@ export function createQuoteService(deps: {
         const windows = () => deps.windowsOf(insurerId);
         let result: QuoteRunResult;
         if (subject.kind === 'vehicle') {
-          result = newIndiaMotor
-            ? await runNiaMotorQuote({ windows, vehicle: subject.vehicle, today })
-            : await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
+          result =
+            request.product === 'hdfc-motor'
+              ? await runHdfcMotorQuote({ windows, vehicle: subject.vehicle, run: request.run })
+              : newIndiaMotor
+                ? await runNiaMotorQuote({ windows, vehicle: subject.vehicle, today })
+                : await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
         } else if (subject.kind === 'traveller') {
           const travel = {
             windows,
@@ -180,22 +197,29 @@ export function createQuoteService(deps: {
             today,
           };
           result =
-            request.product === 'nia-travel'
-              ? await runNiaTravelQuote({
+            request.product === 'hdfc-travel'
+              ? await runHdfcTravelQuote({
                   windows,
                   traveller: subject.record.traveller,
-                  trip: request.trip,
-                  passportNumber: travel.passportNumber,
-                  noPreExisting: request.noPreExistingConfirmed,
+                  run: request.run,
                   today,
                 })
-              : request.product === 'omp-proposal'
-                ? await runUiicOmpProposal({ ...travel, trip: request.trip })
-                : request.product === 'travel-proposal'
-                  ? await runUiicTravelProposal({ ...travel, trip: request.trip })
-                  : (() => {
-                      throw new AppException('VALIDATION_FAILED');
-                    })();
+              : request.product === 'nia-travel'
+                ? await runNiaTravelQuote({
+                    windows,
+                    traveller: subject.record.traveller,
+                    trip: request.trip,
+                    passportNumber: travel.passportNumber,
+                    noPreExisting: request.noPreExistingConfirmed,
+                    today,
+                  })
+                : request.product === 'omp-proposal'
+                  ? await runUiicOmpProposal({ ...travel, trip: request.trip })
+                  : request.product === 'travel-proposal'
+                    ? await runUiicTravelProposal({ ...travel, trip: request.trip })
+                    : (() => {
+                        throw new AppException('VALIDATION_FAILED');
+                      })();
         } else if (request.product === 'nia-pa') {
           result = await runNiaPaQuote({
             windows,
@@ -203,6 +227,19 @@ export function createQuoteService(deps: {
             run: request.run,
             noClaims: request.noClaimsConfirmed,
             noDisabilities: request.noDisabilitiesConfirmed,
+          });
+        } else if (request.product === 'hdfc-retail') {
+          result = await runHdfcRetailQuote({
+            windows,
+            client: subject.record.client,
+            run: request.run,
+            today,
+          });
+        } else if (request.product === 'hdfc-mst') {
+          result = await runHdfcMstQuote({
+            windows,
+            client: subject.record.client,
+            run: request.run,
           });
         } else if (request.product === 'niva-health') {
           result = await runNivaHealthQuote({
@@ -222,9 +259,11 @@ export function createQuoteService(deps: {
         } else if (
           request.product !== 'health' &&
           request.product !== 'motor' &&
+          request.product !== 'hdfc-motor' &&
           request.product !== 'travel-proposal' &&
           request.product !== 'omp-proposal' &&
-          request.product !== 'nia-travel'
+          request.product !== 'nia-travel' &&
+          request.product !== 'hdfc-travel'
         ) {
           result = await runUiicHealthProposal({
             windows,

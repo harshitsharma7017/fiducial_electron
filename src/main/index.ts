@@ -3,7 +3,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { app, safeStorage, session, type BrowserWindow } from 'electron';
+import { app, powerSaveBlocker, safeStorage, session, type BrowserWindow } from 'electron';
 import { createAadhaarVault, createPassportVault } from './clients/aadhaar-vault';
 import { createClientService } from './clients/service';
 import { createInsurerCredentials } from './insurers/credentials';
@@ -108,12 +108,22 @@ function start(): void {
     // Insurer pages are tabs of the app window (created below, once the services exist).
     let appWindow: BrowserWindow | null = null;
     const portalHost = createPortalHost({ window: () => appWindow });
+    let keepAwake: number | null = null;
     const portalWindows = createPortalWindows({
       host: portalHost,
       logger,
       credentials,
       clock: createSessionClock(join(userData, 'insurer-sessions.json')),
       keeper: createSessionKeeper(join(userData, 'insurer-sessions'), safeStorage),
+      // While a session runs, macOS must not suspend the app (App Nap would hold back the timers
+      // that keep portals signed in).
+      onSessionsRunning: (any) => {
+        if (any && keepAwake === null) keepAwake = powerSaveBlocker.start('prevent-app-suspension');
+        if (!any && keepAwake !== null) {
+          powerSaveBlocker.stop(keepAwake);
+          keepAwake = null;
+        }
+      },
     });
     const insurers = createInsurerService({
       enabled: automation,

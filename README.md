@@ -64,7 +64,7 @@ staged file has a secret, a lint error or unformatted code: run `npm run format`
 | `npm run build:mac` / `build:win` | Unsigned installers in `release/`, then the packaged-content and fuse check |
 | `npm test` | Unit tests (Vitest) |
 | `npm run test:smoke` | Builds, launches the app with `--smoke-test` (in-app security checks) and verifies the launch guard |
-| `npm run test:nia` (`-- health`, `-- travel`, `-- rural`, `-- marine`, `-- pa`, `-- fire`, `-- niva`) | New India motor (health, travel, rural, marine, personal accident, fire) quote automation, and Niva Bupa's premium calculator, against local copies of their forms (no insurer contacted) |
+| `npm run test:nia` (`-- health`, `-- travel`, `-- rural`, `-- marine`, `-- pa`, `-- fire`, `-- niva`, `-- alive`, `-- pie`) | New India motor (health, travel, rural, marine, personal accident, fire) quote automation, Niva Bupa's premium calculator, HDFC ERGO's PIE forms, and keeping portals signed in, against local copies of their pages (no insurer contacted) |
 | `node scripts/smoke.mjs --packaged` | The same against the packaged app in `release/` |
 | `npm run typecheck` / `npm run lint` | TypeScript (node and web configs); ESLint and Prettier |
 | `npm run secrets:scan` | secretlint over the repository |
