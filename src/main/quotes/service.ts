@@ -5,7 +5,8 @@
 // overseas travel quote forms (run-nia-travel.ts) and four rural quote forms for a rural client
 // (run-nia-rural.ts), the Marine Specific Voyage form for a marine client (run-nia-marine.ts),
 // three Personal Accident forms for a health client's proposer (run-nia-pa.ts), and nine fire
-// forms for a property client (run-nia-fire.ts).
+// forms for a property client (run-nia-fire.ts). Niva Bupa: the premium calculator for
+// ReAssure 2.0, ReAssure 3.0 and Health Recharge, for a health client (run-niva-health.ts).
 // Other
 // insurers and products are refused with a reason. Motor quotes are for a saved vehicle, travel
 // e-proposals for a travel client, the others for a saved client.
@@ -30,6 +31,7 @@ import { runNiaPaQuote } from './run-nia-pa';
 import { runNiaFireQuote } from './run-nia-fire';
 import { runNiaRuralQuote } from './run-nia-rural';
 import { runNiaTravelQuote } from './run-nia-travel';
+import { runNivaHealthQuote } from './run-niva-health';
 
 /** The e-proposal each product fills. */
 const PROPOSAL_FORM = {
@@ -75,9 +77,13 @@ export function createQuoteService(deps: {
         request.product === 'nia-marine' ||
         request.product === 'nia-pa' ||
         request.product === 'nia-fire';
-      if (
-        newIndiaOnly ? insurerId !== 'new-india' : insurerId !== 'united-india' && !newIndiaMotor
-      ) {
+      const wrongInsurer =
+        request.product === 'niva-health'
+          ? insurerId !== 'niva-bupa'
+          : newIndiaOnly
+            ? insurerId !== 'new-india'
+            : insurerId !== 'united-india' && !newIndiaMotor;
+      if (wrongInsurer) {
         return {
           outcome: 'refused',
           step: null,
@@ -197,6 +203,13 @@ export function createQuoteService(deps: {
             run: request.run,
             noClaims: request.noClaimsConfirmed,
             noDisabilities: request.noDisabilitiesConfirmed,
+          });
+        } else if (request.product === 'niva-health') {
+          result = await runNivaHealthQuote({
+            windows,
+            client: subject.record.client,
+            plan: request.plan,
+            today,
           });
         } else if (request.product === 'nia-health') {
           result = await runNiaHealthQuote({

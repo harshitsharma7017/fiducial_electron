@@ -1,0 +1,451 @@
+<!doctype html>
+<!--
+  A local copy of Niva Bupa's premium calculator (UNO, #/new-premiumcalculator), drawn from the
+  recording niva-bupa-2026-11-05T07-37-29-027Z: the paths of its counters, read-only date boxes with
+  Angular Material calendars, the city box suggesting cities, the 10-digit mobile box, Continue;
+  then the plans step with Ionic dropdowns (custom elements with a shadow root, opening an ion-alert
+  whose options are buttons #alert-input-N-k) and their recorded lists. Query: a, c (counts left
+  from an earlier run), topup=1 (the top-up product chosen). Continue on the plans step sets
+  window.__step3, Calculate Premium window.__calculated (neither to be pressed by the run).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>UNO</title>
+    <style>
+      body {
+        font: 14px sans-serif;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .cdk-overlay-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 0;
+        height: 0;
+      }
+      .cdk-overlay-container > * {
+        position: fixed;
+        top: 40px;
+        left: 300px;
+        background: #fff;
+        border: 1px solid #888;
+        padding: 6px;
+      }
+      mat-calendar,
+      mat-month-view,
+      mat-year-view,
+      mat-multi-year-view,
+      mat-datepicker-toggle {
+        display: block;
+      }
+      mat-datepicker-toggle {
+        display: inline-block;
+      }
+      .mat-calendar-body-cell {
+        min-width: 28px;
+      }
+      .mat-calendar-body-disabled {
+        color: #bbb;
+      }
+      ion-select {
+        display: inline-block;
+        border: 1px solid #888;
+        padding: 4px;
+        min-width: 120px;
+        cursor: pointer;
+      }
+      ion-alert {
+        position: fixed;
+        inset: 0;
+        display: block;
+        background: rgba(0, 0, 0, 0.2);
+      }
+      .alert-wrapper {
+        background: #fff;
+        margin: 60px auto;
+        width: 320px;
+        padding: 8px;
+      }
+      .alert-button {
+        text-transform: uppercase;
+      }
+      .alert-radio-button,
+      .alert-checkbox-button {
+        display: block;
+        width: 100%;
+        text-align: left;
+      }
+      ion-input,
+      ion-footer {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <ion-router-outlet>
+      <app-dynamic-calculator id="step1">
+        <ion-content>
+          <div>
+            <form onsubmit="return false;">
+              <h3>Who would you like to insure today?</h3>
+              <div id="members"></div>
+              <h3>Customer's details</h3>
+              <div>
+                <input
+                  id="mat-input-7"
+                  type="text"
+                  class="mat-mdc-autocomplete-trigger"
+                  aria-autocomplete="list"
+                  role="combobox"
+                />
+              </div>
+              <ion-input
+                ><input
+                  id="ion-input-8"
+                  name="ion-input-8"
+                  class="native-input"
+                  type="text"
+                  maxlength="10"
+              /></ion-input>
+              <p id="error" class="hidden"></p>
+            </form>
+          </div>
+        </ion-content>
+        <ion-footer
+          ><div>
+            <div></div>
+            <div></div>
+            <div><button type="button" id="continue1">Continue</button></div>
+          </div></ion-footer
+        >
+      </app-dynamic-calculator>
+      <app-second-step id="step2" class="hidden">
+        <ion-header
+          ><ion-toolbar
+            ><div><a href="#/new-premiumcalculator">Back</a></div></ion-toolbar
+          ></ion-header
+        >
+        <div>
+          <p>Recommended <ion-select id="recommended"></ion-select></p>
+          <p>Compare <ion-select id="compare"></ion-select></p>
+          <p id="cards"></p>
+        </div>
+        <ion-footer
+          ><div>
+            <div></div>
+            <div></div>
+            <div><button type="button" id="continue2">Continue</button></div>
+          </div></ion-footer
+        >
+      </app-second-step>
+      <app-third-step id="step3" class="hidden">
+        <h3>Select your Policy Period Tenure</h3>
+        <button type="button" id="calculate">Calculate Premium</button>
+      </app-third-step>
+    </ion-router-outlet>
+    <div class="cdk-overlay-container" id="overlay"></div>
+    <script>
+      const $ = (s, r = document) => r.querySelector(s);
+      const q = new URLSearchParams(location.search);
+      const MONTHS = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
+      ];
+      const TODAY = new Date(2026, 10, 5);
+      const ADULT_MAX = new Date(2008, 10, 5);
+      window.__step3 = false;
+      window.__calculated = false;
+      window.__chosen = {};
+      const pad = (n) => String(n).padStart(2, '0');
+
+      // --- counters and date rows -------------------------------------------------------------
+      const LIMITS = { adult: [1, 4], child: [0, 4] };
+      const block = (kind, label, count) => {
+        const b = document.createElement('div');
+        b.dataset.kind = kind;
+        b.innerHTML = `<div><p>${label}</p><div><span><button type="button" class="minus">-</button></span><input type="text" readonly value="${count}" /><span><button type="button" class="plus">+</button></span></div></div>`;
+        $('#members').appendChild(b);
+        for (let i = 0; i < count; i++) addRow(b);
+        $('.plus', b).addEventListener('click', () => step(b, 1));
+        $('.minus', b).addEventListener('click', () => step(b, -1));
+      };
+      const addRow = (b) => {
+        const row = document.createElement('div');
+        row.innerHTML = `<div><input placeholder="DD/MM/YYYY" readonly /><mat-datepicker-toggle><button type="button" aria-label="Open calendar">&#128197;</button></mat-datepicker-toggle></div>`;
+        b.appendChild(row);
+        const input = $('input', row);
+        $('mat-datepicker-toggle button', row).addEventListener('click', () =>
+          openCalendar(input, b.dataset.kind),
+        );
+      };
+      const step = (b, by) => {
+        const box = $('input[readonly]', b);
+        const [min, max] = LIMITS[b.dataset.kind];
+        const n = Number(box.value) + by;
+        if (n < min || n > max) return;
+        setTimeout(() => {
+          box.value = String(n);
+          if (by > 0) addRow(b);
+          else b.lastElementChild.remove();
+        }, 150);
+      };
+      block('adult', 'Adult', Number(q.get('a') ?? 1));
+      block('child', 'Child', Number(q.get('c') ?? 0));
+
+      // --- Angular Material calendar ----------------------------------------------------------
+      let cal = null;
+      function openCalendar(input, kind) {
+        const max = kind === 'adult' ? ADULT_MAX : TODAY;
+        const state = { view: 'month', y: max.getFullYear(), m: max.getMonth(), input, max };
+        const wrap = document.createElement('div');
+        wrap.setAttribute('role', 'dialog');
+        wrap.innerHTML = '<mat-calendar></mat-calendar>';
+        $('#overlay').replaceChildren(wrap);
+        cal = { state, el: $('mat-calendar', wrap) };
+        draw();
+      }
+      const cell = (label, aria, disabled, onPick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'mat-calendar-body-cell' + (disabled ? ' mat-calendar-body-disabled' : '');
+        b.setAttribute('aria-label', aria);
+        if (disabled) b.setAttribute('aria-disabled', 'true');
+        b.innerHTML = `<span class="mat-calendar-body-cell-content">${label}</span>`;
+        if (!disabled) b.addEventListener('click', onPick);
+        return b;
+      };
+      function draw() {
+        const s = cal.state;
+        const head = document.createElement('div');
+        const title =
+          s.view === 'month'
+            ? `${MONTHS[s.m].slice(0, 3).toUpperCase()} ${s.y}`
+            : s.view === 'year'
+              ? String(s.y)
+              : `${s.start} – ${s.start + 23}`;
+        head.innerHTML = `<button type="button" class="mat-calendar-period-button">${title}</button><button type="button" class="mat-calendar-previous-button" aria-label="Previous"></button><button type="button" class="mat-calendar-next-button" aria-label="Next"></button>`;
+        const body = document.createElement(
+          s.view === 'month'
+            ? 'mat-month-view'
+            : s.view === 'year'
+              ? 'mat-year-view'
+              : 'mat-multi-year-view',
+        );
+        if (s.view === 'month') {
+          const days = new Date(s.y, s.m + 1, 0).getDate();
+          for (let d = 1; d <= days; d++) {
+            const date = new Date(s.y, s.m, d);
+            body.appendChild(
+              cell(d, `${d} ${MONTHS[s.m]} ${s.y}`, date > s.max, () => {
+                s.input.value = `${pad(d)}/${pad(s.m + 1)}/${s.y}`;
+                $('#overlay').replaceChildren();
+                cal = null;
+              }),
+            );
+          }
+        } else if (s.view === 'year') {
+          MONTHS.forEach((name, m) =>
+            body.appendChild(
+              cell(
+                name.slice(0, 3).toUpperCase(),
+                `${name} ${s.y}`,
+                new Date(s.y, m, 1) > s.max,
+                () => {
+                  s.m = m;
+                  s.view = 'month';
+                  draw();
+                },
+              ),
+            ),
+          );
+        } else {
+          for (let y = s.start; y < s.start + 24; y++)
+            body.appendChild(
+              cell(y, String(y), y > s.max.getFullYear(), () => {
+                s.y = y;
+                s.view = 'year';
+                draw();
+              }),
+            );
+        }
+        cal.el.replaceChildren(head, body);
+        $('.mat-calendar-period-button', head).addEventListener('click', () => {
+          if (s.view === 'month') {
+            s.view = 'multi';
+            s.start = s.y - ((s.y - 1) % 24);
+          } else s.view = 'month';
+          draw();
+        });
+        const move = (by) => () => {
+          if (s.view === 'month') {
+            const t = new Date(s.y, s.m + by, 1);
+            s.y = t.getFullYear();
+            s.m = t.getMonth();
+          } else if (s.view === 'year') s.y += by;
+          else s.start += 24 * by;
+          draw();
+        };
+        $('.mat-calendar-previous-button', head).addEventListener('click', move(-1));
+        $('.mat-calendar-next-button', head).addEventListener('click', move(1));
+      }
+
+      // --- city box suggesting cities ---------------------------------------------------------
+      const CITIES = ['Agra', 'Ahmedabad', 'Ahmednagar', 'Bengaluru', 'Mumbai', 'Pune'];
+      const city = $('#mat-input-7');
+      const suggest = () => {
+        const list = document.createElement('div');
+        list.setAttribute('role', 'listbox');
+        list.id = 'mat-autocomplete-0';
+        const typed = city.value.trim().toLowerCase();
+        CITIES.filter((c) => c.toLowerCase().startsWith(typed)).forEach((c, i) => {
+          const o = document.createElement('mat-option');
+          o.setAttribute('role', 'option');
+          o.id = `mat-option-${i}`;
+          o.textContent = c;
+          o.style.display = 'block';
+          o.addEventListener('click', () => {
+            city.value = c;
+            window.__city = c;
+            close();
+          });
+          list.appendChild(o);
+        });
+        $('#overlay').replaceChildren(list);
+        city.setAttribute('aria-controls', list.id);
+      };
+      const close = () => {
+        $('#overlay').replaceChildren();
+        city.removeAttribute('aria-controls');
+      };
+      city.addEventListener('focus', suggest);
+      city.addEventListener('input', () => {
+        window.__city = null;
+        suggest();
+      });
+      const mobile = $('#ion-input-8');
+      mobile.addEventListener('input', () => {
+        window.__mobile = mobile.value;
+      });
+
+      // --- step 1 Continue --------------------------------------------------------------------
+      $('#continue1').addEventListener('click', () => {
+        const dates = Array.from(document.querySelectorAll('#members input[placeholder]'));
+        if (dates.some((d) => !d.value) || !window.__city) {
+          $('#error').textContent = 'Please fill all details';
+          $('#error').classList.remove('hidden');
+          return;
+        }
+        setTimeout(() => {
+          location.hash = '#/new-premiumcalculator/second-step';
+          $('#step1').classList.add('hidden');
+          $('#step2').classList.remove('hidden');
+        }, 400);
+      });
+
+      // --- plans step: Ionic dropdowns and alerts ---------------------------------------------
+      const members = () => document.querySelectorAll('#members input[placeholder]').length;
+      const LISTS = {
+        individual: [
+          'GoActive Individual',
+          'Health Pulse Individual',
+          'Health Premia Individual',
+          'HB Individual',
+          'ReAssure Individual',
+          'HCIndividual',
+          'ReAssure2.0 Individual',
+        ],
+        floater: [
+          'ReAssure3.0 Family Floater',
+          'ReAssure2.0 Family Floater',
+          'ReAssure Family Floater',
+          'Aspire Family Floater',
+          'Rise Family Floater',
+          'Heart BeatV5 Family Floater',
+          'Health Pulse Family Floater',
+          'GoActive Family Floater',
+          'Health Premia Family Floater',
+          'Arogya Sanjeevani Family Floater',
+        ],
+      };
+      const optionsOf = (id) => {
+        const kind = members() > 1 ? 'Family Floater' : 'Individual';
+        if (id === 'recommended') return [`Aspire ${kind}`];
+        if (q.get('topup') === '1') return [`HealthRechargeV2 ${kind}`];
+        return members() > 1 ? LISTS.floater : LISTS.individual;
+      };
+      let overlays = 15;
+      class IonSelect extends HTMLElement {
+        connectedCallback() {
+          if (this.shadowRoot) return;
+          this.attachShadow({ mode: 'open' }).innerHTML =
+            '<span class="select-text">Select</span> <button type="button" part="icon">&#9662;</button>';
+          this.addEventListener('click', () => openAlert(this));
+        }
+        show(chosen) {
+          this.shadowRoot.querySelector('.select-text').textContent = chosen.join(', ') || 'Select';
+        }
+      }
+      customElements.define('ion-select', IonSelect);
+      function openAlert(select) {
+        overlays += 1;
+        const multi = select.id === 'compare';
+        const chosen = new Set(window.__chosen[select.id] ?? []);
+        const alert = document.createElement('ion-alert');
+        alert.id = `ion-overlay-${overlays}`;
+        alert.setAttribute('role', 'dialog');
+        const group = optionsOf(select.id)
+          .map(
+            (name, k) =>
+              `<button type="button" id="alert-input-${overlays}-${k}" class="${multi ? 'alert-checkbox-button' : 'alert-radio-button'} alert-tappable" role="${multi ? 'checkbox' : 'radio'}" aria-checked="${chosen.has(name)}"><div class="alert-radio-label">${name}</div></button>`,
+          )
+          .join('');
+        alert.innerHTML = `<div class="alert-wrapper"><div class="alert-head"></div><div class="alert-message"></div><div class="alert-radio-group">${group}</div><div class="alert-button-group"><button type="button" class="alert-button">Cancel</button><button type="button" class="alert-button">OK</button></div></div>`;
+        document.body.appendChild(alert);
+        alert.querySelectorAll('[id^="alert-input-"]').forEach((b) =>
+          b.addEventListener('click', () => {
+            if (!multi)
+              alert
+                .querySelectorAll('[id^="alert-input-"]')
+                .forEach((o) => o.setAttribute('aria-checked', 'false'));
+            b.setAttribute(
+              'aria-checked',
+              String(!(multi && b.getAttribute('aria-checked') === 'true')),
+            );
+          }),
+        );
+        const [cancel, ok] = alert.querySelectorAll('.alert-button');
+        cancel.addEventListener('click', () => setTimeout(() => alert.remove(), 150));
+        ok.addEventListener('click', () => {
+          const picked = Array.from(alert.querySelectorAll('[aria-checked="true"]')).map((b) =>
+            b.textContent.trim(),
+          );
+          window.__chosen[select.id] = picked;
+          select.show(picked);
+          $('#cards').textContent = picked.map((p) => `${p} ₹ 12463 For 1 Year`).join(' | ');
+          setTimeout(() => alert.remove(), 150);
+        });
+      }
+      $('#continue2').addEventListener('click', () => {
+        window.__step3 = true;
+        $('#step2').classList.add('hidden');
+        $('#step3').classList.remove('hidden');
+      });
+      $('#calculate').addEventListener('click', () => {
+        window.__calculated = true;
+      });
+    </script>
+  </body>
+</html>

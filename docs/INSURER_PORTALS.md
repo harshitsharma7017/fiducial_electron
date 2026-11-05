@@ -480,6 +480,66 @@ and the dashboard (`npm run test:nia -- fire`). Checked for:
 
 **Not yet run on the live portal.**
 
+## Niva Bupa: premium calculator, ReAssure 2.0, ReAssure 3.0 and Health Recharge (filled, never calculated)
+
+Built from the recording of 5 November 2026 (`niva-bupa-2026-11-05T07-37-29-027Z`). In it, the
+advisor walked through UNO's premium calculator (`#/new-premiumcalculator`) several times:
+- individual and family cover;
+- a top-up (Health Recharge);
+- plan lists, the policy period step and Calculate Premium.
+
+The calculator is built with Ionic and Angular Material, in steps:
+1. **Who would you like to insure today?** Adult and Child counters, one date of birth per member,
+   the city and the mobile number, then Continue. The date boxes are read-only and take a date from
+   Material's calendar only.
+2. **Plans:** Ionic dropdowns whose lists name each plan "… Individual" (one member) or "… Family
+   Floater" (several).
+3. **Policy period, add-ons, terms,** then Calculate Premium, which leads to a summary.
+
+The recorder of that day did not see Ionic's own controls: the dropdowns, plan cards, radios and
+checkboxes. Steps 2 and 3 are therefore known only from the lists Niva Bupa opened. The recorder
+(src/main/insurers/form-recorder-agent.ts) now notes such controls (Ionic's and Material's
+dropdowns, radios, checkboxes, toggles and tabs: what each shows and whether it is ticked), clicks
+on them and on other clickable cards, and Ionic's changes. It also notes a field's caption written
+beside it.
+
+A health client has a **Niva Bupa health quote** button; the advisor picks the plan. The advisor
+opens the calculator at its first step, and the app then:
+- sets the Adult and Child counters (adults: self, spouse, parents, parents-in-law; children: sons
+  and daughters);
+- picks each date of birth in Material's calendar (year, month, day);
+- chooses the city from Niva Bupa's suggestions and types the mobile number;
+- presses the calculator's **Continue** (nothing is saved);
+- chooses the plan in the plan list ("ReAssure2.0 …", "ReAssure3.0 …" or "HealthRecharge …").
+
+Left to the advisor: the plan card (sum insured and options) and its Continue, the policy period,
+add-ons, the Terms & Conditions box, and **Calculate Premium**, which the app never presses.
+
+**Health Recharge (top-up):** the recording did not show how the top-up product is chosen at the top
+of step 1, nor its two extra boxes (an amount and a date). The advisor chooses the top-up product
+and fills those boxes first. Without them, the plan list does not offer Health Recharge, and the run
+says so.
+
+The run refuses:
+- a calculator not on its first step;
+- a client without an adult or without dates of birth;
+- an "adult" under 18 (Niva Bupa's adult calendar starts 18 years back).
+
+A plan Niva Bupa does not offer for these members (on the recorded lists, ReAssure 3.0 appeared for
+family cover only) stops the run with the plans it does offer.
+
+**Verified:** against a local copy of the calculator, with Material calendars and Ionic dropdowns as
+custom elements with shadow roots (`npm run test:nia -- niva`). Checked for:
+- family and single cover;
+- each plan;
+- counts left from an earlier run;
+- a plan not offered;
+- the counter's limit;
+- a refusal off the first step;
+- the recorder seeing the dropdowns and a click on one.
+
+**Not yet run on the live portal.**
+
 ## What it does
 
 The advisor saves each insurer's user ID and password once. When they open that insurer's portal

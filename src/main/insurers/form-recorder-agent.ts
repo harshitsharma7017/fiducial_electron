@@ -33,8 +33,20 @@ export interface RecordedField extends RecordedElement {
   checked: boolean | null;
 }
 
+/**
+ * A control drawn by a component library rather than a native input (Ionic and Angular Material:
+ * ion-select, ion-radio, ion-checkbox, mat-select, …; or an element with a radio/checkbox/switch
+ * role). `text`: what it shows (a dropdown's chosen option, a radio's label), as for buttons.
+ */
+export interface RecordedControl extends RecordedElement {
+  text: string | null;
+  checked: boolean | null;
+  disabled: boolean;
+}
+
 export interface RecordedSnapshot {
   fields: RecordedField[];
+  controls: RecordedControl[];
   buttons: (RecordedElement & { text: string; visible: boolean })[];
   headings: string[];
   money: { path: string; text: string; context: string }[];
@@ -123,9 +135,56 @@ export function formRecorderAgent(): RecorderDrain {
     }
     const wrap = el.closest('label');
     if (wrap) return clip(wrap.innerText, 120);
+    // Ionic puts a box's label in its host's attribute (<ion-input label="Mobile">).
+    const host = el.closest('ion-input, ion-select, ion-textarea, ion-checkbox, ion-radio');
+    const attr = host?.getAttribute('label');
+    if (attr) return clip(attr, 120);
     const box = el.closest('div, td, li, mat-form-field, ion-item');
     const near = box?.querySelector('label, .label, mat-label, ion-label');
-    return near && near !== el ? clip((near as HTMLElement).innerText, 120) : null;
+    if (near && near !== el && (near as HTMLElement).innerText?.trim()) {
+      return clip((near as HTMLElement).innerText, 120);
+    }
+    // Text written next to the box in its own container (<p>Compare <ion-select>), else a caption
+    // just before the box or one of its containers (<p>Adult</p> above a counter): short text with
+    // no long numbers (so a value shown elsewhere is not taken for a label), and never past an
+    // element holding other controls, buttons or links (their captions are not this box's).
+    const usable = (t: string | null): string | null => (t && !/\d{4,}/.test(t) ? t : null);
+    const beside = Array.from(el.parentElement?.childNodes ?? [])
+      .filter((n) => n.nodeType === Node.TEXT_NODE)
+      .map((n) => n.textContent ?? '')
+      .join(' ');
+    if (usable(clip(beside, 60))) return clip(beside, 60);
+    const CONTROLLED = 'input, select, textarea, button, a, ion-select, mat-select';
+    for (let node: Element | null = el, up = 0; node && up < 3; node = node.parentElement, up++) {
+      const prev = node.previousElementSibling as HTMLElement | null;
+      if (!prev) continue;
+      if (prev.matches(CONTROLLED) || prev.querySelector(CONTROLLED)) break;
+      const t = usable(clip(prev.innerText, 60));
+      if (t) return t;
+    }
+    return null;
+  };
+  const CONTROLS =
+    'ion-select, ion-radio, ion-checkbox, ion-toggle, ion-segment-button, ion-range, mat-select, mat-radio-button, mat-checkbox, mat-slide-toggle, mat-button-toggle, [role="radio"], [role="checkbox"], [role="switch"], [role="combobox"]:not(input), [role="tab"]';
+  /** What a control shows: its own text, else what its shadow root draws (ion-select's choice). */
+  const controlText = (el: Element): string | null =>
+    clip((el as HTMLElement).innerText) ?? clip(el.shadowRoot?.textContent ?? null);
+  const controlChecked = (el: Element): boolean | null => {
+    const aria = el.getAttribute('aria-checked') ?? el.getAttribute('aria-selected');
+    if (aria === 'true' || aria === 'false') return aria === 'true';
+    const cls = el.getAttribute('class') ?? '';
+    if (
+      /\b(radio|checkbox|toggle|segment-button)-checked\b|mdc-[\w-]*-checked|\bmat-[\w-]*-checked\b/.test(
+        cls,
+      )
+    ) {
+      return true;
+    }
+    return /^(ion-(radio|checkbox|toggle|segment-button)|mat-(radio-button|checkbox|slide-toggle|button-toggle))$/i.test(
+      el.tagName,
+    )
+      ? el.hasAttribute('checked')
+      : null;
   };
   const identity = (el: Element): RecordedElement => ({
     tag: el.tagName.toLowerCase(),
@@ -167,6 +226,18 @@ export function formRecorderAgent(): RecorderDrain {
           checked: isChoice ? input.checked : null,
         };
       });
+    const controls = Array.from(document.querySelectorAll(CONTROLS))
+      .filter(visible)
+      .slice(0, 200)
+      .map((el): RecordedControl => ({
+        ...identity(el),
+        text: controlText(el),
+        checked: controlChecked(el),
+        disabled:
+          el.hasAttribute('disabled') ||
+          el.getAttribute('aria-disabled') === 'true' ||
+          /\b(select|radio|checkbox|toggle)-disabled\b/.test(el.getAttribute('class') ?? ''),
+      }));
     const buttons = Array.from(
       document.querySelectorAll(
         'button, a[role="button"], [role="button"], input[type="submit"], input[type="button"], a[href]',
@@ -180,7 +251,9 @@ export function formRecorderAgent(): RecorderDrain {
         visible: true,
       }));
     const headings = Array.from(
-      document.querySelectorAll('h1, h2, h3, h4, legend, .card-title, .modal-title'),
+      document.querySelectorAll(
+        'h1, h2, h3, h4, legend, .card-title, .modal-title, ion-title, ion-card-title, ion-list-header, mat-card-title, .alert-title, .alert-sub-title',
+      ),
     )
       .filter(visible)
       .map((h) => clip((h as HTMLElement).innerText, 120) ?? '')
@@ -218,7 +291,7 @@ export function formRecorderAgent(): RecorderDrain {
     const messages: string[] = [];
     for (const el of Array.from(
       document.querySelectorAll(
-        '[role="dialog"], [role="alertdialog"], [role="alert"], .modal-body, .modal-content, .alert, .error, .errors, .text-danger, .help-block, .toast, .swal2-popup',
+        '[role="dialog"], [role="alertdialog"], [role="alert"], .modal-body, .modal-content, .alert, .error, .errors, .text-danger, .help-block, .toast, .swal2-popup, ion-toast, mat-error, mat-snack-bar-container, mat-dialog-container',
       ),
     )) {
       if (messages.length >= 20 || !visible(el)) continue;
@@ -227,6 +300,7 @@ export function formRecorderAgent(): RecorderDrain {
     }
     return {
       fields,
+      controls,
       buttons,
       headings,
       money,
@@ -265,19 +339,48 @@ export function formRecorderAgent(): RecorderDrain {
       },
       true,
     );
+    // A click on a component's shadow DOM reaches the page as a click on the component itself
+    // (ion-select), which the list below names. Anything else drawn to be clicked (a card or tile
+    // with a pointer cursor) is noted by its nearest such element.
+    const CLICKABLE = `button, a, [role="button"], [role="tab"], [role="option"], [role="menuitem"], input[type="submit"], input[type="button"], input[type="radio"], input[type="checkbox"], label, mat-option, ion-item[button], ion-card[button], ${CONTROLS}`;
     document.addEventListener(
       'click',
       (event) => {
-        const el = (event.target as Element | null)?.closest(
-          'button, a, [role="button"], [role="tab"], [role="option"], input[type="submit"], input[type="button"], input[type="radio"], input[type="checkbox"], label',
-        );
+        const target = event.target as Element | null;
+        let el = target?.closest(CLICKABLE) ?? null;
+        for (let n = target, up = 0; !el && n && n !== document.body && up < 5; up++) {
+          if (getComputedStyle(n).cursor === 'pointer') el = n;
+          n = n.parentElement;
+        }
         if (!el) return;
         push({
           at: Date.now(),
           kind: 'click',
           target: identity(el),
-          text: clip((el as HTMLElement).innerText || (el as HTMLInputElement).value, 80) ?? '',
+          text:
+            clip((el as HTMLElement).innerText || (el as HTMLInputElement).value, 80) ??
+            controlText(el) ??
+            '',
         });
+      },
+      true,
+    );
+    // Ionic's controls report a choice with ionChange rather than change. Its detail belongs to the
+    // page's world, so what the control shows afterwards is noted instead.
+    document.addEventListener(
+      'ionChange',
+      (event) => {
+        const el = event.target as Element | null;
+        if (!el || /^ION-(INPUT|TEXTAREA|SEARCHBAR)$/.test(el.tagName)) return;
+        setTimeout(() => {
+          push({
+            at: Date.now(),
+            kind: 'change',
+            field: identity(el),
+            option: { value: '', text: controlText(el) ?? '' },
+            checked: controlChecked(el) ?? undefined,
+          });
+        }, 0);
       },
       true,
     );

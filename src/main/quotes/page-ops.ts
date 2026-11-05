@@ -48,7 +48,34 @@ export type PageOp =
    * No suggestions, or none that reads the same, fails (`no-match`): the typed text is never left
    * in the box as if it were chosen.
    */
-  | { op: 'typeahead'; selector: string; value: string; timeoutMs: number }
+  | {
+      op: 'typeahead';
+      selector: string;
+      value: string;
+      timeoutMs: number;
+      /** The last box shown that matches (Niva Bupa's city, after any other suggesting box). */
+      last?: boolean;
+    }
+  /**
+   * Sets a counter drawn as "-" [n] "+" (Niva Bupa's Adult and Child counts) to `count`: the
+   * `index`-th such counter on the page (from 0), pressing + or - until its box shows the count.
+   * Fails `stuck at n` when the page stops counting (its limit).
+   */
+  | { op: 'stepper'; index: number; count: number; timeoutMs: number }
+  /**
+   * Picks a date in an Angular Material calendar (the box is read-only): the `nth` (from 0) date
+   * box of the `counter`-th counter's block (Niva Bupa's dates of birth under Adult and Child).
+   * Opens the calendar with the box's own toggle, goes to the year, then the month, then the day,
+   * and checks the box shows it (dd/mm/yyyy). A day the calendar greys out fails `date-disabled`.
+   */
+  | { op: 'matDate'; counter: number; nth: number; date: string }
+  /**
+   * Chooses an option in one of the page's Ionic dropdowns (ion-select, opening an ion-alert):
+   * tries each dropdown shown, in order, until one offers an option whose text starts with
+   * `option` (ignoring case and spacing), picks it and presses OK; a dropdown without it is
+   * cancelled. None offering it fails `no-match (offered: …)`. Returns the option's text.
+   */
+  | { op: 'ionPick'; option: string; timeoutMs: number }
   /**
    * Waits until the box holds a value other than `rejectValues` (for example an age box that shows
    * "0" until the portal has worked the age out from the date of birth).
@@ -235,6 +262,42 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       root.querySelectorAll('button, input[type="button"], input[type="submit"], a'),
     ).find((b) => visible(b) && (text(b) || (b as HTMLInputElement).value) === label) as
       HTMLElement | undefined) ?? null;
+  /** A full press: some widgets act on pointer or mouse down, others on click. */
+  const pressEl = (el: Element): void => {
+    const at = { bubbles: true, cancelable: true, view: window, button: 0 };
+    el.dispatchEvent(new PointerEvent('pointerdown', at));
+    el.dispatchEvent(new MouseEvent('mousedown', at));
+    el.dispatchEvent(new PointerEvent('pointerup', at));
+    el.dispatchEvent(new MouseEvent('mouseup', at));
+    (el as HTMLElement).click();
+  };
+  /**
+   * Counters drawn as "-" [n] "+", in page order: each "+" button shown with a "-" button in the
+   * nearest container around it; `box` is the container's box showing the count.
+   */
+  const findCounters = (): {
+    plus: HTMLElement;
+    minus: HTMLElement;
+    root: Element;
+    box: HTMLInputElement | null;
+  }[] => {
+    const isMinus = (b: Element) => ['-', '−', '–'].includes(text(b));
+    const found = [];
+    for (const plus of Array.from(document.querySelectorAll<HTMLElement>('button'))) {
+      if (!visible(plus) || text(plus) !== '+') continue;
+      let root: Element | null = plus.parentElement;
+      for (let up = 0; root && up < 3; up += 1, root = root.parentElement) {
+        const minus = Array.from(root.querySelectorAll<HTMLElement>('button')).find(
+          (b) => visible(b) && isMinus(b),
+        );
+        if (minus) {
+          found.push({ plus, minus, root, box: root.querySelector('input') });
+          break;
+        }
+      }
+    }
+    return found;
+  };
 
   switch (command.op) {
     case 'waitFor': {
@@ -326,12 +389,17 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
     }
     case 'typeahead': {
       const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const pick = (): HTMLElement | null =>
+        command.last
+          ? ((Array.from(document.querySelectorAll(command.selector)).filter(visible).at(-1) as
+              HTMLElement | undefined) ?? null)
+          : first(document, command.selector);
       const box = await until(() => {
-        const el = first(document, command.selector);
+        const el = pick();
         return el instanceof HTMLInputElement && !el.disabled && !el.readOnly ? el : null;
       }, command.timeoutMs);
       if (!box) {
-        const el = first(document, command.selector) as HTMLInputElement | null;
+        const el = pick() as HTMLInputElement | null;
         return { ok: false, detail: el ? 'still-disabled' : 'not-found' };
       }
       box.focus();
@@ -368,7 +436,12 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           ).flatMap((list) => shownItems(list));
           if (items.length > 0) return items;
         }
-        return Array.from(document.querySelectorAll<HTMLElement>('.ui-autocomplete'))
+        // jQuery UI (appended to the page's end), or Angular Material's overlay (likewise).
+        return Array.from(
+          document.querySelectorAll<HTMLElement>(
+            '.ui-autocomplete, .cdk-overlay-container [role="listbox"]',
+          ),
+        )
           .filter(visible)
           .flatMap((list) => shownItems(list));
       };
@@ -383,7 +456,7 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
       target.click();
       await sleep(700);
-      const kept = first(document, command.selector) as HTMLInputElement | null;
+      const kept = box.isConnected ? box : (pick() as HTMLInputElement | null);
       return kept && loose(kept.value) === loose(command.value)
         ? { ok: true }
         : { ok: false, detail: 'not-kept' };
@@ -983,6 +1056,190 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       return now.replace(/-/g, '/') === want
         ? { ok: true }
         : { ok: false, detail: `not-kept: box shows "${now}"` };
+    }
+    case 'stepper': {
+      const get = () => findCounters()[command.index] ?? null;
+      const count = (c: NonNullable<ReturnType<typeof get>>): number => {
+        const digits = (c.box?.value ?? text(c.root)).replace(/[^0-9]/g, '');
+        return digits === '' ? Number.NaN : Number(digits);
+      };
+      if (!(await until(get, command.timeoutMs))) {
+        return { ok: false, detail: `not-found (${findCounters().length} counters shown)` };
+      }
+      for (let press = 0; press < 15; press += 1) {
+        const c = get();
+        if (!c) return { ok: false, detail: 'not-found' };
+        const n = count(c);
+        if (Number.isNaN(n)) return { ok: false, detail: 'count-unreadable' };
+        if (n === command.count) return { ok: true };
+        const button = n < command.count ? c.plus : c.minus;
+        if ((button as HTMLButtonElement).disabled) return { ok: false, detail: `stuck at ${n}` };
+        button.click();
+        const moved = await until(() => {
+          const now = get();
+          return now && count(now) !== n ? true : null;
+        }, 3000);
+        if (!moved) return { ok: false, detail: `stuck at ${n}` };
+      }
+      return { ok: false, detail: 'too-many-presses' };
+    }
+    case 'matDate': {
+      const [y, m, d] = command.date.split('-').map(Number) as [number, number, number];
+      const MONTHS = [
+        'january',
+        'february',
+        'march',
+        'april',
+        'may',
+        'june',
+        'july',
+        'august',
+        'september',
+        'october',
+        'november',
+        'december',
+      ];
+      const month = MONTHS[m - 1]!;
+      const want = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+      const same = (value: string) => value.trim().replace(/[-.]/g, '/') === want;
+      /** The counter's block (the largest container holding no other counter), its date boxes. */
+      const dateBoxes = (): HTMLInputElement[] => {
+        const counter = findCounters()[command.counter];
+        if (!counter) return [];
+        let block: Element = counter.root;
+        for (
+          let n = counter.root.parentElement, up = 0;
+          n && n !== document.body && up < 6;
+          n = n.parentElement, up += 1
+        ) {
+          const pluses = Array.from(n.querySelectorAll('button')).filter(
+            (b) => visible(b) && text(b) === '+',
+          );
+          if (pluses.length > 1) break;
+          block = n;
+        }
+        return Array.from(block.querySelectorAll('input')).filter(
+          (i) => visible(i) && i.parentElement?.querySelector('mat-datepicker-toggle') !== null,
+        );
+      };
+      const box = () => dateBoxes()[command.nth] ?? null;
+      const start = box();
+      if (!start) return { ok: false, detail: `date-box-not-found (${dateBoxes().length} shown)` };
+      if (same(start.value)) return { ok: true, detail: 'already-set' };
+      const toggle =
+        start.parentElement?.querySelector<HTMLElement>('mat-datepicker-toggle button') ?? start;
+      pressEl(toggle);
+      const calendar = (): HTMLElement | null =>
+        Array.from(document.querySelectorAll<HTMLElement>('mat-calendar')).find(visible) ?? null;
+      if (!(await until(calendar, 5000))) return { ok: false, detail: 'calendar-not-shown' };
+      const words = (el: Element) =>
+        (el.getAttribute('aria-label') ?? text(el)).toLowerCase().split(/[^a-z0-9]+/);
+      const disabled = (el: Element) =>
+        el.classList.contains('mat-calendar-body-disabled') ||
+        el.getAttribute('aria-disabled') === 'true';
+      for (let move = 0; ; move += 1) {
+        const cal = calendar();
+        if (!cal) break; // closed: the day was chosen
+        if (move >= 60) return { ok: false, detail: 'calendar-did-not-reach-date' };
+        const cells = Array.from(cal.querySelectorAll<HTMLElement>('.mat-calendar-body-cell'));
+        const go = (selector: string): boolean => {
+          const b = cal.querySelector<HTMLButtonElement>(selector);
+          if (!b || b.disabled) return false;
+          pressEl(b);
+          return true;
+        };
+        let target: HTMLElement | undefined;
+        if (cal.querySelector('mat-month-view')) {
+          target = cells.find((c) => {
+            const w = words(c);
+            return w.includes(String(d)) && w.includes(month) && w.includes(String(y));
+          });
+          if (!target && !go('.mat-calendar-period-button')) {
+            return { ok: false, detail: 'calendar-period-button-missing' };
+          }
+        } else if (cal.querySelector('mat-multi-year-view')) {
+          target = cells.find((c) => text(c) === String(y));
+          if (!target) {
+            const years = cells.map((c) => Number(text(c))).filter((n) => n > 0);
+            const back = years.length > 0 && y < Math.min(...years);
+            if (!go(back ? '.mat-calendar-previous-button' : '.mat-calendar-next-button')) {
+              return { ok: false, detail: 'date-disabled' };
+            }
+          }
+        } else if (cal.querySelector('mat-year-view')) {
+          target = cells.find((c) => {
+            const w = words(c);
+            return (w.includes(month) && w.includes(String(y))) || w.includes(month.slice(0, 3));
+          });
+          if (!target) return { ok: false, detail: 'month-not-found' };
+        } else {
+          return { ok: false, detail: 'calendar-view-unknown' };
+        }
+        if (target) {
+          if (disabled(target)) return { ok: false, detail: 'date-disabled' };
+          pressEl(target.querySelector('.mat-calendar-body-cell-content') ?? target);
+          // The day: done once the box shows it, whether or not the calendar closes by itself.
+          if (cal.querySelector('mat-month-view')) {
+            if (await until(() => (same(box()?.value ?? '') ? true : null), 1500)) break;
+          }
+        }
+        await sleep(150);
+      }
+      const set = await until(() => (same(box()?.value ?? '') ? true : null), 2500);
+      return set
+        ? { ok: true }
+        : { ok: false, detail: `date-not-set: box shows "${box()?.value ?? ''}"` };
+    }
+    case 'ionPick': {
+      const loose = (t: string) => t.replace(/\s+/g, '').toLowerCase();
+      const want = loose(command.option);
+      const selects = await until(() => {
+        const shown = Array.from(document.querySelectorAll<HTMLElement>('ion-select')).filter(
+          visible,
+        );
+        return shown.length > 0 ? shown : null;
+      }, command.timeoutMs);
+      if (!selects) return { ok: false, detail: 'no-dropdown' };
+      const alertShown = (): HTMLElement | null =>
+        Array.from(document.querySelectorAll<HTMLElement>('ion-alert')).find((a) =>
+          visible(a.querySelector('.alert-wrapper') ?? a),
+        ) ?? null;
+      const offered: string[] = [];
+      for (const select of selects) {
+        if (!select.isConnected) continue;
+        select.click();
+        const alert = await until(alertShown, 4000);
+        if (!alert) continue;
+        const options = Array.from(alert.querySelectorAll<HTMLElement>('button')).filter(
+          (b) =>
+            b.id.startsWith('alert-input-') ||
+            b.matches('.alert-radio-button, .alert-checkbox-button'),
+        );
+        for (const o of options) if (text(o) && !offered.includes(text(o))) offered.push(text(o));
+        const action = (label: string): HTMLElement | null =>
+          Array.from(alert.querySelectorAll<HTMLElement>('button')).find(
+            (b) => !options.includes(b) && text(b).toLowerCase() === label,
+          ) ?? null;
+        const match = options.find((o) => loose(text(o)).startsWith(want));
+        if (!match) {
+          action('cancel')?.click();
+          await until(() => (alertShown() ? null : true), 3000);
+          continue;
+        }
+        if (match.getAttribute('aria-checked') !== 'true') match.click();
+        await sleep(200);
+        const ok = action('ok');
+        if (!ok) return { ok: false, detail: 'ok-not-found' };
+        ok.click();
+        if (!(await until(() => (alertShown() ? null : true), 4000))) {
+          return { ok: false, detail: 'picker-still-open' };
+        }
+        return { ok: true, value: text(match) };
+      }
+      return {
+        ok: false,
+        detail: offered.length > 0 ? `no-match (offered: ${offered.join('; ')})` : 'no-options',
+      };
     }
   }
 }

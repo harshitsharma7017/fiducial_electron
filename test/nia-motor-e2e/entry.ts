@@ -1,5 +1,6 @@
 // Bundled by run.mjs with the same toolchain as the app, so the harness runs exactly the
 // serialised page agent the app injects into New India's page.
+import { formRecorderAgent } from '../../src/main/insurers/form-recorder-agent';
 import { createLogger } from '../../src/main/logging/logger';
 import { runNiaFireQuote } from '../../src/main/quotes/run-nia-fire';
 import { runNiaHealthQuote } from '../../src/main/quotes/run-nia-health';
@@ -8,6 +9,7 @@ import { runNiaMotorQuote } from '../../src/main/quotes/run-nia-motor';
 import { runNiaPaQuote } from '../../src/main/quotes/run-nia-pa';
 import { runNiaRuralQuote } from '../../src/main/quotes/run-nia-rural';
 import { runNiaTravelQuote } from '../../src/main/quotes/run-nia-travel';
+import { runNivaHealthQuote } from '../../src/main/quotes/run-niva-health';
 import {
   installNavigationPolicy,
   setSessionPolicy,
@@ -15,6 +17,7 @@ import {
 
 export {
   createLogger,
+  formRecorderAgent,
   installNavigationPolicy,
   runNiaFireQuote,
   runNiaHealthQuote,
@@ -23,5 +26,6 @@ export {
   runNiaPaQuote,
   runNiaRuralQuote,
   runNiaTravelQuote,
+  runNivaHealthQuote,
   setSessionPolicy,
 };

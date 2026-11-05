@@ -41,6 +41,11 @@ import {
   type NiaPaForm,
   type NiaPaRun,
 } from '../../../shared/insurers/nia-pa';
+import {
+  NIVA_HEALTH_PLAN_NAMES,
+  NIVA_HEALTH_PLANS,
+  type NivaHealthPlan,
+} from '../../../shared/insurers/niva-health';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
 
 const RELATIONSHIP_LABELS: Record<Relationship, string> = {
@@ -306,6 +311,14 @@ export function ClientsPanel(): React.JSX.Element | null {
                   >
                     New India PA quote
                   </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setQuoting(quoting === `niva-health:${c.id}` ? null : `niva-health:${c.id}`)
+                    }
+                  >
+                    Niva Bupa health quote
+                  </button>
                   <button type="button" onClick={() => void edit(c)}>
                     Edit
                   </button>
@@ -328,6 +341,7 @@ export function ClientsPanel(): React.JSX.Element | null {
               {quoting === c.id && <QuotePanel clientId={c.id} />}
               {quoting === `nia-health:${c.id}` && <NiaHealthPanel clientId={c.id} />}
               {quoting === `nia-pa:${c.id}` && <NiaPaPanel clientId={c.id} />}
+              {quoting === `niva-health:${c.id}` && <NivaHealthPanel clientId={c.id} />}
               {PROPOSAL_FORMS.map(
                 (f) =>
                   quoting === `${f.product}:${c.id}` && (
@@ -768,6 +782,84 @@ function ProposalPanel(props: {
           {result.toDo && result.toDo.length > 0 && (
             <>
               <p>Still to fill in by hand:</p>
+              <ul>
+                {result.toDo.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Fills Niva Bupa's premium calculator for a saved client and chooses the plan, then stops. */
+function NivaHealthPanel(props: { clientId: string }): React.JSX.Element {
+  const [plan, setPlan] = useState<NivaHealthPlan>('reassure-2');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    const r = await window.fqf.quotes
+      .run({ clientId: props.clientId, insurerId: 'niva-bupa', product: 'niva-health', plan })
+      .catch(() => null);
+    setBusy(false);
+    setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
+  };
+  return (
+    <div className="quote-panel">
+      <p className="insurer-note">
+        <strong>Niva Bupa, premium calculator.</strong> Sign in to Niva Bupa and open its premium
+        calculator at the first step (&ldquo;Who would you like to insure today?&rdquo;). The app
+        fills the members, their dates of birth, the city and mobile number, presses Continue and
+        chooses the plan, then stops. You choose the sum insured, policy period and add-ons, and
+        press Calculate Premium.
+      </p>
+      {plan === 'health-recharge' && (
+        <p className="insurer-note">
+          For Health Recharge, first choose the top-up product at the top of Niva Bupa&rsquo;s
+          calculator and fill its own boxes, then press Fill.
+        </p>
+      )}
+      <label>
+        Plan{' '}
+        <select value={plan} onChange={(e) => setPlan(e.target.value as NivaHealthPlan)}>
+          {NIVA_HEALTH_PLANS.map((p) => (
+            <option key={p} value={p}>
+              {NIVA_HEALTH_PLAN_NAMES[p]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="insurer-actions">
+        <button type="button" disabled={busy} onClick={() => void run()}>
+          {busy ? 'Filling Niva Bupa…' : `Fill for ${NIVA_HEALTH_PLAN_NAMES[plan]}`}
+        </button>
+      </div>
+      {result && 'error' in result && (
+        <p className="error" role="alert">
+          {result.error}
+        </p>
+      )}
+      {result && 'outcome' in result && (
+        <div role="status">
+          <p className={result.outcome === 'ready' ? undefined : 'error'}>
+            {result.step ? `${result.step}: ` : ''}
+            {result.message}
+          </p>
+          {result.problems.length > 0 && (
+            <ul>
+              {result.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          {result.toDo && result.toDo.length > 0 && (
+            <>
+              <p>Still to do by hand:</p>
               <ul>
                 {result.toDo.map((t) => (
                   <li key={t}>{t}</li>
