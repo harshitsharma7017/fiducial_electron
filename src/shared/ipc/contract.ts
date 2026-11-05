@@ -30,7 +30,7 @@ import { marineClientSchema, marineRecordSchema, marineSummarySchema } from '../
 import { niaShipmentSchema } from '../insurers/nia-marine';
 import { niaPaRunSchema } from '../insurers/nia-pa';
 import { niaFireRunSchema } from '../insurers/nia-fire';
-import { NIVA_HEALTH_PLANS } from '../insurers/niva-health';
+import { nivaRunSchema } from '../insurers/niva-health';
 import {
   propertyClientSchema,
   propertyRecordSchema,
@@ -317,13 +317,13 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       goodHealthConfirmed: z.boolean(),
     })
     .strict(),
-  // Niva Bupa's premium calculator, for a health client: the plan is chosen for this run.
+  // Niva Bupa's premium calculator, for a health client: the plan and its options for this run.
   z
     .object({
       product: z.literal('niva-health'),
       clientId: entityIdSchema,
       insurerId: insurerIdSchema,
-      plan: z.enum(NIVA_HEALTH_PLANS),
+      run: nivaRunSchema,
     })
     .strict(),
   // New India Personal Accident forms, for a health client's proposer: choices for this run.

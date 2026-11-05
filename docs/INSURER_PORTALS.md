@@ -488,13 +488,18 @@ advisor walked through UNO's premium calculator (`#/new-premiumcalculator`) seve
 - a top-up (Health Recharge);
 - plan lists, the policy period step and Calculate Premium.
 
-The calculator is built with Ionic and Angular Material, in steps:
-1. **Who would you like to insure today?** Adult and Child counters, one date of birth per member,
-   the city and the mobile number, then Continue. The date boxes are read-only and take a date from
-   Material's calendar only.
-2. **Plans:** Ionic dropdowns whose lists name each plan "… Individual" (one member) or "… Family
-   Floater" (several).
-3. **Policy period, add-ons, terms,** then Calculate Premium, which leads to a summary.
+The calculator is built with Ionic and Angular Material. The advisor's screenshots of the same day
+show UNO's home page and the first step:
+0. **UNO's home page** (`#/landing-page`): the **Premium Calculator** tile opens the calculator.
+1. **Basic Details:** plan-type tiles (Individual Plan, Family Floater, Benefit Plan, Top-Up Plan,
+   Family First, Combo Product). Under "Who would you like to insure today?": Adult and Child
+   counters and one date of birth per member ("Adult1 DOB"). The date boxes are read-only and take
+   a date from Material's calendar only; Niva Bupa then shows it month first without zeros
+   (8/1/1981). Then the city and "Phone no. (optional)", and Continue.
+2. **Premium Details:** Ionic dropdowns whose lists name each plan "… Individual" (one member) or
+   "… Family Floater" (several).
+3. **Customize Your Plan:** policy period, add-ons and terms, then Calculate Premium, which leads to
+   4. **Plan Summary**.
 
 The recorder of that day did not see Ionic's own controls: the dropdowns, plan cards, radios and
 checkboxes. Steps 2 and 3 are therefore known only from the lists Niva Bupa opened. The recorder
@@ -503,25 +508,31 @@ dropdowns, radios, checkboxes, toggles and tabs: what each shows and whether it 
 on them and on other clickable cards, and Ionic's changes. It also notes a field's caption written
 beside it.
 
-A health client has a **Niva Bupa health quote** button; the advisor picks the plan. The advisor
-opens the calculator at its first step, and the app then:
+A health client has a **Niva Bupa health quote** button; the advisor picks the plan. From UNO's
+home page (or the calculator's first step), the app:
+- presses **Premium Calculator** (from the home page);
+- chooses the plan-type tile: Individual Plan for one member, Family Floater for several, Top-Up
+  Plan for Health Recharge. Choosing it draws the members' boxes again once Niva Bupa's server
+  answers, late enough on 5 November 2026 to undo counts set a second after the click. So it comes
+  first, and the app waits for that redraw before it counts;
 - sets the Adult and Child counters (adults: self, spouse, parents, parents-in-law; children: sons
   and daughters);
 - picks each date of birth in Material's calendar (year, month, day);
-- chooses the city from Niva Bupa's suggestions and types the mobile number;
+- checks the counters and dates once more, filling again anything a late redraw cleared;
+- chooses the city from Niva Bupa's suggestions and types the phone number when the client has one;
 - presses the calculator's **Continue** (nothing is saved);
-- chooses the plan in the plan list ("ReAssure2.0 …", "ReAssure3.0 …" or "HealthRecharge …").
+- chooses the plan in the plan list ("ReAssure2.0 …" or "ReAssure3.0 …").
 
 Left to the advisor: the plan card (sum insured and options) and its Continue, the policy period,
 add-ons, the Terms & Conditions box, and **Calculate Premium**, which the app never presses.
 
-**Health Recharge (top-up):** the recording did not show how the top-up product is chosen at the top
-of step 1, nor its two extra boxes (an amount and a date). The advisor chooses the top-up product
-and fills those boxes first. Without them, the plan list does not offer Health Recharge, and the run
-says so.
+**Health Recharge (top-up):** the Top-Up Plan tile shows boxes of its own: in the recording, an
+amount and a date, whose labels were not captured. The app chooses Top-Up Plan and fills the
+members, city and phone, then stops before Continue. The advisor fills the top-up boxes, presses
+Continue and chooses HealthRechargeV2.
 
 The run refuses:
-- a calculator not on its first step;
+- a page that is neither UNO's home page nor the calculator's first step;
 - a client without an adult or without dates of birth;
 - an "adult" under 18 (Niva Bupa's adult calendar starts 18 years back).
 
@@ -530,12 +541,15 @@ family cover only) stops the run with the plans it does offer.
 
 **Verified:** against a local copy of the calculator, with Material calendars and Ionic dropdowns as
 custom elements with shadow roots (`npm run test:nia -- niva`). Checked for:
+- the start from UNO's home page and from the open calculator;
 - family and single cover;
-- each plan;
+- each plan, with its plan-type tile;
+- dates shown month first without zeros;
 - counts left from an earlier run;
+- a plan-type tile that redraws the members' boxes late;
 - a plan not offered;
 - the counter's limit;
-- a refusal off the first step;
+- a refusal on another step;
 - the recorder seeing the dropdowns and a click on one.
 
 **Not yet run on the live portal.**

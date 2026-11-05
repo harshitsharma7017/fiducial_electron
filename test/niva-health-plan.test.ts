@@ -1,10 +1,11 @@
-// Niva Bupa's premium calculator for a health client: the request, the members and dates of
-// birth, the plan chosen, what is left to the advisor, and that Calculate Premium is never pressed.
+// Niva Bupa's premium calculator for a health client, by "I Know My Plan": the request, the plan,
+// members and dates of birth, the questions, the sum insured, policy period and add-ons, Calculate
+// Premium and the premium read, and that the Continue after it is never pressed.
 import { describe, expect, it } from 'vitest';
 import type { PageOp } from '../src/main/quotes/page-ops';
-import { planNivaHealthQuote } from '../src/main/quotes/niva-health';
+import { nivaPlanOptions, nivaRupees, planNivaHealthQuote } from '../src/main/quotes/niva-health';
 import { clientInputSchema } from '../src/shared/contracts/client';
-import { NIVA_HEALTH_PLANS, type NivaHealthPlan } from '../src/shared/insurers/niva-health';
+import { NIVA_HEALTH_PLANS, nivaRunSchema, type NivaRun } from '../src/shared/insurers/niva-health';
 import { quoteRunRequestSchema } from '../src/shared/ipc/contract';
 
 const TODAY = new Date(2026, 10, 5);
@@ -18,82 +19,144 @@ const FAMILY = {
   ],
   proposal: { city: 'Ahmedabad' },
 };
-const plan = (client: Record<string, unknown> = FAMILY, which: NivaHealthPlan = 'reassure-2') =>
-  planNivaHealthQuote(clientInputSchema.parse(client), { plan: which, today: TODAY });
-const ops = (...args: Parameters<typeof plan>): PageOp[] => {
+const SINGLE = { ...FAMILY, members: [FAMILY.members[2]] };
+const RUN: NivaRun = {
+  plan: 'reassure-2',
+  sumInsured: 2000000,
+  years: 1,
+  addOns: ['Safeguard'],
+  tieredNetwork: false,
+  medicalPractitioner: false,
+};
+const plan = (client: Record<string, unknown> = FAMILY, run: NivaRun = RUN) =>
+  planNivaHealthQuote(clientInputSchema.parse(client), run, { today: TODAY });
+const steps = (...args: Parameters<typeof plan>) => {
   const r = plan(...args);
   if (!r.ok) throw new Error(r.problems.join('; '));
-  return r.steps.map((s) => s.op);
+  return r.steps;
 };
+const ops = (...args: Parameters<typeof plan>): PageOp[] => steps(...args).map((s) => s.op);
+const labelled = (label: string, ...args: Parameters<typeof plan>) =>
+  steps(...args).filter((s) => s.label === label);
 
-describe('Niva Bupa premium calculator', () => {
-  it('a request names a health client, Niva Bupa and one of the three plans', () => {
+describe('Niva Bupa premium calculator (I Know My Plan)', () => {
+  it('a request names a health client, Niva Bupa and the run’s choices', () => {
     const request = {
       product: 'niva-health',
       clientId: '018f2b8e-7c1a-7b3e-9d4f-1a2b3c4d5e6f',
       insurerId: 'niva-bupa',
-      plan: 'reassure-3',
+      run: { ...RUN, previousPolicyEndDate: '2026-11-18' },
     };
     expect(quoteRunRequestSchema.safeParse(request).success).toBe(true);
-    expect(quoteRunRequestSchema.safeParse({ ...request, plan: 'aspire' }).success).toBe(false);
+    expect(nivaRunSchema.safeParse({ ...RUN, plan: 'aspire' }).success).toBe(false);
+    expect(nivaRunSchema.safeParse({ ...RUN, years: 4 }).success).toBe(false);
     expect(NIVA_HEALTH_PLANS).toEqual(['reassure-2', 'reassure-3', 'health-recharge']);
   });
 
-  it('counts adults and children, then their dates of birth: adults self first, children after', () => {
-    expect(ops().slice(0, 5)).toEqual([
+  it('goes "I Know My Plan", then picks the plan by name: Individual or Family Floater', () => {
+    const list = ops();
+    expect(list[0]).toEqual({
+      op: 'ensureShown',
+      shown: { text: 'Plan Recommendation' },
+      open: { text: 'I Know My Plan' },
+      timeoutMs: 8000,
+    });
+    expect(list[1]).toMatchObject({
+      op: 'pickOption',
+      type: 'ReAssure2.0',
+      options: ['ReAssure2.0 Family Floater'],
+    });
+    expect(ops(SINGLE)[1]).toMatchObject({ options: ['ReAssure2.0 Individual'] });
+    expect(nivaPlanOptions({ ...RUN, plan: 'reassure-3' }, 1)).toEqual(['ReAssure3.0 Individual']);
+    expect(nivaPlanOptions({ ...RUN, plan: 'health-recharge' }, 2)[0]).toBe(
+      'HealthRechargeV2 Family Floater',
+    );
+  });
+
+  it('counts the members, then dates of birth eldest first; a floater may ask only the eldest', () => {
+    expect(ops().slice(3, 8)).toEqual([
       { op: 'stepper', index: 0, count: 2, timeoutMs: 15000 },
       { op: 'stepper', index: 1, count: 1, timeoutMs: 5000 },
       { op: 'matDate', counter: 0, nth: 0, date: '1986-01-25' },
       { op: 'matDate', counter: 0, nth: 1, date: '1988-07-02' },
       { op: 'matDate', counter: 1, nth: 0, date: '2018-03-14' },
     ]);
+    // The eldest's box is always asked; the others are skipped when Niva Bupa shows no box.
+    expect(
+      steps()
+        .slice(5, 8)
+        .map((s) => s.skipIfNoBox),
+    ).toEqual([false, true, true]);
   });
 
-  it('sets the children to none when there are none (a count left from an earlier run)', () => {
-    const single = { ...FAMILY, members: [FAMILY.members[2]] };
-    expect(ops(single).slice(0, 3)).toEqual([
-      { op: 'stepper', index: 0, count: 1, timeoutMs: 15000 },
-      { op: 'stepper', index: 1, count: 0, timeoutMs: 5000 },
-      { op: 'matDate', counter: 0, nth: 0, date: '1986-01-25' },
+  it('answers the three questions: no transfer, not a practitioner, not a child-only policy', () => {
+    const answers = steps().filter((s) => s.op.op === 'ionRadio' && s.op.group.question);
+    expect(answers.map((s) => [s.label, (s.op as { label: string }).label])).toEqual([
+      ['Transfer of a current policy', 'NO'],
+      ['Medical practitioner', 'NO'],
+      ['Only for Child Policy', 'NO'],
     ]);
   });
 
-  it('then the city (last suggesting box), the mobile number, Continue and the plan', () => {
-    const list = ops();
-    expect(list.slice(5)).toEqual([
-      expect.objectContaining({ op: 'typeahead', value: 'Ahmedabad', last: true }),
-      { op: 'setField', selector: 'input[maxlength="10"]', value: '9876543210' },
+  it('a transfer answers YES and picks the previous policy’s end date; a practitioner, YES', () => {
+    const run = { ...RUN, previousPolicyEndDate: '2026-11-18', medicalPractitioner: true };
+    expect(labelled('Transfer of a current policy', FAMILY, run)[0]?.op).toMatchObject({
+      label: 'YES',
+    });
+    expect(labelled('Previous Policy End Date', FAMILY, run)[0]?.op).toEqual({
+      op: 'matDate',
+      label: 'Previous Policy End Date',
+      date: '2026-11-18',
+    });
+    expect(labelled('Medical practitioner', FAMILY, run)[0]?.op).toMatchObject({ label: 'YES' });
+  });
+
+  it('then Continue, the sum insured as Niva Bupa writes it, the policy period, add-ons', () => {
+    const list = ops(FAMILY, { ...RUN, years: 2, addOns: ['Safeguard', 'Hospital Cash'] });
+    const at = list.findIndex((o) => o.op === 'clickButton' && o.text === 'Continue');
+    expect(list.slice(at, at + 7)).toEqual([
       { op: 'clickButton', text: 'Continue', timeoutMs: 5000 },
-      { op: 'waitFor', selector: 'app-second-step', timeoutMs: 20000 },
-      { op: 'ionPick', option: 'ReAssure2.0', timeoutMs: 20000 },
+      { op: 'waitFor', selector: 'app-third-step ion-select', timeoutMs: 25000 },
+      { op: 'ionPick', option: '₹ 2,000,000', exact: true, timeoutMs: 10000 },
+      {
+        op: 'ionRadio',
+        group: { selector: 'ion-radio-group[formcontrolname="premium"]' },
+        label: '2 Year',
+        timeoutMs: 10000,
+      },
+      { op: 'scrollTo', text: 'Key Add-Ons', timeoutMs: 5000 },
+      { op: 'addOn', name: 'Safeguard', timeoutMs: 5000 },
+      { op: 'addOn', name: 'Hospital Cash', timeoutMs: 5000 },
     ]);
-    expect(ops(FAMILY, 'reassure-3').at(-1)).toMatchObject({ option: 'ReAssure3.0' });
-    expect(ops(FAMILY, 'health-recharge').at(-1)).toMatchObject({ option: 'HealthRecharge' });
+    expect(nivaRupees(500000)).toBe('₹ 500,000');
   });
 
-  it('never presses Calculate Premium; the card, period, add-ons and premium are the advisor’s', () => {
+  it('Tiered Network only when asked: Show more in its row, then the tiered list', () => {
+    expect(labelled('Tiered Network')).toEqual([]);
+    const tiered = labelled('Tiered Network', FAMILY, { ...RUN, tieredNetwork: true });
+    expect(tiered.map((s) => s.op.op)).toEqual(['clickInRow', 'ionRadio', 'pause']);
+  });
+
+  it('presses Calculate Premium, reads the premium, and never presses the Continue after it', () => {
     const r = plan();
     if (!r.ok) throw new Error('refused');
     const clicks = r.steps
       .map((s) => s.op)
-      .filter((o): o is Extract<PageOp, { op: 'clickButton' }> => o.op === 'clickButton');
-    expect(clicks.map((c) => c.text)).toEqual(['Continue']);
-    expect(r.byHand).toEqual([
-      'the ReAssure 2.0 card: its sum insured and options, then Continue',
-      'policy period, add-ons and the Terms & Conditions box',
-    ]);
-    expect(r.steps.find((s) => s.op.op === 'ionPick')?.keep).toBe('plan');
+      .filter((o): o is Extract<PageOp, { op: 'clickButton' }> => o.op === 'clickButton')
+      .map((o) => o.text);
+    expect(clicks).toEqual(['Continue', 'Calculate Premium']);
+    expect(r.steps.at(-1)).toMatchObject({
+      op: { op: 'ionRadioRead', group: { selector: 'ion-radio-group[formcontrolname="premium"]' } },
+      keep: 'premium',
+    });
   });
 
-  it('without a city or mobile number, leaves them to the advisor', () => {
+  it('without a city, leaves it to the advisor; the phone number is optional on Niva Bupa', () => {
     const bare = { ...FAMILY, customer: { name: 'Synthetic Insured' }, proposal: {} };
     const r = plan(bare);
     if (!r.ok) throw new Error('refused');
     expect(r.steps.some((s) => s.op.op === 'typeahead' || s.op.op === 'setField')).toBe(false);
-    expect(r.byHand.slice(0, 2)).toEqual([
-      'city (the client record has none)',
-      'mobile number (the client record has none)',
-    ]);
+    expect(r.byHand[0]).toBe('city (the client record has none), then run again');
   });
 
   it('refuses without an adult, a date of birth, or with an adult under 18', () => {

@@ -44,6 +44,8 @@ import {
 import {
   NIVA_HEALTH_PLAN_NAMES,
   NIVA_HEALTH_PLANS,
+  NIVA_KNOWN_ADD_ONS,
+  NIVA_SUMS_INSURED,
   type NivaHealthPlan,
 } from '../../../shared/insurers/niva-health';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
@@ -795,16 +797,44 @@ function ProposalPanel(props: {
   );
 }
 
-/** Fills Niva Bupa's premium calculator for a saved client and chooses the plan, then stops. */
+/** Fills Niva Bupa's premium calculator for a saved client and works the premium out. */
 function NivaHealthPanel(props: { clientId: string }): React.JSX.Element {
   const [plan, setPlan] = useState<NivaHealthPlan>('reassure-2');
+  const [sumInsured, setSumInsured] = useState<number>(500000);
+  const [years, setYears] = useState<1 | 2 | 3>(1);
+  const [known, setKnown] = useState<string[]>([]);
+  const [otherAddOns, setOtherAddOns] = useState('');
+  const [tieredNetwork, setTieredNetwork] = useState(false);
+  const [medicalPractitioner, setMedicalPractitioner] = useState(false);
+  const [porting, setPorting] = useState(false);
+  const [previousEnd, setPreviousEnd] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
   const run = async () => {
     setBusy(true);
     setResult(null);
+    const addOns = [
+      ...known,
+      ...otherAddOns
+        .split(',')
+        .map((a) => a.trim())
+        .filter((a) => a.length >= 2),
+    ];
     const r = await window.fqf.quotes
-      .run({ clientId: props.clientId, insurerId: 'niva-bupa', product: 'niva-health', plan })
+      .run({
+        clientId: props.clientId,
+        insurerId: 'niva-bupa',
+        product: 'niva-health',
+        run: {
+          plan,
+          sumInsured,
+          years,
+          addOns,
+          tieredNetwork,
+          medicalPractitioner,
+          ...(porting && previousEnd ? { previousPolicyEndDate: previousEnd } : {}),
+        },
+      })
       .catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
@@ -812,18 +842,13 @@ function NivaHealthPanel(props: { clientId: string }): React.JSX.Element {
   return (
     <div className="quote-panel">
       <p className="insurer-note">
-        <strong>Niva Bupa, premium calculator.</strong> Sign in to Niva Bupa and open its premium
-        calculator at the first step (&ldquo;Who would you like to insure today?&rdquo;). The app
-        fills the members, their dates of birth, the city and mobile number, presses Continue and
-        chooses the plan, then stops. You choose the sum insured, policy period and add-ons, and
-        press Calculate Premium.
+        <strong>Niva Bupa, premium calculator.</strong> Sign in to Niva Bupa and leave it on
+        UNO&rsquo;s home page (or the calculator&rsquo;s first step). The app opens the Premium
+        Calculator, chooses &ldquo;I Know My Plan&rdquo; and the plan, fills the members, dates of
+        birth, city, phone and questions, then the sum insured, policy period and add-ons, presses
+        Calculate Premium and reads the premium. It stops before the summary that asks the
+        customer&rsquo;s name and email.
       </p>
-      {plan === 'health-recharge' && (
-        <p className="insurer-note">
-          For Health Recharge, first choose the top-up product at the top of Niva Bupa&rsquo;s
-          calculator and fill its own boxes, then press Fill.
-        </p>
-      )}
       <label>
         Plan{' '}
         <select value={plan} onChange={(e) => setPlan(e.target.value as NivaHealthPlan)}>
@@ -833,10 +858,77 @@ function NivaHealthPanel(props: { clientId: string }): React.JSX.Element {
             </option>
           ))}
         </select>
+      </label>{' '}
+      <label>
+        Sum insured{' '}
+        <select value={sumInsured} onChange={(e) => setSumInsured(Number(e.target.value))}>
+          {NIVA_SUMS_INSURED.map((s) => (
+            <option key={s} value={s}>
+              ₹{s.toLocaleString('en-IN')}
+            </option>
+          ))}
+        </select>
+      </label>{' '}
+      <label>
+        Policy period{' '}
+        <select value={years} onChange={(e) => setYears(Number(e.target.value) as 1 | 2 | 3)}>
+          <option value={1}>1 year</option>
+          <option value={2}>2 years</option>
+          <option value={3}>3 years</option>
+        </select>
       </label>
+      <fieldset>
+        <legend>Key Add-Ons</legend>
+        {NIVA_KNOWN_ADD_ONS.map((a) => (
+          <label key={a} className="check">
+            <input
+              type="checkbox"
+              checked={known.includes(a)}
+              onChange={(e) =>
+                setKnown(e.target.checked ? [...known, a] : known.filter((k) => k !== a))
+              }
+            />
+            {a}
+          </label>
+        ))}
+        <label>
+          Others, as Niva Bupa names them (comma-separated){' '}
+          <input value={otherAddOns} onChange={(e) => setOtherAddOns(e.target.value)} />
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={tieredNetwork}
+            onChange={(e) => setTieredNetwork(e.target.checked)}
+          />
+          Tiered Network (Niva Bupa&rsquo;s discount with a co-pay)
+        </label>
+      </fieldset>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={medicalPractitioner}
+          onChange={(e) => setMedicalPractitioner(e.target.checked)}
+        />
+        An insured member is a medical practitioner
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={porting} onChange={(e) => setPorting(e.target.checked)} />
+        Transfer (port) a current health policy
+      </label>
+      {porting && (
+        <label>
+          Previous policy end date{' '}
+          <input type="date" value={previousEnd} onChange={(e) => setPreviousEnd(e.target.value)} />
+        </label>
+      )}
       <div className="insurer-actions">
-        <button type="button" disabled={busy} onClick={() => void run()}>
-          {busy ? 'Filling Niva Bupa…' : `Fill for ${NIVA_HEALTH_PLAN_NAMES[plan]}`}
+        <button
+          type="button"
+          disabled={busy || (porting && !previousEnd)}
+          onClick={() => void run()}
+        >
+          {busy ? 'Working on Niva Bupa…' : `Get ${NIVA_HEALTH_PLAN_NAMES[plan]} premium`}
         </button>
       </div>
       {result && 'error' in result && (
@@ -846,6 +938,11 @@ function NivaHealthPanel(props: { clientId: string }): React.JSX.Element {
       )}
       {result && 'outcome' in result && (
         <div role="status">
+          {result.premium && (
+            <p>
+              <strong>{result.premium.amount}</strong> &mdash; {result.premium.label}
+            </p>
+          )}
           <p className={result.outcome === 'ready' ? undefined : 'error'}>
             {result.step ? `${result.step}: ` : ''}
             {result.message}

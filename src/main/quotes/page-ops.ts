@@ -68,14 +68,63 @@ export type PageOp =
    * Opens the calendar with the box's own toggle, goes to the year, then the month, then the day,
    * and checks the box shows it (dd/mm/yyyy). A day the calendar greys out fails `date-disabled`.
    */
-  | { op: 'matDate'; counter: number; nth: number; date: string }
+  | {
+      op: 'matDate';
+      date: string;
+      counter?: number;
+      nth?: number;
+      /** Instead of a counter's box: the date box captioned so ("Previous Policy End Date"). */
+      label?: string;
+    }
   /**
    * Chooses an option in one of the page's Ionic dropdowns (ion-select, opening an ion-alert):
    * tries each dropdown shown, in order, until one offers an option whose text starts with
    * `option` (ignoring case and spacing), picks it and presses OK; a dropdown without it is
    * cancelled. None offering it fails `no-match (offered: …)`. Returns the option's text.
    */
-  | { op: 'ionPick'; option: string; timeoutMs: number }
+  | {
+      op: 'ionPick';
+      option: string;
+      timeoutMs: number;
+      /** The option reads exactly `option` (ignoring spacing and case), not only starts with it. */
+      exact?: boolean;
+    }
+  /**
+   * Picks an Ionic radio (ion-radio) by what is written beside it, in the radio group found by a
+   * selector or by the question written above it ("Is any of the insured member a medical
+   * practitioner?"): `match` prefix (default), exact or contains. Checks it is then chosen.
+   */
+  | {
+      op: 'ionRadio';
+      group: { selector?: string; question?: string };
+      label: string;
+      match?: 'prefix' | 'exact' | 'contains';
+      timeoutMs: number;
+    }
+  /** Returns what is written beside the chosen radio of a group (a policy period and premium). */
+  | { op: 'ionRadioRead'; group: { selector: string }; timeoutMs: number }
+  /**
+   * Adds a listed add-on: in the row naming it, presses "+ Add" and checks it is gone. A row
+   * without "+ Add" but with Remove (or Added) is already added.
+   */
+  | { op: 'addOn'; name: string; timeoutMs: number }
+  /** Presses the element reading `text` in the row that names `row` ("Show more" for Tiered Network). */
+  | { op: 'clickInRow'; row: string; text: string; timeoutMs: number }
+  /** Scrolls the element reading exactly `text` into view (a page whose footer follows the scroll). */
+  | { op: 'scrollTo'; text: string; timeoutMs: number }
+  /**
+   * A box suggesting as you type, offering several names for one thing: types `type`, then picks
+   * the first of `options` (in order) that a suggestion reads (ignoring spacing and case). None
+   * offered fails `no-match (offered: …)`. Returns the suggestion picked.
+   */
+  | {
+      op: 'pickOption';
+      selector: string;
+      type: string;
+      options: string[];
+      timeoutMs: number;
+      last?: boolean;
+    }
   /**
    * Waits until the box holds a value other than `rejectValues` (for example an age box that shows
    * "0" until the portal has worked the age out from the date of birth).
@@ -1100,11 +1149,22 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         'december',
       ];
       const month = MONTHS[m - 1]!;
-      const want = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
-      const same = (value: string) => value.trim().replace(/[-.]/g, '/') === want;
+      // The box may show the date as dd/mm/yyyy or, as Niva Bupa's does, without leading zeros
+      // and month first ("8/1/1981"): the day was chosen here, so day and month in either order
+      // can only be this date.
+      const same = (value: string): boolean => {
+        const parts = value
+          .trim()
+          .split(/[^0-9]+/)
+          .filter(Boolean)
+          .map(Number);
+        if (parts.length !== 3 || parts[2] !== y) return false;
+        const [a, b] = parts as [number, number];
+        return (a === d && b === m) || (a === m && b === d);
+      };
       /** The counter's block (the largest container holding no other counter), its date boxes. */
       const dateBoxes = (): HTMLInputElement[] => {
-        const counter = findCounters()[command.counter];
+        const counter = findCounters()[command.counter ?? 0];
         if (!counter) return [];
         let block: Element = counter.root;
         for (
@@ -1122,9 +1182,34 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           (i) => visible(i) && i.parentElement?.querySelector('mat-datepicker-toggle') !== null,
         );
       };
-      const box = () => dateBoxes()[command.nth] ?? null;
-      const start = box();
-      if (!start) return { ok: false, detail: `date-box-not-found (${dateBoxes().length} shown)` };
+      /** The date box captioned `label`: its container (holding no other date box) says so. */
+      const labelled = (label: string): HTMLInputElement | null => {
+        const all = Array.from(document.querySelectorAll('input')).filter(
+          (i) => visible(i) && i.parentElement?.querySelector('mat-datepicker-toggle') !== null,
+        );
+        for (const input of all) {
+          for (let n = input.parentElement, up = 0; n && up < 5; n = n.parentElement, up += 1) {
+            if (all.filter((i) => n.contains(i)).length > 1) break;
+            if (text(n).toLowerCase().includes(label.toLowerCase())) return input;
+          }
+        }
+        return null;
+      };
+      const box = () =>
+        command.label !== undefined
+          ? labelled(command.label)
+          : (dateBoxes()[command.nth ?? 0] ?? null);
+      // A box added by the counter or a question a moment ago may not be drawn yet.
+      const start = await until(box, 2500);
+      if (!start) {
+        if (command.label !== undefined) return { ok: false, detail: 'date-box-not-found' };
+        const counter = findCounters()[command.counter ?? 0];
+        const shows = counter?.box?.value ?? (counter ? text(counter.root) : 'no counter');
+        return {
+          ok: false,
+          detail: `date-box-not-found (${dateBoxes().length} shown, counter shows ${shows})`,
+        };
+      }
       if (same(start.value)) return { ok: true, detail: 'already-set' };
       const toggle =
         start.parentElement?.querySelector<HTMLElement>('mat-datepicker-toggle button') ?? start;
@@ -1220,7 +1305,9 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           Array.from(alert.querySelectorAll<HTMLElement>('button')).find(
             (b) => !options.includes(b) && text(b).toLowerCase() === label,
           ) ?? null;
-        const match = options.find((o) => loose(text(o)).startsWith(want));
+        const match = options.find((o) =>
+          command.exact ? loose(text(o)) === want : loose(text(o)).startsWith(want),
+        );
         if (!match) {
           action('cancel')?.click();
           await until(() => (alertShown() ? null : true), 3000);
@@ -1240,6 +1327,213 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         ok: false,
         detail: offered.length > 0 ? `no-match (offered: ${offered.join('; ')})` : 'no-options',
       };
+    }
+    case 'ionRadio': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const want = loose(command.label);
+      const fits = (t: string) => {
+        const have = loose(t);
+        if (command.match === 'exact') return have === want;
+        if (command.match === 'contains') return have.includes(want);
+        return have.startsWith(want);
+      };
+      const group = (): Element | null => {
+        const groups = Array.from(
+          document.querySelectorAll(command.group.selector ?? 'ion-radio-group'),
+        ).filter(visible);
+        if (!command.group.question) return groups[0] ?? null;
+        const q = loose(command.group.question);
+        // The group whose nearest container saying the question holds no other group.
+        for (const g of groups) {
+          for (let n = g.parentElement, up = 0; n && up < 5; n = n.parentElement, up += 1) {
+            if (groups.filter((o) => n.contains(o)).length > 1) break;
+            if (loose(text(n)).includes(q)) return g;
+          }
+        }
+        return null;
+      };
+      const found = await until(group, command.timeoutMs);
+      if (!found) return { ok: false, detail: 'group-not-found' };
+      const radios = () =>
+        Array.from((group() ?? found).querySelectorAll<HTMLElement>('ion-radio')).filter(visible);
+      const checked = (r: Element) =>
+        r.getAttribute('aria-checked') === 'true' ||
+        /\bradio-checked\b/.test(r.getAttribute('class') ?? '');
+      const labelOf = (r: HTMLElement): string => {
+        if (text(r)) return text(r);
+        for (let n = r.parentElement, up = 0; n && up < 3; n = n.parentElement, up += 1) {
+          if (n.querySelectorAll('ion-radio').length > 1) break;
+          if (text(n)) return text(n);
+        }
+        return '';
+      };
+      const pick = () => radios().find((r) => fits(labelOf(r))) ?? null;
+      const radio = pick();
+      if (!radio) {
+        return {
+          ok: false,
+          detail: `option-missing (offered: ${radios()
+            .map(labelOf)
+            .map((t) => t.slice(0, 40))
+            .join('; ')})`,
+        };
+      }
+      if (checked(radio)) return { ok: true, detail: 'already-chosen', value: labelOf(radio) };
+      radio.click();
+      const chosen = await until(() => {
+        const now = pick();
+        return now && checked(now) ? now : null;
+      }, 3000);
+      return chosen ? { ok: true, value: labelOf(chosen) } : { ok: false, detail: 'not-chosen' };
+    }
+    case 'ionRadioRead': {
+      const read = (): string | null => {
+        const g = first(document, command.group.selector);
+        const radio = g
+          ? Array.from(g.querySelectorAll('ion-radio')).find(
+              (r) =>
+                visible(r) &&
+                (r.getAttribute('aria-checked') === 'true' ||
+                  /\bradio-checked\b/.test(r.getAttribute('class') ?? '')),
+            )
+          : undefined;
+        if (!radio) return null;
+        for (let n: Element | null = radio, up = 0; n && up < 4; n = n.parentElement, up += 1) {
+          if (n.querySelectorAll('ion-radio').length > 1) break;
+          if (text(n)) return text(n);
+        }
+        return null;
+      };
+      const value = await until(read, command.timeoutMs);
+      return value ? { ok: true, value } : { ok: false, detail: 'nothing-chosen' };
+    }
+    case 'addOn': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const want = loose(command.name);
+      const ADD = /^\+?\s*add$/i;
+      const DONE = /^(remove|added|✓\s*added)$/i;
+      const leaves = (root: ParentNode) =>
+        Array.from(root.querySelectorAll<HTMLElement>('*')).filter(
+          (el) => el.children.length === 0 && visible(el),
+        );
+      /** The add-on's row: around the text naming it, the first container with an Add/Remove. */
+      const row = (): { add: HTMLElement | null; done: boolean } | null => {
+        const names = leaves(document).filter((el) => loose(text(el)) === want);
+        const named =
+          names.length > 0
+            ? names
+            : leaves(document).filter((el) => loose(text(el)).startsWith(want));
+        for (const name of named) {
+          for (let n = name.parentElement, up = 0; n && up < 6; n = n.parentElement, up += 1) {
+            const actions = leaves(n).filter((el) => ADD.test(text(el)) || DONE.test(text(el)));
+            if (actions.length > 1) break;
+            if (actions.length === 1) {
+              const a = actions[0]!;
+              return { add: ADD.test(text(a)) ? a : null, done: DONE.test(text(a)) };
+            }
+          }
+        }
+        return null;
+      };
+      const found = await until(row, command.timeoutMs);
+      if (!found) return { ok: false, detail: 'add-on-not-found' };
+      if (!found.add) return { ok: true, detail: 'already-added' };
+      pressEl(found.add.closest('button, a, [role="button"]') ?? found.add);
+      const added = await until(() => (row()?.add ? null : true), 4000);
+      return added ? { ok: true } : { ok: false, detail: 'not-added' };
+    }
+    case 'clickInRow': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const target = await until(() => {
+        const hits = Array.from(document.querySelectorAll<HTMLElement>('*')).filter(
+          (el) =>
+            el.children.length === 0 && visible(el) && loose(text(el)) === loose(command.text),
+        );
+        return (
+          hits.find((el) => {
+            for (let n = el.parentElement, up = 0; n && up < 6; n = n.parentElement, up += 1) {
+              if (hits.filter((h) => n.contains(h)).length > 1) return false;
+              if (loose(text(n)).includes(loose(command.row))) return true;
+            }
+            return false;
+          }) ?? null
+        );
+      }, command.timeoutMs);
+      if (!target) return { ok: false, detail: 'not-found' };
+      pressEl(target.closest('button, a, [role="button"]') ?? target);
+      return { ok: true };
+    }
+    case 'scrollTo': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const el = await until(
+        () =>
+          Array.from(document.querySelectorAll<HTMLElement>('*')).find(
+            (e) => e.children.length === 0 && visible(e) && loose(text(e)) === loose(command.text),
+          ) ?? null,
+        command.timeoutMs,
+      );
+      if (!el) return { ok: false, detail: 'not-found' };
+      el.scrollIntoView({ block: 'start' });
+      await sleep(800);
+      return { ok: true };
+    }
+    case 'pickOption': {
+      const loose = (t: string) => t.replace(/\s+/g, '').toLowerCase();
+      const find = (): HTMLInputElement | null => {
+        const all = Array.from(document.querySelectorAll(command.selector)).filter(visible);
+        const el = command.last ? all.at(-1) : all[0];
+        return el instanceof HTMLInputElement && !el.disabled ? el : null;
+      };
+      const box = await until(find, command.timeoutMs);
+      if (!box) return { ok: false, detail: 'not-found' };
+      box.focus();
+      pressEl(box);
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      if (setter?.set) setter.set.call(box, command.type);
+      else box.value = command.type;
+      fire(box, 'input');
+      fire(box, 'keyup');
+      const items = (): HTMLElement[] => {
+        const owned = ['aria-controls', 'aria-owns']
+          .map((a) => box.getAttribute(a))
+          .filter((id): id is string => !!id)
+          .map((id) => document.getElementById(id))
+          .filter((el): el is HTMLElement => el !== null);
+        const lists =
+          owned.length > 0
+            ? owned
+            : Array.from(
+                document.querySelectorAll<HTMLElement>('.cdk-overlay-container [role="listbox"]'),
+              );
+        return lists
+          .flatMap((l) =>
+            Array.from(l.querySelectorAll<HTMLElement>('[role="option"], mat-option')),
+          )
+          .filter((o) => visible(o) && text(o) !== '');
+      };
+      const shown = await until(() => (items().length > 0 ? true : null), 4000);
+      if (!shown) return { ok: false, detail: 'no-match (no suggestions)' };
+      let match: HTMLElement | undefined;
+      for (const option of command.options) {
+        match = items().find((o) => loose(text(o)) === loose(option));
+        if (match) break;
+      }
+      if (!match) {
+        const offered = items()
+          .map((o) => text(o))
+          .slice(0, 15)
+          .join('; ');
+        box.blur();
+        return { ok: false, detail: `no-match (offered: ${offered})` };
+      }
+      const chosen = text(match);
+      match.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      match.click();
+      await sleep(700);
+      const kept = find();
+      return kept && loose(kept.value) === loose(chosen)
+        ? { ok: true, value: chosen }
+        : { ok: false, detail: `not-kept: box shows "${kept?.value ?? ''}"` };
     }
   }
 }

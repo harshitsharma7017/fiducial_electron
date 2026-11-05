@@ -208,7 +208,7 @@ export function createQuoteService(deps: {
           result = await runNivaHealthQuote({
             windows,
             client: subject.record.client,
-            plan: request.plan,
+            run: request.run,
             today,
           });
         } else if (request.product === 'nia-health') {

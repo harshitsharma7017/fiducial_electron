@@ -1,9 +1,10 @@
 // Runs the Niva Bupa premium calculator automation (bundled real code) against the local copy of
-// the calculator (niva-page.html), and checks the counters, the dates picked in the Material
-// calendars, the city and mobile, the plan chosen in the Ionic dropdowns, what is left to the
-// advisor, and that neither the plans step's Continue nor Calculate Premium is pressed. Then it
-// drains the form recorder on the plans step, to check it now sees Ionic's dropdowns and a click on
-// one. Contacts no insurer: the pages are served from 127.0.0.1. Exits 0 only if every check passes.
+// the calculator (niva-page.html), by "I Know My Plan", and checks the plan, counters, dates picked
+// in the Material calendars, city, phone and questions, the sum insured, policy period, add-ons and
+// Tiered Network, that Calculate Premium is pressed and the premium read is the one shown, and that
+// the Continue after it is not pressed. Then it drains the form recorder on Customize Your Plan, to
+// check it sees Ionic's dropdowns and a click on one. Contacts no insurer: the pages are served
+// from 127.0.0.1. Exits 0 only if every check passes.
 // Started by run.mjs niva (npm run test:nia -- niva).
 const http = require('node:http');
 const { app, BrowserWindow, session } = require('electron');
@@ -41,78 +42,111 @@ const FAMILY = {
   proposal: { city: 'Ahmedabad' },
 };
 const SINGLE = { ...FAMILY, members: [FAMILY.members[2]] };
+const RUN = {
+  plan: 'reassure-2',
+  sumInsured: 2000000,
+  years: 2,
+  addOns: ['Safeguard', 'Prolonged treatment assistance cover'],
+  tieredNetwork: true,
+  medicalPractitioner: false,
+};
 const CALCULATOR = '/uno/#/new-premiumcalculator';
 const READ = `(() => {
+  const q = (s) => document.querySelector(s);
   const values = (kind) => Array.from(document.querySelectorAll('[data-kind="' + kind + '"] input[placeholder]')).map((i) => i.value);
+  const answer = (key) => q('[data-q="' + key + '"] ion-radio[aria-checked="true"]')?.textContent ?? '';
+  const chosen = q('#premium ion-radio[aria-checked="true"]');
   return {
-    adults: document.querySelector('[data-kind="adult"] input[readonly]')?.value ?? null,
-    children: document.querySelector('[data-kind="child"] input[readonly]')?.value ?? null,
+    mode: q('#mode').textContent, plan: window.__plan,
+    adults: q('[data-kind="adult"] input[readonly]').value,
+    children: q('[data-kind="child"] input[readonly]').value,
     adultDobs: values('adult'), childDobs: values('child'),
-    city: document.querySelector('#mat-input-7').value,
-    mobile: document.querySelector('#ion-input-8').value,
+    city: q('#mat-input-6').value, phone: q('#ion-input-4').value,
+    answers: [answer('transfer'), answer('practitioner'), answer('child')],
+    previousEnd: q('#previous-end').value,
     route: location.hash,
-    compare: window.__chosen.compare ?? [],
-    alertsOpen: document.querySelectorAll('ion-alert').length,
-    step3: window.__step3, calculated: window.__calculated,
+    sum: q('#sum').value, period: chosen ? chosen.parentElement.textContent.trim() : null,
+    addOns: window.__addOns, tier: window.__tier,
+    alertsOpen: document.querySelectorAll('ion-alert, app-tier-network').length,
+    calculated: window.__calculated, summary: window.__summary,
   };
 })()`;
 
 const CASES = [
   {
-    name: 'family (self, spouse, son) for ReAssure 2.0, over counts left from an earlier run',
-    start: '/uno/?a=3&c=2#/new-premiumcalculator',
+    name: "family from UNO's home page: ReAssure 2.0 floater, ₹20 lakh, 2 years, add-ons, Tiered Network",
+    start: '/uno/#/landing-page',
     client: FAMILY,
-    plan: 'reassure-2',
+    run: RUN,
     outcome: 'ready',
-    message: '"ReAssure2.0 Family Floater" is chosen',
+    message: 'Niva Bupa worked the premium out: ₹',
+    premiumLabel: 'ReAssure2.0 Family Floater, ₹ 2,000,000, 2 Year',
     expect: {
+      mode: 'Plan Recommendation',
+      plan: 'ReAssure2.0 Family Floater',
       adults: '2',
       children: '1',
-      adultDobs: ['25/01/1986', '02/07/1988'],
-      childDobs: ['14/03/2018'],
+      // A family floater asks the eldest member's date of birth only.
+      adultDobs: ['1/25/1986'],
+      childDobs: [],
       city: 'Ahmedabad',
-      mobile: '9876543210',
-      route: '#/new-premiumcalculator/second-step',
-      compare: ['ReAssure2.0 Family Floater'],
+      phone: '9876543210',
+      answers: ['NO', 'NO', 'NO'],
+      route: '#/new-premiumcalculator/third-step',
+      sum: '₹ 2,000,000',
+      addOns: ['Safeguard', 'Prolonged treatment assistance cover'],
+      tier: true,
       alertsOpen: 0,
-      step3: false,
-      calculated: false,
+      calculated: true,
+      summary: false,
     },
-    toDo: ['the ReAssure 2.0 card', 'policy period, add-ons', 'Press Calculate Premium yourself'],
+    toDo: ['check the ReAssure 2.0 options'],
   },
   {
-    name: 'family for ReAssure 3.0 (the floater list offers it)',
+    name: 'one adult, ReAssure 2.0 Individual, porting with the previous end date, a practitioner',
+    start: CALCULATOR,
+    client: SINGLE,
+    run: {
+      ...RUN,
+      sumInsured: 500000,
+      years: 1,
+      addOns: ['Hospital Cash Plus'],
+      tieredNetwork: false,
+      medicalPractitioner: true,
+      previousPolicyEndDate: '2026-11-18',
+    },
+    outcome: 'ready',
+    premiumLabel: 'ReAssure2.0 Individual, ₹ 500,000, 1 Year',
+    expect: {
+      plan: 'ReAssure2.0 Individual',
+      adultDobs: ['1/25/1986'],
+      answers: ['YES', 'YES', 'NO'],
+      previousEnd: '11/18/2026',
+      sum: '₹ 500,000',
+      addOns: [],
+      tier: false,
+      calculated: true,
+      summary: false,
+    },
+    toDo: ['add-on "Hospital Cash Plus" (not found'],
+  },
+  {
+    name: 'one adult for ReAssure 3.0: the plan box does not offer it, nothing else touched',
+    start: CALCULATOR,
+    client: SINGLE,
+    run: { ...RUN, plan: 'reassure-3' },
+    outcome: 'failed',
+    message: 'plan list does not offer ReAssure 3.0 for these members (it offers: ',
+    expect: { plan: '', route: '#/new-premiumcalculator', calculated: false },
+  },
+  {
+    name: 'a sum insured Niva Bupa does not offer: stops at the sum insured, lists its own',
     start: CALCULATOR,
     client: FAMILY,
-    plan: 'reassure-3',
-    outcome: 'ready',
-    expect: { compare: ['ReAssure3.0 Family Floater'], step3: false, calculated: false },
-  },
-  {
-    name: 'one adult for ReAssure 3.0: the individual list does not offer it, both lists closed',
-    start: CALCULATOR,
-    client: SINGLE,
-    plan: 'reassure-3',
+    run: { ...RUN, plan: 'reassure-3', sumInsured: 300000 },
     outcome: 'failed',
-    message:
-      'does not offer ReAssure 3.0 for these members (it offers: Aspire Individual; GoActive',
-    expect: { adults: '1', children: '0', alertsOpen: 0, compare: [], step3: false },
-  },
-  {
-    name: 'Health Recharge with the top-up product chosen first',
-    start: '/uno/?topup=1#/new-premiumcalculator',
-    client: SINGLE,
-    plan: 'health-recharge',
-    outcome: 'ready',
-    expect: { compare: ['HealthRechargeV2 Individual'], step3: false, calculated: false },
-  },
-  {
-    name: 'Health Recharge without the top-up product: told to choose it first',
-    start: CALCULATOR,
-    client: SINGLE,
-    plan: 'health-recharge',
-    outcome: 'failed',
-    message: 'choose the top-up product at the top of the calculator first',
+    message: 'does not offer a sum insured of ₹ 300,000 here (it offers: ₹ 500,000;',
+    expect: { plan: 'ReAssure3.0 Family Floater', alertsOpen: 0, calculated: false },
   },
   {
     name: 'six adults: the calculator stops counting at four',
@@ -123,19 +157,19 @@ const CASES = [
         (relationship, i) => ({ relationship, age: 40 + i, dateOfBirth: `${1986 - i}-05-10` }),
       ),
     },
-    plan: 'reassure-2',
+    run: RUN,
     outcome: 'failed',
     message: 'stops at 4 adults',
     expect: { adults: '4', route: '#/new-premiumcalculator' },
   },
   {
-    name: 'not on the first step (landing page): refused before anything is touched',
-    start: '/uno/?a=2#/landing-page',
+    name: 'on another calculator step: refused before anything is touched',
+    start: '/uno/#/new-premiumcalculator/third-step',
     client: FAMILY,
-    plan: 'reassure-2',
+    run: RUN,
     outcome: 'refused',
-    message: "Open Niva Bupa's premium calculator at its first step",
-    expect: { adults: '2', adultDobs: ['', ''], city: '' },
+    message: "Go to UNO's home page",
+    expect: { mode: 'I Know My Plan', adultDobs: [''], city: '' },
   },
 ];
 
@@ -150,6 +184,13 @@ function check(c, result, state, problems) {
   for (const [k, v] of Object.entries(c.expect ?? {}))
     if (!same(state[k], v))
       problems.push(`${k}: ${JSON.stringify(state[k])} (expected ${JSON.stringify(v)})`);
+  if (c.premiumLabel) {
+    const p = result.premium;
+    if (!p || p.label !== c.premiumLabel || !/^₹[\d,]+$/.test(p.amount))
+      problems.push(`premium ${JSON.stringify(p)} (expected ${c.premiumLabel} and an amount)`);
+    else if (state.period !== `${p.label.split(', ').at(-1)} ${p.amount}`)
+      problems.push(`premium ${p.amount} is not what the page shows: ${state.period}`);
+  }
   for (const item of c.toDo ?? [])
     if (!(result.toDo ?? []).some((t) => t.startsWith(item)))
       problems.push(`to do lacks "${item}": ${JSON.stringify(result.toDo)}`);
@@ -183,7 +224,7 @@ app.whenReady().then(async () => {
     const result = await runNivaHealthQuote({
       windows: () => [win],
       client: c.client,
-      plan: c.plan,
+      run: c.run,
       today: new Date(2026, 10, 5),
     });
     const state = await win.webContents
@@ -195,8 +236,8 @@ app.whenReady().then(async () => {
     report(c.name, problems);
   }
 
-  // The recorder on the plans step: Ionic's dropdowns are listed, and a click inside one's shadow
-  // root is noted as a click on the dropdown.
+  // The recorder on Customize Your Plan: Ionic's dropdowns are listed with their captions, and a
+  // click inside one's shadow root is noted as a click on the dropdown.
   {
     const win = await newWindow(origin, 'recorder');
     await win.loadURL(origin + '/uno/#/new-premiumcalculator');
@@ -207,28 +248,34 @@ app.whenReady().then(async () => {
     await drain();
     await win.webContents.executeJavaScript(`(() => {
       document.querySelector('#step1').classList.add('hidden');
-      document.querySelector('#step2').classList.remove('hidden');
-      document.querySelector('#compare').shadowRoot.querySelector('button').click();
+      document.querySelector('#step3').classList.remove('hidden');
+      document.querySelector('#sum').shadowRoot.querySelector('button').click();
     })()`);
     await new Promise((resolve) => setTimeout(resolve, 300));
     const out = await drain();
     const problems = [];
     const selects = (out.snapshot?.controls ?? []).filter((c) => c.tag === 'ion-select');
-    if (selects.length !== 2) problems.push(`controls: ${JSON.stringify(out.snapshot?.controls)}`);
     const labels = Object.fromEntries(selects.map((s) => [s.id, s.label]));
-    if (!same(labels, { recommended: 'Recommended', compare: 'Compare' }))
+    if (
+      !same(labels, {
+        sum: 'RECOMMENDED',
+        acute: 'Acute Care Option',
+        room: 'Room Category',
+        deductible: 'Deductable',
+      })
+    )
       problems.push(`labels: ${JSON.stringify(labels)}`);
-    if (!selects.some((s) => s.id === 'compare' && s.text?.startsWith('Select')))
-      problems.push(`no compare dropdown showing "Select": ${JSON.stringify(selects)}`);
+    if (!selects.some((s) => s.id === 'sum' && s.text?.startsWith('₹ 500,000')))
+      problems.push(`no sum insured dropdown showing ₹ 500,000: ${JSON.stringify(selects)}`);
     const click = out.events.find((e) => e.kind === 'click' && e.target.tag === 'ion-select');
-    if (!click || click.target.id !== 'compare')
+    if (!click || click.target.id !== 'sum')
       problems.push(`click on the dropdown not noted: ${JSON.stringify(out.events)}`);
-    if (!(out.snapshot?.messages ?? []).some((m) => m.includes('ReAssure2.0 Individual')))
+    if (!(out.snapshot?.messages ?? []).some((m) => m.includes('₹ 10,000,000')))
       problems.push(
         `the open list is not among the messages: ${JSON.stringify(out.snapshot?.messages)}`,
       );
     win.destroy();
-    report('the recorder sees Ionic dropdowns and a click on one', problems);
+    report('the recorder sees Ionic dropdowns with their captions and a click on one', problems);
   }
 
   console.log(`\n${total - failures} of ${total} Niva Bupa checks passed`);
