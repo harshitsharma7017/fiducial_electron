@@ -3,7 +3,8 @@
 // from 127.0.0.1.
 // Usage: npm run test:nia (motor), npm run test:nia -- health (health quote forms),
 // npm run test:nia -- travel (overseas travel quote forms), npm run test:nia -- rural (rural forms),
-// npm run test:nia -- marine (Marine Specific Voyage), npm run test:nia -- pa (Personal Accident)
+// npm run test:nia -- marine (Marine Specific Voyage), npm run test:nia -- pa (Personal Accident),
+// npm run test:nia -- fire (the nine fire forms)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -40,6 +41,7 @@ const harness =
     rural: 'rural-harness.cjs',
     marine: 'marine-harness.cjs',
     pa: 'pa-harness.cjs',
+    fire: 'fire-harness.cjs',
   }[process.argv[2]] ?? 'harness.cjs';
 const child = spawn(electron, [join(HERE, harness)], { env, stdio: 'inherit' });
 child.on('exit', (code) => process.exit(code ?? 1));

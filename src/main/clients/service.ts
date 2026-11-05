@@ -19,6 +19,11 @@ import type {
 } from '../../shared/contracts/traveller';
 import type { RuralClient, RuralRecord, RuralSummary } from '../../shared/contracts/rural';
 import type { MarineClient, MarineRecord, MarineSummary } from '../../shared/contracts/marine';
+import type {
+  PropertyClient,
+  PropertyRecord,
+  PropertySummary,
+} from '../../shared/contracts/property';
 import { ClientStoreError, type ClientStore } from '../storage/client-store';
 import type { AadhaarVault, PassportVault } from './aadhaar-vault';
 
@@ -69,6 +74,11 @@ export interface ClientService {
   getMarine(id: string): Promise<MarineRecord>;
   saveMarine(id: string | null, input: MarineClient): Promise<string>;
   deleteMarine(id: string): Promise<boolean>;
+  /** Property clients (an owner and their home or premises), kept apart from the others. */
+  listProperties(): Promise<PropertySummary[]>;
+  getProperty(id: string): Promise<PropertyRecord>;
+  saveProperty(id: string | null, input: PropertyClient): Promise<string>;
+  deleteProperty(id: string): Promise<boolean>;
   close(): void;
 }
 
@@ -336,6 +346,44 @@ export function createClientService(deps: {
       const s = await requireStore();
       const deleted = guard(() => s.marine.delete(id));
       if (deleted) deps.logger.info('marine.deleted');
+      return deleted;
+    },
+
+    listProperties: async () => {
+      const s = await requireStore();
+      return guard(() => s.properties.list());
+    },
+
+    getProperty: async (id) => {
+      const s = await requireStore();
+      const record = guard(() => s.properties.get(id));
+      if (!record) throw new AppException('VALIDATION_FAILED');
+      return record;
+    },
+
+    saveProperty: async (id, input) => {
+      const s = await requireStore();
+      const today = (deps.now ?? (() => new Date()))();
+      const h = input.holder;
+      const dates = [h.dateOfBirth, h.registrationDate].filter((d): d is string => d !== undefined);
+      if (
+        hasFutureDateOfBirth({ members: dates.map((dateOfBirth) => ({ dateOfBirth })) }, today) ||
+        (input.property.yearOfConstruction ?? 0) > today.getFullYear()
+      ) {
+        throw new AppException('VALIDATION_FAILED');
+      }
+      if (id !== null && !guard(() => s.properties.get(id))) {
+        throw new AppException('VALIDATION_FAILED');
+      }
+      const saved = guard(() => s.properties.save(id, input));
+      deps.logger.info('property.saved');
+      return saved.id;
+    },
+
+    deleteProperty: async (id) => {
+      const s = await requireStore();
+      const deleted = guard(() => s.properties.delete(id));
+      if (deleted) deps.logger.info('property.deleted');
       return deleted;
     },
 

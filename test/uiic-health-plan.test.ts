@@ -170,6 +170,7 @@ describe('the quote service', () => {
         passportFor: () => Promise.resolve(null),
         getRural: () => Promise.reject(new Error('not used')),
         getMarine: () => Promise.reject(new Error('not used')),
+        getProperty: () => Promise.reject(new Error('not used')),
       },
       windowsOf: () => windows as never,
       logger: createLogger([]),

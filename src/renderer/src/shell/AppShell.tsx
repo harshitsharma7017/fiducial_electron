@@ -5,6 +5,7 @@
 import {
   Building2,
   Car,
+  Flame,
   FlaskConical,
   LayoutDashboard,
   Lock,
@@ -27,6 +28,7 @@ export type ViewId =
   | 'travellers'
   | 'rural'
   | 'marine'
+  | 'properties'
   | 'vehicles'
   | 'insurers'
   | 'development';
@@ -53,6 +55,7 @@ const NAV: NavItem[] = [
   { id: 'travellers', label: 'Travel clients', icon: Plane, automation: true },
   { id: 'rural', label: 'Rural clients', icon: Tractor, automation: true },
   { id: 'marine', label: 'Marine clients', icon: Ship, automation: true },
+  { id: 'properties', label: 'Property clients', icon: Flame, automation: true },
   { id: 'vehicles', label: 'Vehicles', icon: Car, automation: true },
   { id: 'insurers', label: 'Insurer portals', icon: Building2, automation: true },
 ];

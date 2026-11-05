@@ -435,6 +435,51 @@ Checked for:
 
 **Not yet run on the live portal.**
 
+## New India: fire forms (filled, never calculated)
+
+Built from the recording of 4 November 2026 (`new-india-2026-11-04T10-59-31-695Z`). In it, the
+advisor opened nine forms from the dashboard (FIRE, then the policy's tile) and opened their
+sections. Nothing was typed and no premium was worked out.
+- **Homes:** Bharat Griha Raksha, Flexi Griha Raksha, Flexi Griha Raksha (Long Term).
+- **Business premises:** Bharat Sookshma Udyam Suraksha, Flexi Sookshma Udyam, Bharat Laghu Udyam
+  Suraksha, Flexi Laghu Udyam Suraksha.
+- **Either:** Standard Fire and Special Perils, Standalone War.
+
+A property client (see CLIENTS.md) has a **New India fire quote** button. The advisor picks the
+form and the cover: building and contents, building, contents, or (business) with stocks.
+
+**How the fields are found:** the forms ask much the same, under different field ids and
+spellings. The app keeps, for each form, the fields it showed in the recording
+(`src/main/quotes/nia-fire-fields.ts`, generated from it). Each property detail goes into the field
+its form has; a detail the form does not ask is skipped.
+
+The app:
+1. Fills the owner, as on the marine form.
+2. Opens every closed section, never closing an open one.
+3. Fills what the property client holds:
+   - the type of policy and the cover;
+   - location, building and sums insured;
+   - construction, year and age, floors and height;
+   - the industry and the risk answers;
+   - fire protection;
+   - mortgage and past losses.
+
+A field the form asks but the client lacks is listed for the advisor, along with:
+- the earthquake state and district;
+- the pre-acceptance inspection;
+- the add-on covers and the remaining underwriting questions.
+
+It never presses **Save & Calculate Premium**. A home form for business premises, a business form
+for a home, or stocks for a home is refused with the reason.
+
+**Verified:** against local copies of the nine forms, drawn from the recording's fields and lists,
+and the dashboard (`npm run test:nia -- fire`). Checked for:
+- a home on Griha Raksha;
+- a business on Flexi Laghu Udyam, Standard Fire and Standalone War;
+- a refusal.
+
+**Not yet run on the live portal.**
+
 ## What it does
 
 The advisor saves each insurer's user ID and password once. When they open that insurer's portal

@@ -85,6 +85,12 @@ export function createHandlers(deps: {
       id: await deps.clients.saveMarine(id ?? null, marine),
     }),
     'marine:delete': async ({ id }) => ({ deleted: await deps.clients.deleteMarine(id) }),
+    'properties:list': async () => ({ properties: await deps.clients.listProperties() }),
+    'properties:get': ({ id }) => deps.clients.getProperty(id),
+    'properties:save': async ({ id, property }) => ({
+      id: await deps.clients.saveProperty(id ?? null, property),
+    }),
+    'properties:delete': async ({ id }) => ({ deleted: await deps.clients.deleteProperty(id) }),
     'imports:template': ({ kind, format }) => imports().template(kind, format),
     'imports:preview': ({ kind }) => imports().preview(kind),
     'imports:commit': ({ token, includeDuplicates }) => imports().commit(token, includeDuplicates),

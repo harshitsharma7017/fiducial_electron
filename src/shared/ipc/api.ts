@@ -13,6 +13,7 @@ import type {
   SaveClientRequest,
   SaveLoginRequest,
   SaveMarineRequest,
+  SavePropertyRequest,
   SaveRuralRequest,
   SaveTravellerRequest,
   TravellerView,
@@ -22,6 +23,7 @@ import type { VehicleInputRaw, VehicleRecord, VehicleSummary } from '../contract
 import type { TravellerSummary } from '../contracts/traveller';
 import type { RuralRecord, RuralSummary } from '../contracts/rural';
 import type { MarineRecord, MarineSummary } from '../contracts/marine';
+import type { PropertyRecord, PropertySummary } from '../contracts/property';
 import type { ImportKind } from '../import/import-kinds';
 
 export interface FqfApi {
@@ -90,6 +92,13 @@ export interface FqfApi {
     save(request: SaveMarineRequest): Promise<AppResult<{ id: string }>>;
     delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
   };
+  /** Property clients (an owner and their home or premises), for New India's fire forms. */
+  properties: {
+    list(): Promise<AppResult<{ properties: PropertySummary[] }>>;
+    get(id: string): Promise<AppResult<PropertyRecord>>;
+    save(request: SavePropertyRequest): Promise<AppResult<{ id: string }>>;
+    delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
+  };
   /** Saved vehicles, for motor quotes (kept on their own, not part of a client). */
   vehicles: {
     list(): Promise<AppResult<{ vehicles: VehicleSummary[] }>>;
@@ -114,6 +123,7 @@ export const API_SHAPE = {
   travellers: ['list', 'get', 'save', 'delete'],
   rural: ['list', 'get', 'save', 'delete'],
   marine: ['list', 'get', 'save', 'delete'],
+  properties: ['list', 'get', 'save', 'delete'],
   vehicles: ['list', 'get', 'save', 'delete'],
   imports: ['template', 'preview', 'commit'],
 } as const satisfies { [K in keyof FqfApi]: readonly (keyof FqfApi[K])[] };

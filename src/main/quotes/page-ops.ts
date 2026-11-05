@@ -140,7 +140,13 @@ export type PageOp =
    * Waits for a button, link or label reading exactly `text` to be on the page, shown or not (a
    * form recognised by a button inside a closed section: New India's Add Animal).
    */
-  | { op: 'hasText'; text: string; timeoutMs: number };
+  | { op: 'hasText'; text: string; timeoutMs: number }
+  /**
+   * Opens every closed section of the form: each section link (a link in a heading) whose body
+   * (the element after the heading, or after the heading's box) is hidden. An open section is left
+   * open. Returns how many it opened.
+   */
+  | { op: 'openSections' };
 
 export interface PageOpResult {
   ok: boolean;
@@ -927,6 +933,32 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         command.timeoutMs,
       );
       return found ? { ok: true } : { ok: false, detail: 'text-not-found' };
+    }
+    case 'openSections': {
+      const bodyOf = (a: Element): Element | null => {
+        const heading = a.closest('h1, h2, h3, h4, h5, h6');
+        if (!heading) return null;
+        return heading.nextElementSibling ?? heading.parentElement?.nextElementSibling ?? null;
+      };
+      const closed = (): HTMLElement[] =>
+        Array.from(document.querySelectorAll<HTMLElement>('h3 > a, h4 > a, h5 > a')).filter((a) => {
+          if (!visible(a) || a.closest(DIALOGS)) return false;
+          const body = bodyOf(a);
+          return body !== null && !visible(body);
+        });
+      let opened = 0;
+      for (const a of closed()) {
+        a.click();
+        opened += 1;
+        await sleep(300);
+      }
+      // Sections drawn as others open (AngularJS): one more pass.
+      for (const a of closed()) {
+        a.click();
+        opened += 1;
+        await sleep(300);
+      }
+      return { ok: true, value: String(opened) };
     }
     case 'typeDate': {
       const [y, m, d] = command.date.split('-');

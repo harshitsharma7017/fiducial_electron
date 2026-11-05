@@ -23,8 +23,11 @@ import type { QuoteRunResultView } from '../../../shared/ipc/contract';
 import { MARITAL_LABELS } from '../clients/proposal-fields';
 
 type OrgType = (typeof NIA_ORGANISATION_TYPES)[number];
+type Draft = HolderDraft;
+const EMPTY = (): HolderDraft => ({ ...EMPTY_HOLDER });
 
-interface Draft {
+/** The policy holder as the form edits it (strings, '' for not given). */
+export interface HolderDraft {
   id: string | null;
   kind: 'organization' | 'individual';
   name: string;
@@ -42,7 +45,7 @@ interface Draft {
   msme: '' | 'yes' | 'no';
   organisationType: OrgType | '';
 }
-const EMPTY: Draft = {
+export const EMPTY_HOLDER: HolderDraft = {
   id: null,
   kind: 'organization',
   name: '',
@@ -64,7 +67,7 @@ const EMPTY: Draft = {
 const text = (v: string) => (v.trim() ? v.trim() : undefined);
 const opt = <K extends string>(key: K, v: string | undefined) => (v ? { [key]: v } : {});
 
-function toInput(d: Draft): MarineClientRaw {
+export function holderToInput(d: HolderDraft): MarineClientRaw {
   const common = {
     customer: {
       name: d.name.trim(),
@@ -127,25 +130,7 @@ export function MarinePanel(): React.JSX.Element | null {
       setError(result.error.message);
       return;
     }
-    const m = result.data.marine;
-    setDraft({
-      id: summary.id,
-      kind: m.kind,
-      name: m.customer.name,
-      phone: m.customer.phone ?? '',
-      email: m.customer.email ?? '',
-      notes: m.customer.notes ?? '',
-      pincode: m.pincode,
-      address: m.address ?? '',
-      pan: m.pan ?? '',
-      dateOfBirth: m.dateOfBirth ?? '',
-      gender: m.gender ?? '',
-      maritalStatus: m.maritalStatus ?? '',
-      registrationNo: m.registrationNo ?? '',
-      registrationDate: m.registrationDate ?? '',
-      msme: m.msme === undefined ? '' : m.msme ? 'yes' : 'no',
-      organisationType: m.organisationType ?? '',
-    });
+    setDraft(holderFromRecord(result.data.marine, summary.id));
   };
 
   const remove = async (id: string) => {
@@ -170,7 +155,7 @@ export function MarinePanel(): React.JSX.Element | null {
       )}
       {list && (
         <div className="insurer-actions">
-          <button type="button" className="primary" onClick={() => setDraft({ ...EMPTY })}>
+          <button type="button" className="primary" onClick={() => setDraft(EMPTY())}>
             Add marine client
           </button>
         </div>
@@ -244,15 +229,12 @@ function MarineForm(props: {
   const { draft: d, onChange } = props;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const set = (patch: Partial<Draft>) => onChange({ ...d, ...patch });
-  const business = d.kind === 'organization';
-
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError(null);
     const result = await window.fqf.marine
-      .save({ ...(d.id ? { id: d.id } : {}), marine: toInput(d) })
+      .save({ ...(d.id ? { id: d.id } : {}), marine: holderToInput(d) })
       .catch(() => null);
     setBusy(false);
     if (result?.ok) props.onSaved();
@@ -271,9 +253,40 @@ function MarineForm(props: {
 
   return (
     <form className="login-form client-form" onSubmit={(e) => void submit(e)}>
+      <HolderFields draft={d} onChange={onChange} />
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="insurer-actions">
+        <button type="submit" disabled={busy}>
+          {busy ? 'Saving…' : 'Save marine client'}
+        </button>
+        <button type="button" onClick={props.onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** The policy holder's fields (a business or a person): shared with property clients. */
+export function HolderFields(props: {
+  draft: HolderDraft;
+  onChange: (draft: HolderDraft) => void;
+}): React.JSX.Element {
+  const { draft: d, onChange } = props;
+  const set = (patch: Partial<HolderDraft>) => onChange({ ...d, ...patch });
+  const business = d.kind === 'organization';
+  return (
+    <>
       <label>
         Policy holder
-        <select value={d.kind} onChange={(e) => set({ kind: e.target.value as Draft['kind'] })}>
+        <select
+          value={d.kind}
+          onChange={(e) => set({ kind: e.target.value as HolderDraft['kind'] })}
+        >
           <option value="organization">A business (organisation)</option>
           <option value="individual">A person</option>
         </select>
@@ -361,7 +374,7 @@ function MarineForm(props: {
               MSME
               <select
                 value={d.msme}
-                onChange={(e) => set({ msme: e.target.value as Draft['msme'] })}
+                onChange={(e) => set({ msme: e.target.value as HolderDraft['msme'] })}
               >
                 <option value="">Not given</option>
                 <option value="yes">Yes</option>
@@ -431,21 +444,33 @@ function MarineForm(props: {
           rows={2}
         />
       </label>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="insurer-actions">
-        <button type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Save marine client'}
-        </button>
-        <button type="button" onClick={props.onCancel}>
-          Cancel
-        </button>
-      </div>
-    </form>
+    </>
   );
+}
+
+/** A saved policy holder, as the form edits it. */
+export function holderFromRecord(
+  m: MarineClientRaw & { kind: HolderDraft['kind'] },
+  id: string | null,
+): HolderDraft {
+  return {
+    id,
+    kind: m.kind,
+    name: m.customer.name,
+    phone: m.customer.phone ?? '',
+    email: m.customer.email ?? '',
+    notes: m.customer.notes ?? '',
+    pincode: m.pincode,
+    address: m.address ?? '',
+    pan: m.pan ?? '',
+    dateOfBirth: m.dateOfBirth ?? '',
+    gender: m.gender ?? '',
+    maritalStatus: m.maritalStatus ?? '',
+    registrationNo: m.registrationNo ?? '',
+    registrationDate: m.registrationDate ?? '',
+    msme: m.msme === undefined ? '' : m.msme ? 'yes' : 'no',
+    organisationType: m.organisationType ?? '',
+  };
 }
 
 function tomorrow(): string {

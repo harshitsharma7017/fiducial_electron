@@ -59,49 +59,7 @@ export function planNiaMarineQuote(
     add(link, { op: 'ensureShown', shown: { selector }, open: { link }, timeoutMs: 8000 });
 
   // Policy Holder Information.
-  if (holder.kind === 'individual') {
-    policyHolderSteps(
-      {
-        name: holder.customer.name,
-        gender: holder.gender,
-        maritalStatus: holder.maritalStatus,
-        dateOfBirth: holder.dateOfBirth,
-        address: holder.address,
-        phone: holder.customer.phone,
-        email: holder.customer.email,
-      },
-      steps,
-      byHand,
-    );
-  } else {
-    section('Policy Holder Information', '#policyHolder1');
-    add(
-      'New customer',
-      { op: 'check', selector: '#policyHolder1', checked: true },
-      { optional: true, ifMissed: 'policy holder: New or Existing Customer' },
-    );
-    add('Category: Organization', { op: 'check', selector: '#Organization', checked: true });
-    field('Business name', '#businessNameNewOrg', holder.customer.name);
-    if (holder.registrationNo) field('Registration no.', '#registrationNo', holder.registrationNo);
-    if (holder.msme !== undefined) field('MSME', '#isMSME', holder.msme ? 'Yes' : 'No');
-    else byHand.push('whether the business is under the MSME category');
-    if (holder.registrationDate) {
-      add('Registration date', {
-        op: 'typeDate',
-        input: '#regDate',
-        date: holder.registrationDate,
-      });
-    } else byHand.push('registration date');
-    if (holder.organisationType) {
-      field('Type of organisation', '#typeOfOrg', holder.organisationType, true);
-    }
-    if (holder.address) field('Business address 1', '#businessAddress1', holder.address);
-    else byHand.push('business address');
-    byHand.push('state, city and PIN code', 'GST registration type and GSTIN');
-    if (holder.customer.phone) field('Mobile no.', '#mobileBus', holder.customer.phone);
-    if (holder.customer.email) field('Email ID', '#emailBus', holder.customer.email);
-    if (holder.pan) field('PAN no.', 'input[name="panNumber"]:not([disabled])', holder.pan, true);
-  }
+  marineHolderSteps(holder, steps, byHand);
 
   // Transit Details.
   section('Transit Details', '#typeOfSV');
@@ -159,4 +117,68 @@ export function planNiaMarineQuote(
     { optional: true, ifMissed: `Inland Transit Clause-${shipment.clause}` },
   );
   return { ok: true, steps, byHand };
+}
+
+/**
+ * Policy Holder Information for a person (as on the travel forms) or a business (the
+ * Organization category, as recorded on the Specific Voyage form), as a new customer. Shared by
+ * the marine and fire forms.
+ */
+export function marineHolderSteps(
+  holder: MarineClient,
+  steps: NiaHealthStep[],
+  byHand: string[],
+): void {
+  if (holder.kind === 'individual') {
+    policyHolderSteps(
+      {
+        name: holder.customer.name,
+        gender: holder.gender,
+        maritalStatus: holder.maritalStatus,
+        dateOfBirth: holder.dateOfBirth,
+        address: holder.address,
+        phone: holder.customer.phone,
+        email: holder.customer.email,
+      },
+      steps,
+      byHand,
+    );
+    return;
+  }
+  const add = (label: string, op: PageOp, more: Partial<NiaHealthStep> = {}) =>
+    steps.push({ label, op, ...more });
+  const field = (label: string, selector: string, value: string, optional = false) =>
+    add(
+      label,
+      { op: 'setField', selector, value },
+      optional ? { optional: true, ifMissed: label.toLowerCase() } : {},
+    );
+  add('Policy Holder Information', {
+    op: 'ensureShown',
+    shown: { selector: '#policyHolder1' },
+    open: { link: 'Policy Holder Information' },
+    timeoutMs: 8000,
+  });
+  add(
+    'New customer',
+    { op: 'check', selector: '#policyHolder1', checked: true },
+    { optional: true, ifMissed: 'policy holder: New or Existing Customer' },
+  );
+  add('Category: Organization', { op: 'check', selector: '#Organization', checked: true });
+  field('Business name', '#businessNameNewOrg', holder.customer.name);
+  if (holder.registrationNo) field('Registration no.', '#registrationNo', holder.registrationNo);
+  if (holder.msme !== undefined) field('MSME', '#isMSME', holder.msme ? 'Yes' : 'No');
+  else byHand.push('whether the business is under the MSME category');
+  if (holder.registrationDate) {
+    add('Registration date', { op: 'typeDate', input: '#regDate', date: holder.registrationDate });
+  } else byHand.push('registration date');
+  if (holder.organisationType) {
+    field('Type of organisation', '#typeOfOrg', holder.organisationType, true);
+  }
+  if (holder.address) field('Business address 1', '#businessAddress1', holder.address);
+  else byHand.push('business address');
+  byHand.push('state, city and PIN code', 'GST registration type and GSTIN');
+  if (holder.customer.phone) field('Mobile no.', '#mobileBus', holder.customer.phone);
+  if (holder.customer.email) field('Email ID', '#emailBus', holder.customer.email);
+  if (holder.pan) field('PAN no.', 'input[name="panNumber"]:not([disabled])', holder.pan, true);
 }

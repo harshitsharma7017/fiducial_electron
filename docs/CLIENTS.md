@@ -127,6 +127,29 @@ Decision of 4 November 2026: marine clients are **separate records**, with their
 - **Upgrade (schema version 8):** adds the empty marine client table. Nothing is moved or removed.
 - **The shipment is not saved:** it is entered for each quote.
 
+## Property clients (kept apart from the others)
+
+Decision of 4 November 2026: property clients are **separate records**, with their own list on the
+**Property clients** screen. They are for New India's nine fire forms.
+
+- **The owner:** a person or a business, with the same details as a marine client.
+- **The property:** a home or business premises, with:
+  - building name, landmark, address and pincode;
+  - walls, floor and roof (pucca or kutcha);
+  - year built, floors, the floor it is on, and height;
+  - homes: carpet area and construction cost per sq. m;
+  - sums insured: building, furniture, electrical, other contents (with a description), plant and
+    machinery, stocks (with a description);
+  - type of industry or occupation;
+  - claims ratio and maximum ICR;
+  - fire protection details, and the fire brigade's distance and response time;
+  - answers to the forms' risk questions: lift, basement, fire hydrant or sprinkler, electrical
+    upkeep, storm drain, security, basement use, water body, fire brigade access, central AC,
+    unoccupied, mortgaged, past fire losses, insured before. Each can be left unanswered.
+- **Where:** the same encrypted database, in its own `property_client` table (validated JSON). Kept
+  until the advisor deletes it.
+- **Upgrade (schema version 9):** adds the empty property client table. Nothing is moved or removed.
+
 ## How it is stored
 
 | What               | Where                       | Protection                                                         |

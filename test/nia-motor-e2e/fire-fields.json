@@ -1,0 +1,4749 @@
+{
+  "sookshma": {
+    "heading": "Bharat Sookshma Udyam Suraksha Insurance",
+    "fields": {
+      "maxICRinLast3Yr": {
+        "kind": "text"
+      },
+      "icrDisclaimer": {
+        "kind": "checkbox"
+      },
+      "typeOfPolicy": {
+        "kind": "select",
+        "options": ["Commercial", "Retail"]
+      },
+      "whetherPolicyInPast0": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast0",
+        "value": "Y"
+      },
+      "whetherPolicyInPast1": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast1",
+        "value": "N"
+      },
+      "preAcceptanceInspectionCarriedout": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "pinCode": {
+        "kind": "text"
+      },
+      "doYouWantToOpt": {
+        "kind": "select",
+        "options": [
+          "Only Building & Contents",
+          "Building Contents & Stocks on Floater basis",
+          "Building Contents & Stocks on Declaration basis",
+          "Building, Contents & Stocks",
+          "Only Stocks on Floater basis",
+          "Only Stocks on Declaration & Floater Basis",
+          "Only Stocks on Declaration Basis"
+        ]
+      },
+      "riskLocationBuildingName": {
+        "kind": "text"
+      },
+      "riskLocationNearbyLandmark": {
+        "kind": "text"
+      },
+      "hasLift": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "buildingHeight": {
+        "kind": "text"
+      },
+      "numberOfFloors": {
+        "kind": "text"
+      },
+      "operationalDetectors": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "electricalInstallations": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "waterDrainSystems": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "security": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "basementUsedforOperations": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "insuredPremisesLocatedWithin1KM": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "riskLocatedWithNoAcessToFireBrigade": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "expensesLossMinimisation": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "hirePurchaseorLeaseAgreements": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "inadverentOmission": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "contaminationComingling": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "expeditingExpenses": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "agreedBankClause": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "builtInCoverForFloater": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "wantToOptDeclarationPolicy": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "isPropertyMortgagedt": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "relatedBiPolicy": {
+        "kind": "select",
+        "options": ["No", "Yes"]
+      },
+      "lossDueToFireOrAlliedPeril": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "typeOfRiskForTerrorismCover": {
+        "kind": "select",
+        "options": ["Non-Industrial risk", "Industrial Risk"]
+      },
+      "earthQuakeFireAndShock": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      }
+    }
+  },
+  "flexi-griha": {
+    "heading": "New India Bharat Flexi Griha Raksha Insurance",
+    "fields": {
+      "maxICRinLast3Yr": {
+        "kind": "text"
+      },
+      "icrDisclaimer": {
+        "kind": "checkbox"
+      },
+      "typeOfPolicy": {
+        "kind": "select",
+        "options": ["Retail", "Commercial"]
+      },
+      "whetherPolicyInPast0": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast0",
+        "value": "Y"
+      },
+      "whetherPolicyInPast1": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast1",
+        "value": "N"
+      },
+      "preAcceptanceInspectionCarriedout": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "termUnit": {
+        "kind": "select",
+        "options": ["Year", "Month", "Day"]
+      },
+      "policyDuration": {
+        "kind": "text"
+      },
+      "pinCode": {
+        "kind": "text"
+      },
+      "whatDoUWantToCover": {
+        "kind": "select",
+        "options": ["Home Building & Home Contents", "Home Building Only", "Home Content Only"]
+      },
+      "riskLocationBuildingName": {
+        "kind": "text"
+      },
+      "riskLocationNearbyLandmark": {
+        "kind": "text"
+      },
+      "carpetArea0": {
+        "kind": "text"
+      },
+      "rateOfCostOfCons0": {
+        "kind": "text"
+      },
+      "costOfAddStruc0": {
+        "kind": "text"
+      },
+      "detailsOfAddStruc0": {
+        "kind": "text"
+      },
+      "optOufOfGenContent0": {
+        "kind": "radio",
+        "name": "optOufOfGenContent0",
+        "value": "Y"
+      },
+      "optOufOfGenContent1": {
+        "kind": "radio",
+        "name": "optOufOfGenContent1",
+        "value": "N"
+      },
+      "furniFixFitSI0": {
+        "kind": "text"
+      },
+      "eleclElectroSI0": {
+        "kind": "text"
+      },
+      "otherGenContSI0": {
+        "kind": "text"
+      },
+      "totalSIProperty0": {
+        "kind": "text"
+      },
+      "typeOfConsWalls0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "typeOfConsFloor0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "typeOfConsRoof0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "locationAddress0": {
+        "kind": "text"
+      },
+      "earthquakeDis": {
+        "kind": "select",
+        "options": []
+      },
+      "yearOfCons": {
+        "kind": "select",
+        "options": [
+          "2032",
+          "2031",
+          "2030",
+          "2029",
+          "2028",
+          "2027",
+          "2026",
+          "2025",
+          "2024",
+          "2023",
+          "2022",
+          "2021",
+          "2020",
+          "2019",
+          "2018",
+          "2017",
+          "2016",
+          "2015",
+          "2014",
+          "2013",
+          "2012",
+          "2011",
+          "2010",
+          "2009",
+          "2008",
+          "2007",
+          "2006",
+          "2005",
+          "2004",
+          "2003",
+          "2002",
+          "2001",
+          "2000",
+          "1999",
+          "1998",
+          "1997",
+          "1996",
+          "1995",
+          "1994",
+          "1993",
+          "1992",
+          "1991",
+          "1990",
+          "1989",
+          "1988",
+          "1987",
+          "1986",
+          "1985",
+          "1984",
+          "1983",
+          "1982",
+          "1981",
+          "1980",
+          "1979",
+          "1978",
+          "1977",
+          "1976",
+          "1975",
+          "1974",
+          "1973",
+          "1972",
+          "1971",
+          "1970",
+          "1969",
+          "1968",
+          "1967",
+          "1966",
+          "1965",
+          "1964",
+          "1963",
+          "1962",
+          "1961",
+          "1960"
+        ]
+      },
+      "ageOfBuilding": {
+        "kind": "text"
+      },
+      "insuredOccu": {
+        "kind": "text"
+      },
+      "noOfFloorOccupancy": {
+        "kind": "text"
+      },
+      "doesBuildingHaveElevator": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "istheRiskLocatedinBase0": {
+        "kind": "radio",
+        "name": "istheRiskLocatedinBase0",
+        "value": "YES"
+      },
+      "istheRiskLocatedinBase1": {
+        "kind": "radio",
+        "name": "istheRiskLocatedinBase1",
+        "value": "NO"
+      },
+      "nameOfOwner": {
+        "kind": "text"
+      },
+      "heightofBuild": {
+        "kind": "text"
+      },
+      "operationalFireHydrant": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "electriaclInstallation": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "provisionOfStorm": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "highStandarndSecurity": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "past3YrClaimRatio": {
+        "kind": "select",
+        "options": ["0-30", "30-70", "0-70", "70-100", "100-200", "Above 200"]
+      },
+      "basementUsedForOp": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "premiSesLocated1KM": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "riskLocatedinThickPop": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "ageOfBuilding30Yr": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fireProtectionDetail": {
+        "kind": "text"
+      },
+      "flexCheckDefault": {
+        "kind": "checkbox"
+      },
+      "coverForLossOfRent": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "siChosenFor": {
+        "kind": "text"
+      },
+      "coverForRentAlt": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "siForAlt": {
+        "kind": "text"
+      },
+      "coverForValuableContents": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "removalOfDebris0": {
+        "kind": "radio",
+        "name": "removalOfDebris0",
+        "value": "YES"
+      },
+      "removalOfDebris1": {
+        "kind": "radio",
+        "name": "removalOfDebris1",
+        "value": "NO"
+      },
+      "architectsFees0": {
+        "kind": "radio",
+        "name": "architectsFees0",
+        "value": "YES"
+      },
+      "architectsFees1": {
+        "kind": "radio",
+        "name": "architectsFees1",
+        "value": "NO"
+      },
+      "gardenTreeRemover0": {
+        "kind": "radio",
+        "name": "gardenTreeRemover0",
+        "value": "Y"
+      },
+      "gardenTreeRemover1": {
+        "kind": "radio",
+        "name": "gardenTreeRemover1",
+        "value": "N"
+      },
+      "lossMinimizationExpenses0": {
+        "kind": "radio",
+        "name": "lossMinimizationExpenses0",
+        "value": "Yes"
+      },
+      "lossMinimizationExpenses1": {
+        "kind": "radio",
+        "name": "lossMinimizationExpenses1",
+        "value": "No"
+      },
+      "immediateRepairscom0": {
+        "kind": "radio",
+        "name": "immediateRepairscom0",
+        "value": "Y"
+      },
+      "immediateRepairscom1": {
+        "kind": "radio",
+        "name": "immediateRepairscom1",
+        "value": "N"
+      },
+      "claimsPrepCostcom0": {
+        "kind": "radio",
+        "name": "claimsPrepCostcom0",
+        "value": "Y"
+      },
+      "claimsPrepCostcom1": {
+        "kind": "radio",
+        "name": "claimsPrepCostcom1",
+        "value": "N"
+      },
+      "terrCover0": {
+        "kind": "radio",
+        "name": "terrCover0",
+        "value": "YES"
+      },
+      "terrCover1": {
+        "kind": "radio",
+        "name": "terrCover1",
+        "value": "NO"
+      },
+      "anyInsurerDeclined0": {
+        "kind": "radio",
+        "name": "anyInsurerDeclined0",
+        "value": "Y"
+      },
+      "anyInsurerDeclined1": {
+        "kind": "radio",
+        "name": "anyInsurerDeclined1",
+        "value": "N"
+      },
+      "insurerRefusedToRenew0": {
+        "kind": "radio",
+        "name": "insurerRefusedToRenew0",
+        "value": "Y"
+      },
+      "insurerRefusedToRenew1": {
+        "kind": "radio",
+        "name": "insurerRefusedToRenew1",
+        "value": "N"
+      },
+      "insurerIncreasedPrem0": {
+        "kind": "radio",
+        "name": "insurerIncreasedPrem0",
+        "value": "Y"
+      },
+      "insurerIncreasedPrem1": {
+        "kind": "radio",
+        "name": "insurerIncreasedPrem1",
+        "value": "N"
+      },
+      "propertyMortaged0": {
+        "kind": "radio",
+        "name": "propertyMortaged0",
+        "value": "Y"
+      },
+      "propertyMortaged1": {
+        "kind": "radio",
+        "name": "propertyMortaged1",
+        "value": "N"
+      },
+      "doURequirePACoverSpouse0": {
+        "kind": "radio",
+        "name": "doURequirePACoverSpouse0",
+        "value": "Y"
+      },
+      "doURequirePACoverSpouse1": {
+        "kind": "radio",
+        "name": "doURequirePACoverSpouse1",
+        "value": "N"
+      }
+    }
+  },
+  "flexi-griha-long-term": {
+    "heading": "New India Bharat Flexi Griha Raksha Policy (Long Term) Insurance",
+    "fields": {
+      "policyDuration": {
+        "kind": "text"
+      },
+      "typeOfPolicy": {
+        "kind": "select",
+        "options": ["Commercial", "Retail"]
+      },
+      "whetherPolicyInPast": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "maxICRinLast3Yr": {
+        "kind": "text"
+      },
+      "doYouWantToOpt": {
+        "kind": "select",
+        "options": ["Home Building & Home Contents", "Home Building Only", "Home Content Only"]
+      },
+      "carpetArea0": {
+        "kind": "text"
+      },
+      "rateOfCostOfCons0": {
+        "kind": "text"
+      },
+      "costOfAddStruc0": {
+        "kind": "text"
+      },
+      "detailsOfAddStruc0": {
+        "kind": "text"
+      },
+      "optOutOfGenContent": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "furniFixFitSI0": {
+        "kind": "text"
+      },
+      "eleclElectroSI0": {
+        "kind": "text"
+      },
+      "otherGenContSI0": {
+        "kind": "text"
+      },
+      "typeOfConstructionWalls0": {
+        "kind": "select",
+        "options": ["SELECT", "Kutcha", "Pucca"]
+      },
+      "typeOfConstructionFloor0": {
+        "kind": "select",
+        "options": ["SELECT", "Kutcha", "Pucca"]
+      },
+      "typeOfConstructionRoof0": {
+        "kind": "select",
+        "options": ["SELECT", "Kutcha", "Pucca"]
+      },
+      "locationAddress0": {
+        "kind": "text"
+      },
+      "locationPin0": {
+        "kind": "text"
+      },
+      "yearOfConstruction": {
+        "kind": "select",
+        "options": [
+          "1960",
+          "1961",
+          "1962",
+          "1963",
+          "1964",
+          "1965",
+          "1966",
+          "1967",
+          "1968",
+          "1969",
+          "1970",
+          "1971",
+          "1972",
+          "1973",
+          "1974",
+          "1975",
+          "1976",
+          "1977",
+          "1978",
+          "1979",
+          "1980",
+          "1981",
+          "1982",
+          "1983",
+          "1984",
+          "1985",
+          "1986",
+          "1987",
+          "1988",
+          "1989",
+          "1990",
+          "1991",
+          "1992",
+          "1993",
+          "1994",
+          "1995",
+          "1996",
+          "1997",
+          "1998",
+          "1999",
+          "2000",
+          "2001",
+          "2002",
+          "2003",
+          "2004",
+          "2005",
+          "2006",
+          "2007",
+          "2008",
+          "2009",
+          "2010",
+          "2011",
+          "2012",
+          "2013",
+          "2014",
+          "2015",
+          "2016",
+          "2017",
+          "2018",
+          "2019",
+          "2020",
+          "2021",
+          "2022",
+          "2023",
+          "2024",
+          "2025",
+          "2026",
+          "2027",
+          "2028",
+          "2029",
+          "2030",
+          "2031",
+          "2032",
+          "2033",
+          "2034",
+          "2035",
+          "2036",
+          "2037",
+          "2038"
+        ]
+      },
+      "yearOfOccupation": {
+        "kind": "select",
+        "options": [
+          "1960",
+          "1961",
+          "1962",
+          "1963",
+          "1964",
+          "1965",
+          "1966",
+          "1967",
+          "1968",
+          "1969",
+          "1970",
+          "1971",
+          "1972",
+          "1973",
+          "1974",
+          "1975",
+          "1976",
+          "1977",
+          "1978",
+          "1979",
+          "1980",
+          "1981",
+          "1982",
+          "1983",
+          "1984",
+          "1985",
+          "1986",
+          "1987",
+          "1988",
+          "1989",
+          "1990",
+          "1991",
+          "1992",
+          "1993",
+          "1994",
+          "1995",
+          "1996",
+          "1997",
+          "1998",
+          "1999",
+          "2000",
+          "2001",
+          "2002",
+          "2003",
+          "2004",
+          "2005",
+          "2006",
+          "2007",
+          "2008",
+          "2009",
+          "2010",
+          "2011",
+          "2012",
+          "2013",
+          "2014",
+          "2015",
+          "2016",
+          "2017",
+          "2018",
+          "2019",
+          "2020",
+          "2021",
+          "2022",
+          "2023",
+          "2024",
+          "2025",
+          "2026",
+          "2027",
+          "2028",
+          "2029",
+          "2030",
+          "2031",
+          "2032",
+          "2033",
+          "2034",
+          "2035",
+          "2036",
+          "2037",
+          "2038"
+        ]
+      },
+      "numberOfFloor": {
+        "kind": "text"
+      },
+      "onWhichFloor": {
+        "kind": "text"
+      },
+      "riskLocatedInBasement": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "ownedBy": {
+        "kind": "text"
+      },
+      "unoccupiedForAMonth": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "centralizedAC": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "ductsMadeOfHazardous": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "hasLift": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "heightOfBuilding": {
+        "kind": "text"
+      },
+      "ageOfBuilding": {
+        "kind": "text"
+      },
+      "portableExt": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "smallBoreHoseReels": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "tPumpFEngines": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "foamSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "gasFloodingSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "spotProtection": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "otherProtectingNotSpeified": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fireProtectionDetails": {
+        "kind": "text"
+      },
+      "operationalDetectors": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "electricalInstallations": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "waterDrainSystems": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "security": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "past3YearsClaimRatio": {
+        "kind": "select",
+        "options": ["0-70", "Above 200", "100-200", "70-100", "30-70", "0-30"]
+      },
+      "basementUsedforOperations": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "insuredPremisesLocatedWithin1KM": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "riskLocatedWithNoAcessToFireBrigade": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "ageOfBuildingMoreThan30": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "loadingDiscountDueTOHistoricalRiskEQ": {
+        "kind": "select",
+        "options": ["Discount", "Loading"]
+      },
+      "loadingDiscountDueTOHistoricalRiskSTFI": {
+        "kind": "select",
+        "options": ["Discount", "Loading"]
+      },
+      "eqCoverDeletedAtInception": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "earthQuakeState": {
+        "kind": "select",
+        "options": [
+          "ANDAMAN & NICOBAR ISLANDS",
+          "ANDHRA PRADESH",
+          "ARUNACHAL PRADESH",
+          "ASSAM",
+          "BIHAR",
+          "CHATTISGARH",
+          "CHANDIGARH",
+          "DELHI",
+          "GOA",
+          "GUJARAT",
+          "HIMACHAL PRADESH",
+          "HARYANA",
+          "JHARKHAND",
+          "JAMMU & KASHMIR",
+          "KARNATAKA",
+          "KERALA",
+          "LAKSHADWEEP",
+          "MAHARASHTRA",
+          "MEGHALAYA",
+          "MANIPUR",
+          "MADHYA PRADESH",
+          "MIZORAM",
+          "NAGALAND",
+          "ODISHA",
+          "PUNJAB",
+          "PONDICHERRY",
+          "RAJASTHAN",
+          "SIKKIM",
+          "TAMILNADU",
+          "TRIPURA",
+          "TELANGANA",
+          "UTTAR PRADESH",
+          "UTTARAKHAND",
+          "WEST BENGAL"
+        ]
+      },
+      "earthQuakeZone": {
+        "kind": "select",
+        "options": []
+      },
+      "stfiDeletedAtInception": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "removalOfDebris": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "architectsFees": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "terrCover": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "gardenTreeRemover": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "lossMinimizationExpenses": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "immediateRepairscom": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "claimsPrepCostcom": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "insurerDeclineProposal": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "insurerRefusedRenew": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "insurerIncreasedPremium": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "propertyMortgage": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "lossDueToFireOrAlliedPeril": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "preAcceptance": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "lossOfRent": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "coverRentAlt": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "coverValueBasis": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "discretionaryDiscount": {
+        "kind": "select",
+        "options": ["0", "5", "10", "15", "20", "25"]
+      },
+      "omissionInsure": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "altBrokerage": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "coverPersonalAccident": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "policyHolderName": {
+        "kind": "text"
+      },
+      "policyHolderAge": {
+        "kind": "text"
+      },
+      "personalAccidentSpouse": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "spouseName": {
+        "kind": "text"
+      },
+      "spouseAge": {
+        "kind": "text"
+      },
+      "nomineeName": {
+        "kind": "text"
+      },
+      "relationNominee": {
+        "kind": "text"
+      },
+      "nomineeNameSpouse": {
+        "kind": "text"
+      },
+      "nomineeRelationSpouse": {
+        "kind": "text"
+      }
+    }
+  },
+  "flexi-laghu": {
+    "heading": "New India Bharat Flexi Laghu Udyam Suraksha Insurance",
+    "fields": {
+      "maxICRinLast3Yr": {
+        "kind": "text"
+      },
+      "icrDisclaimer": {
+        "kind": "checkbox"
+      },
+      "typeOfPolicy": {
+        "kind": "select",
+        "options": ["Commercial", "Retail"]
+      },
+      "whetherPolicyInPast0": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast0",
+        "value": "Y"
+      },
+      "whetherPolicyInPast1": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast1",
+        "value": "N"
+      },
+      "preAcceptanceInspectionCarriedout": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "wantToOptDeclarationPolicy": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "pinCode": {
+        "kind": "text"
+      },
+      "doYouWantToOpt": {
+        "kind": "select",
+        "options": [
+          "Only Building & Contents",
+          "Building Contents & Stocks on Floater basis",
+          "Building Contents & Stocks on Declaration basis",
+          "Building, Contents & Stocks",
+          "Only Stocks on Floater basis",
+          "Only Stocks on Declaration & Floater Basis",
+          "Only Stocks on Declaration Basis"
+        ]
+      },
+      "pinCode0": {
+        "kind": "text"
+      },
+      "addressOfTheLocation0": {
+        "kind": "text"
+      },
+      "buildingIncludingAdditionalStructuresI0": {
+        "kind": "text"
+      },
+      "furnitureFixFittEquip0": {
+        "kind": "text"
+      },
+      "plantMachinery0": {
+        "kind": "text"
+      },
+      "otherContentDetails0": {
+        "kind": "textarea"
+      },
+      "otherContentsSI0": {
+        "kind": "text"
+      },
+      "typeOfConstructionWalls0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "typeOfConstructionFloor0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "typeOfConstructionRoof0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "typeOfIndustry": {
+        "kind": "select",
+        "options": [
+          "Hotels",
+          "Offices",
+          "Shops",
+          "Candle Works",
+          "Canning Factories",
+          "Cable Manufacturing",
+          "Camphor Manufacturing",
+          "Cardamom Factories",
+          "Cardboard Box Manufacturing",
+          "Capsule Manufacturing",
+          "Carbon paper,Typewriter Ribbon Manufacturing",
+          "Book Binders, Envelope and Paper Bag Manufacturing.",
+          "Breweries",
+          "Biscuit Factories",
+          "Bitumenised Paper and,or Hessian Cloth Manufacturing",
+          "Bridges,Wooden",
+          "Building In course of construction",
+          "Brickworks (including refractories and fire bricks)",
+          "Bridges,Concrete Steel",
+          "Chemical Manufacturing(others), Pharmaceuticals, Toiletry products",
+          "Cigar and Cigarette Manufacturing",
+          "Ceramic Factories and Crockery and Stoneware pipe Manufacturing,Clay Works.",
+          "Chemical Manufacturing(Using materials with Flash Point below 32OC)",
+          "Cinema Film Production Studios",
+          "Cinematography Film Editing, Lab and Sound recording rooms with Film processing",
+          "Cigarette Filter Manufacturing (Using Solvents with Flash Point below 32OC)",
+          "Cigarette Filter Manufacturing (Others)",
+          "Carpet and Drugget Manufacturing (Others)",
+          "Cashew nut Factories",
+          "Carpenters, Wood wool Manufacturing, Furniture Manufacturing",
+          "Carpet and Drugget Manufacturing (Cotton,jute,wool )",
+          "Cement,asbestos,concrete products Manufacturing",
+          "Cement Factories",
+          "Cattle feed Mill",
+          "Celluloid Goods Manufacturing",
+          "Beedi Factories",
+          "Battery Charging Service Stations",
+          "Amusement parks",
+          "Cafes, Restaurants, Hotels, Confectioner and Sweet meat sellers",
+          "Laundries,Dry Cleaning",
+          "Shops dealing in goods otherwise not provided for",
+          "Shops dealing in hazardous goods",
+          "Hoarding, Neon signs",
+          "Sports Galleries, Outdoor stadiums.",
+          "Showrooms and display centres where goods are kept for display and no sales are",
+          "Educational and Research Institutes imparting training in various crafts",
+          "Mess Houses,Clubs",
+          "Marriage Halls",
+          "Dish Antenna",
+          "Indoor stadiums.",
+          "Lodging,Boarding Houses",
+          "Cycle Shed",
+          "Detergent Manufacturing (Others)",
+          "Distilleries",
+          "Dehydration Factories",
+          "Detergent Manufacturing with Sulphonation Plant",
+          "Basket Weavers and Cane Furniture Makers",
+          "Battery Manufacturing",
+          "Duplicating,stencil paper Manufacturing",
+          "Bakeries",
+          "Condensed Milk Factories, Milk Pasturisings Plants and Dairies",
+          "Confectionery Manufacturing",
+          "Arms and Ammunition dealers",
+          "Collieries , underground Mechinery and pit head gear",
+          "Cotton Gin and Press Houses",
+          "Cotton Seed cleaning , Delinting Factory",
+          "Contractors Plant and Machinery At one location only",
+          "Cork Products Manufacturing",
+          "Oil and Leather Cloth Factories",
+          "Garment Makers, Topee, Hats and the like makers",
+          "Oil Mills refining ( Veg,Animal)",
+          "Oil Mills (Vegetable)",
+          "Glass wool Manufacturing",
+          "Glass Manufacturing",
+          "Ghee Factories including vegetable Ghee mfg.",
+          "Glass Fibre Manufacturing",
+          "Mosaic Factories",
+          "Mushroom Growing Premises (Excluding Crops)",
+          "Mica Products Manufacturing",
+          "Mineral Oil blending and processing",
+          "Oil Extraction",
+          "Oil Distillation Plants (essential)",
+          "Nitro Cellulose Manufacturing",
+          "Non,woven fabric Manufacturing",
+          "Coal,Coke,Charcoal ball and briquettes Manufacturing",
+          "Coal Processing Plants",
+          "Circus, Touring Drama Troupes and Touring Cinema Theatres",
+          "Cloth Processing units situated outside the compound of Textile mills",
+          "Electric Generation Stations- Thermal Power Stations",
+          "Sec IV - Tyres & tube",
+          "Coffee Curing, Roasting , Grinding",
+          "Coir Factories",
+          "Granite Factories (Others)",
+          "Graphite electrode Manufacturing",
+          "Gold thread factories , Gilding factories",
+          "Granite Factories using inflammable solvents",
+          "Green Houses, Algae, Spirulina and the like",
+          "Gum,Glue,Gelatine Manufacturing",
+          "Grain,seeds disintegrating,crushing, Decorticating factories, Dal mills.",
+          "Grease , Wax Manufacturing",
+          "Metal,Tin printers",
+          "Incandescent Gas mantle Manufacturing",
+          "Industrial Diamonds Manufacturing",
+          "Ice candy and Ice cream Manufacturing",
+          "Ice factories",
+          "Jaggery Manufacturing",
+          "Jute Mills",
+          "Industrial Gas Manufacturing",
+          "Ink (excluding printing ink) Manufacturing",
+          "Foam Rubber Manufacturing",
+          "French Polish Manufacturing",
+          "Cinematography Film Editing, Lab and Sound recording rooms without Film processi",
+          "Cinema Theatres",
+          "Gypsum board manufacturer",
+          "Hoisery,lace, Embroidery,Thread factories",
+          "Fruit and vegetable drying,dehydrating factories",
+          "Fruit products and Condiment Factories (including fruit pulp making)",
+          "Man,made Fibre Manufacturing Plant (Others)",
+          "Manure Blending works",
+          "Malt Extraction Plants",
+          "Man,made Fibre Manufacturing (using Cellulose)",
+          "Metallizing works ( involving metals only)",
+          "Metallising Works (others)",
+          "Match Factories",
+          "Mattress and Pillow making",
+          "Lac or Shellac Factories",
+          "Leather Cloth Factories",
+          "Katha Manufacturing",
+          "Khandsari Sugar Manufacturing",
+          "Lithographic presses",
+          "Liquified Gas Bottling Plants",
+          "Leather Goods Manufacturing ( incl. boot,shoe)",
+          "Lime Kiln",
+          "Sec IV - Oil mills",
+          "Sec IV - Match factories",
+          "Sec IV - Man made fibers",
+          "Sec IV - Packaging Industry",
+          "Sec IV - Plastic goods",
+          "Sec IV - Paper & Board",
+          "Sec IV - Paint",
+          "Sec IV - Jute Mills",
+          "Sec IV - Tiny Sector",
+          "Sec IV - Textiles",
+          "Sec IV - Tea",
+          "Sec IV - Any other than above",
+          "Sec V - Any other than above",
+          "Sec V - Pipe lines",
+          "Sec V - Electric Transmission Lines",
+          "Sec IV - Port Facility",
+          "Paint factories (Water based)",
+          "Sec VI - Any of Sec VI",
+          "Sec IV - Tyres & tube",
+          "Paint (others) and Varnish Factories",
+          "Paper and Cardboard Mills (including Lamination)",
+          "Pan Masala making",
+          "Paints , Nitrocellulose based",
+          "Sec IV - Rubber Goods/Tyres",
+          "Sec III - Offices etc",
+          "Sec IV - Printing Press",
+          "Sec IV - Power generation",
+          "Sec III - Hotels etc",
+          "Sec IV - Cables",
+          "Sec III - Any other than above",
+          "Sec III - Shops",
+          "Others",
+          "Silk Mills , Spun Silk Mills",
+          "Sea Food , Meat Processing",
+          "Saw Mills (including Timber Merchants premises where sawing is done).",
+          "Snuff Manufacturing",
+          "Spray Painting, Powder coating",
+          "Sponge Iron Plants",
+          "Soap Manufacturing",
+          "Salt crushing Factories and Refineries",
+          "Rice Polishing Units",
+          "Rice Mills",
+          "Presses for hides",
+          "Rope works (Plastic), Assembling of Plastic Goods such as Toys",
+          "Rubber Goods Manufacturing without spreading",
+          "Rubber Goods Mfg with Spreading",
+          "Rubber Factories",
+          "Stables (excluding animals)",
+          "Tea Factories",
+          "Tea blending,packing factories",
+          "Tarpaulin and canvas proofing factories",
+          "Telephone Exchanges",
+          "Tanks (others)",
+          "Tanks containing liquids flashing at 32 0C and below",
+          "Textile Mills Spinn",
+          "Tapioca factories",
+          "Sugar Candy Manufacturing",
+          "Stone quarries",
+          "Starch Factories",
+          "Sugar factories",
+          "Tanneries",
+          "Sweetmeat Manufacturing",
+          "Surgical Cotton Manufacturing",
+          "Particle Board Manufacturing",
+          "Sec IV - Cement",
+          "Sec III- Dwellings",
+          "Sec IV - Soap/Detergent",
+          "Sec IV - Chemicals",
+          "Sec IV - Cotton gin and press",
+          "Sec IV - Construction",
+          "Sec IV - Coal and Mining",
+          "Sec VII - Any of Sec VII",
+          "Arecanut and,or Betelnut factories",
+          "Aluminium ,Zinc,Copper Factories",
+          "Aluminium,Magnesium Powder Plants",
+          "Asbestos Steam Packing and lagging manufacturing",
+          "Automobile Manufacturing",
+          "Audio,Video Cassette Manufacturing",
+          "Atta and Cereal Grinding (excluding Dal Mills)",
+          "Sec IV - Dairy products/food Mfg",
+          "Museums",
+          "Libraries",
+          "Places of worships",
+          "Schools Colleges",
+          "Auditoriums Planetarium",
+          "Office premises,Meeting Rooms,",
+          "Hospitals including X,ray and other Diagnostic clinics",
+          "Sec IV - Sugar",
+          "Sec IV - Engineering workshops",
+          "Sec IV - Electronics Goods",
+          "Sec IV - Electronic/IT",
+          "Sec IV - Flour Mills",
+          "Sec IV - Steel/Metal",
+          "Sec IV - Glass",
+          "Sec IV - Fertilizers",
+          "Airport Terminal Buildings (including all facilities like Cafes, Shops etc)",
+          "Electric Generation Stations Hydro Power stations",
+          "Presses for carpets, rugs and tobacco",
+          "Presses for coir yarn , cotton,senna leaves",
+          "Electric Lamp ,T.V. Picture Tube Manufacturing",
+          "Enamel,ware factories",
+          "Electronic Software Parks",
+          "Electronic Goods Manufacturing ,Assembly",
+          "Presses for coir fibres,waste,Grass,fodder,boosa,Jute",
+          "Plastic Goods Manufacturing (excluding Foam Plastics)",
+          "Petroleum Coke Calcination",
+          "Pencil Manufacturing",
+          "Plywood , Wood veneering Factories, Laminating Factories",
+          "Poultry Farms (Excluding birds therein)",
+          "Port Premises including jetties and equipment thereon And other port facilities",
+          "Polyester Film Manufacturing , BOPP Film Manufacturing",
+          "Engineering Workshop ,Structural Steel fabricators, Sheet Metal fabricators,",
+          "Abrasive Manufacturing",
+          "Petrol,Diesel Kiosks",
+          "Motor Vehicle showroom including sales and service",
+          "Aerated Water Factories",
+          "Aircraft Hangers",
+          "Agarbatti manufacturing",
+          "Aerial Ropeway including trolley stations",
+          "Foamed Plastics Manufacturing and , or converting plants",
+          "Fertiliser Manufacturing (other than those rateable under Petrochemical Tariff)",
+          "Explosives , Blasting Factories",
+          "Engineering Workshop (Others), Clock,Watch Manufacturing , Motor Vehicle Garages",
+          "Filter and wax paper Manufacturing",
+          "Flour Mills",
+          "Flax , Hemp Mills",
+          "Fireworks Manufacturing"
+        ]
+      },
+      "riskDescription3": {
+        "kind": "select",
+        "options": [
+          "Dwellings",
+          "Places of worships, Libraries, Museums, Schools, Colleges, Hospitals..",
+          "Cafes, Restaurants, Hotels, Confectioner & Sweet meat sellers, Health Resorts",
+          "Shops dealing in hazardous goods as per the list below & Arms Ammunition dealers",
+          "Shops dealing in goods otherwise not provided for including Laundries....",
+          "Places of worships",
+          "Libraries",
+          "Museums",
+          "Schools, Colleges",
+          "Hospitals including X-ray and other Diagnostic clinics",
+          "Office premises/Meeting Rooms",
+          "Auditoriums/Planetarium",
+          "Mess Houses/Clubs",
+          "Marriage Halls",
+          "Showrooms and display centres where goods are kept for display and no sales are",
+          "Educational and Research Institutes imparting training in various crafts",
+          "Lodging/Boarding Houses",
+          "Cycle Shed",
+          "Dish Antenna",
+          "Indoor stadiums/ Health club, Gymnasium and Swimming Pool/ Health Resorts",
+          "Laundries / Dry Cleaning",
+          "Battery Charging Service Stations",
+          "Amusement parks",
+          "Hoarding, Neon signs",
+          "Sports Galleries, Outdoor stadiums",
+          "Shops dealing in hazardous goods",
+          "Arms & Ammunition dealers",
+          "Motor Vehicle showroom including sales and service",
+          "Fuel Station - Petrol/Diesel Kiosks [without CNG]",
+          "Fuel Station - Petrol/Diesel Kiosks [with CNG]",
+          "Data Processing/Call Centres/Business Process Outsourcing Centres"
+        ]
+      },
+      "bldgInSez": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "natureOfOccupancy": {
+        "kind": "select",
+        "options": ["Batch process", "Continuous process"]
+      },
+      "isPropertyMortgagedt": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "builtInCoverForFloater": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "doYouHaveConcurrentInsurance": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "lossDueToFireOrAlliedPeril": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "earthQuakeZone": {
+        "kind": "select",
+        "options": []
+      },
+      "yearOfConstruction": {
+        "kind": "select",
+        "options": [
+          "2033",
+          "2032",
+          "2031",
+          "2030",
+          "2029",
+          "2028",
+          "2027",
+          "2026",
+          "2025",
+          "2024",
+          "2023",
+          "2022",
+          "2021",
+          "2020",
+          "2019",
+          "2018",
+          "2017",
+          "2016",
+          "2015",
+          "2014",
+          "2013",
+          "2012",
+          "2011",
+          "2010",
+          "2009",
+          "2008",
+          "2007",
+          "2006",
+          "2005",
+          "2004",
+          "2003",
+          "2002",
+          "2001",
+          "2000",
+          "1999",
+          "1998",
+          "1997",
+          "1996",
+          "1995",
+          "1994",
+          "1993",
+          "1992",
+          "1991",
+          "1990",
+          "1989",
+          "1988",
+          "1987",
+          "1986",
+          "1985",
+          "1984",
+          "1983",
+          "1982",
+          "1981",
+          "1980",
+          "1979",
+          "1978",
+          "1977",
+          "1976",
+          "1975",
+          "1974",
+          "1973",
+          "1972",
+          "1971",
+          "1970",
+          "1969",
+          "1968",
+          "1967",
+          "1966",
+          "1965",
+          "1964",
+          "1963",
+          "1962",
+          "1961"
+        ]
+      },
+      "yearOfOccupation": {
+        "kind": "select",
+        "options": [
+          "2039",
+          "2038",
+          "2037",
+          "2036",
+          "2035",
+          "2034",
+          "2033",
+          "2032",
+          "2031",
+          "2030",
+          "2029",
+          "2028",
+          "2027",
+          "2026",
+          "2025",
+          "2024",
+          "2023",
+          "2022",
+          "2021",
+          "2020",
+          "2019",
+          "2018",
+          "2017",
+          "2016",
+          "2015",
+          "2014",
+          "2013",
+          "2012",
+          "2011",
+          "2010",
+          "2009",
+          "2008",
+          "2007",
+          "2006",
+          "2005",
+          "2004",
+          "2003",
+          "2002",
+          "2001",
+          "2000",
+          "1999",
+          "1998",
+          "1997",
+          "1996",
+          "1995",
+          "1994",
+          "1993",
+          "1992",
+          "1991",
+          "1990",
+          "1989",
+          "1988",
+          "1987",
+          "1986",
+          "1985",
+          "1984",
+          "1983",
+          "1982",
+          "1981",
+          "1980",
+          "1979",
+          "1978",
+          "1977",
+          "1976",
+          "1975",
+          "1974",
+          "1973",
+          "1972",
+          "1971",
+          "1970",
+          "1969",
+          "1968",
+          "1967",
+          "1966",
+          "1965",
+          "1964",
+          "1963",
+          "1962",
+          "1961"
+        ]
+      },
+      "numberOfFloors": {
+        "kind": "text"
+      },
+      "onWhichFloor": {
+        "kind": "select",
+        "options": ["Ground Floor", "Mezzanine Floor", "Higher Floor"]
+      },
+      "ownedBy": {
+        "kind": "text"
+      },
+      "occupiedAsFire": {
+        "kind": "select",
+        "options": ["Garage", "Shops", "Hotels", "Office", "Any other of Sec III"]
+      },
+      "centralAC": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "hasLift": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fireFightingArrangementsBldg": {
+        "kind": "text"
+      },
+      "excess15MetersAroundRisk": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "cngInstallations": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "riskRatedSilent": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "pilotPlant": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fireFightingArrangementsForRisk": {
+        "kind": "text"
+      },
+      "distanceFromPublicFireBrigade": {
+        "kind": "text"
+      },
+      "approxTimeOfArrival": {
+        "kind": "text"
+      },
+      "hasHydrantSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "premiseUnoccupied30Days": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "ductsOfHazardousMaterial": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "neighbouringRiskEast": {
+        "kind": "select",
+        "options": [
+          "Residence",
+          "Office",
+          "Hotels",
+          "Shops",
+          "Industrial Risks",
+          "Storage Godown",
+          "Open Storages",
+          "Tankages",
+          "Others"
+        ]
+      },
+      "neighbouringSepRoadEast": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "neighbouringRiskWest": {
+        "kind": "select",
+        "options": [
+          "Residence",
+          "Office",
+          "Hotels",
+          "Shops",
+          "Industrial Risks",
+          "Storage Godown",
+          "Open Storages",
+          "Tankages",
+          "Others"
+        ]
+      },
+      "neighbouringSepRoadWest": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "neighbouringRiskSouth": {
+        "kind": "select",
+        "options": [
+          "Residence",
+          "Office",
+          "Hotels",
+          "Shops",
+          "Industrial Risks",
+          "Storage Godown",
+          "Open Storages",
+          "Tankages",
+          "Others"
+        ]
+      },
+      "neighbouringSepRoadSouth": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "neighbouringRiskNorth": {
+        "kind": "select",
+        "options": [
+          "Residence",
+          "Office",
+          "Hotels",
+          "Shops",
+          "Industrial Risks",
+          "Storage Godown",
+          "Open Storages",
+          "Tankages",
+          "Others"
+        ]
+      },
+      "neighbouringSepRoadNorth": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "contractPriceInsuranceClassOpted": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "assetsCoverRIV": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "interiorSec3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "riskLocatedInBasement": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "howPartialBasementIsCovered1": {
+        "kind": "select",
+        "options": [
+          "Plant & Machinery",
+          "Any other. Please specify",
+          "Electrical panels / sub station",
+          "Godown/Storage"
+        ]
+      },
+      "godownBasement": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "godownLocUnderSEZ": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "electricRegulation": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "buildingHeight": {
+        "kind": "text"
+      },
+      "ageOfBuilding": {
+        "kind": "text"
+      },
+      "portableExtinguishers": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "smallBoreHoseReels": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "trailerPumpsFireEngines": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "foamSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "gasFloodingSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "spotProtection": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "otherProtections": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fireProtectionDetails": {
+        "kind": "text"
+      },
+      "operationalDetectors": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "electricalInstallations": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "waterDrainSystems": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "security": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "basementUsedforOperations": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "insuredPremisesLocatedWithin1KM": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "riskLocatedWithNoAcessToFireBrigade": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "expensesLossMinimisation": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "hirePurchaseorLeaseAgreements": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "inadverentOmission": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "contaminationComingling": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "expeditingExpenses": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "claimsPreparationCost": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "involuntaryBetterment": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "lossOfRent": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "immediateRepair": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "impactDamageDueToInsuredOwnRail": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "terrorismAddOnCover": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "brandsTrademarksClause": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      }
+    }
+  },
+  "griha": {
+    "heading": "New India Bharat Griha Raksha Insurance",
+    "fields": {
+      "maxICRinLast3Yr": {
+        "kind": "text"
+      },
+      "icrDisclaimer": {
+        "kind": "checkbox"
+      },
+      "typeOfPolicy": {
+        "kind": "select",
+        "options": ["Retail", "Commercial"]
+      },
+      "whetherPolicyInPast0": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast0",
+        "value": "Y"
+      },
+      "whetherPolicyInPast1": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast1",
+        "value": "N"
+      },
+      "preAcceptanceInspectionCarriedout": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "durationUnit": {
+        "kind": "select",
+        "options": ["Year", "Month", "Day"]
+      },
+      "policyDuration": {
+        "kind": "text"
+      },
+      "pinCode": {
+        "kind": "text"
+      },
+      "whatDoUWantToCover": {
+        "kind": "select",
+        "options": ["Home Building & Home Contents", "Home Building Only", "Home Content Only"]
+      },
+      "riskLocationBuildingName": {
+        "kind": "text"
+      },
+      "riskLocationNearbyLandmark": {
+        "kind": "text"
+      },
+      "carpetArea0": {
+        "kind": "text"
+      },
+      "rateOfCostOfCons0": {
+        "kind": "text"
+      },
+      "costOfAddStruc0": {
+        "kind": "text"
+      },
+      "detailsOfAddStruc0": {
+        "kind": "text"
+      },
+      "furniFixFitSI0": {
+        "kind": "text"
+      },
+      "eleclElectroSI0": {
+        "kind": "text"
+      },
+      "otherGenContSI0": {
+        "kind": "text"
+      },
+      "totalSIProperty0": {
+        "kind": "text"
+      },
+      "typeOfConsWalls0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "typeOfConsFloor0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "typeOfConsRoof0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "locationAddress0": {
+        "kind": "text"
+      },
+      "locationPin0": {
+        "kind": "text"
+      },
+      "earthquakeDis": {
+        "kind": "select",
+        "options": []
+      },
+      "yearOfCons": {
+        "kind": "select",
+        "options": [
+          "2032",
+          "2031",
+          "2030",
+          "2029",
+          "2028",
+          "2027",
+          "2026",
+          "2025",
+          "2024",
+          "2023",
+          "2022",
+          "2021",
+          "2020",
+          "2019",
+          "2018",
+          "2017",
+          "2016",
+          "2015",
+          "2014",
+          "2013",
+          "2012",
+          "2011",
+          "2010",
+          "2009",
+          "2008",
+          "2007",
+          "2006",
+          "2005",
+          "2004",
+          "2003",
+          "2002",
+          "2001",
+          "2000",
+          "1999",
+          "1998",
+          "1997",
+          "1996",
+          "1995",
+          "1994",
+          "1993",
+          "1992",
+          "1991",
+          "1990",
+          "1989",
+          "1988",
+          "1987",
+          "1986",
+          "1985",
+          "1984",
+          "1983",
+          "1982",
+          "1981",
+          "1980",
+          "1979",
+          "1978",
+          "1977",
+          "1976",
+          "1975",
+          "1974",
+          "1973",
+          "1972",
+          "1971",
+          "1970",
+          "1969",
+          "1968",
+          "1967",
+          "1966",
+          "1965",
+          "1964",
+          "1963",
+          "1962",
+          "1961",
+          "1960"
+        ]
+      },
+      "ageOfBuilding": {
+        "kind": "text"
+      },
+      "insuredOccu": {
+        "kind": "text"
+      },
+      "noOfFloorOccupancy": {
+        "kind": "text"
+      },
+      "doesBuildingHaveElevator": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "nameOfOwner": {
+        "kind": "text"
+      },
+      "heightofBuild": {
+        "kind": "text"
+      },
+      "isRiskLocatedInBasement": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "operationalFireHydrant": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "electriaclInstallation": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "provisionOfStorm": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "highStandarndSecurity": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "past3YrClaimRatio": {
+        "kind": "select",
+        "options": ["0-30", "30-70", "0-70", "70-100", "100-200", "200 above"]
+      },
+      "basementUsedForOp": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "premiSesLocated1KM": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "riskLocatedinThickPop": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "ageOfBuilding30Yr": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fireProtectionDetail": {
+        "kind": "text"
+      },
+      "flexCheckDefault": {
+        "kind": "checkbox"
+      },
+      "coverForLossOfRent": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "siChosenFor": {
+        "kind": "text"
+      },
+      "noOfMonthsRent": {
+        "kind": "select",
+        "options": ["12", "24", "36"]
+      },
+      "noOfMonthsAltAcco": {
+        "kind": "select",
+        "options": ["12", "24", "36"]
+      },
+      "coverForRentAlt": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "siForAlt": {
+        "kind": "text"
+      },
+      "coverForValuableContents": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "totalSIvalubaleCont": {
+        "kind": "text"
+      },
+      "itemName0": {
+        "kind": "text"
+      },
+      "siValuableContents0": {
+        "kind": "text"
+      },
+      "valuationCertAtt00": {
+        "kind": "radio",
+        "name": "valuationCertAtt0",
+        "value": "YES"
+      },
+      "valuationCertAtt10": {
+        "kind": "radio",
+        "name": "valuationCertAtt0",
+        "value": "NO"
+      },
+      "valuationAgency0": {
+        "kind": "text"
+      },
+      "removalOfDebris0": {
+        "kind": "radio",
+        "name": "removalOfDebris0",
+        "value": "YES"
+      },
+      "removalOfDebris1": {
+        "kind": "radio",
+        "name": "removalOfDebris1",
+        "value": "NO"
+      },
+      "architectsFees0": {
+        "kind": "radio",
+        "name": "architectsFees0",
+        "value": "YES"
+      },
+      "architectsFees1": {
+        "kind": "radio",
+        "name": "architectsFees1",
+        "value": "NO"
+      },
+      "anyInsurerDeclined0": {
+        "kind": "radio",
+        "name": "anyInsurerDeclined0",
+        "value": "Y"
+      },
+      "anyInsurerDeclined1": {
+        "kind": "radio",
+        "name": "anyInsurerDeclined1",
+        "value": "N"
+      },
+      "insurerRefusedToRenew0": {
+        "kind": "radio",
+        "name": "insurerRefusedToRenew0",
+        "value": "Y"
+      },
+      "insurerRefusedToRenew1": {
+        "kind": "radio",
+        "name": "insurerRefusedToRenew1",
+        "value": "N"
+      },
+      "insurerIncreasedPrem0": {
+        "kind": "radio",
+        "name": "insurerIncreasedPrem0",
+        "value": "Y"
+      },
+      "insurerIncreasedPrem1": {
+        "kind": "radio",
+        "name": "insurerIncreasedPrem1",
+        "value": "N"
+      },
+      "propertyMortaged0": {
+        "kind": "radio",
+        "name": "propertyMortaged0",
+        "value": "Y"
+      },
+      "propertyMortaged1": {
+        "kind": "radio",
+        "name": "propertyMortaged1",
+        "value": "N"
+      },
+      "manualDiscount": {
+        "kind": "text"
+      },
+      "manualLoading": {
+        "kind": "text"
+      }
+    }
+  },
+  "laghu": {
+    "heading": "New India Bharat Laghu Udyam Suraksha Insurance",
+    "fields": {
+      "maxICRinLast3Yr": {
+        "kind": "text"
+      },
+      "icrDisclaimer": {
+        "kind": "checkbox"
+      },
+      "typeOfPolicy": {
+        "kind": "select",
+        "options": ["Retail", "Commercial"]
+      },
+      "whetherPolicyInPast0": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast0",
+        "value": "Y"
+      },
+      "whetherPolicyInPast1": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast1",
+        "value": "N"
+      },
+      "preAcceptanceInspectionCarriedout": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "datePreAcceptanceInspectionCarriedout": {
+        "kind": "text"
+      },
+      "pinCode": {
+        "kind": "text"
+      },
+      "doYouWantToOpt": {
+        "kind": "select",
+        "options": [
+          "Building, Contents & Stocks",
+          "Building Contents & Stocks on Declaration basis",
+          "Building Contents & Stocks on Floater basis",
+          "Only Building & Contents",
+          "Only Stocks on Declaration Basis",
+          "Only Stocks on Declaration & Floater Basis",
+          "Only Stocks on Floater basis"
+        ]
+      },
+      "buildingInSez": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "typeOfIndustry": {
+        "kind": "select",
+        "options": [
+          "Hotels",
+          "Offices",
+          "Shops",
+          "Candle Works",
+          "Canning Factories",
+          "Cable Manufacturing",
+          "Camphor Manufacturing",
+          "Cardamom Factories",
+          "Cardboard Box Manufacturing",
+          "Capsule Manufacturing",
+          "Carbon paper,Typewriter Ribbon Manufacturing",
+          "Book Binders, Envelope and Paper Bag Manufacturing.",
+          "Breweries",
+          "Biscuit Factories",
+          "Bitumenised Paper and,or Hessian Cloth Manufacturing",
+          "Bridges,Wooden",
+          "Building In course of construction",
+          "Brickworks (including refractories and fire bricks)",
+          "Bridges,Concrete Steel",
+          "Chemical Manufacturing(others), Pharmaceuticals, Toiletry products",
+          "Cigar and Cigarette Manufacturing",
+          "Ceramic Factories and Crockery and Stoneware pipe Manufacturing,Clay Works.",
+          "Chemical Manufacturing(Using materials with Flash Point below 32OC)",
+          "Cinema Film Production Studios",
+          "Cinematography Film Editing, Lab and Sound recording rooms with Film processing",
+          "Cigarette Filter Manufacturing (Using Solvents with Flash Point below 32OC)",
+          "Cigarette Filter Manufacturing (Others)",
+          "Carpet and Drugget Manufacturing (Others)",
+          "Cashew nut Factories",
+          "Carpenters, Wood wool Manufacturing, Furniture Manufacturing",
+          "Carpet and Drugget Manufacturing (Cotton,jute,wool )",
+          "Cement,asbestos,concrete products Manufacturing",
+          "Cement Factories",
+          "Cattle feed Mill",
+          "Celluloid Goods Manufacturing",
+          "Beedi Factories",
+          "Battery Charging Service Stations",
+          "Amusement parks",
+          "Cafes, Restaurants, Hotels, Confectioner and Sweet meat sellers",
+          "Laundries,Dry Cleaning",
+          "Shops dealing in goods otherwise not provided for",
+          "Shops dealing in hazardous goods",
+          "Hoarding, Neon signs",
+          "Sports Galleries, Outdoor stadiums.",
+          "Showrooms and display centres where goods are kept for display and no sales are",
+          "Educational and Research Institutes imparting training in various crafts",
+          "Mess Houses,Clubs",
+          "Marriage Halls",
+          "Dish Antenna",
+          "Indoor stadiums.",
+          "Lodging,Boarding Houses",
+          "Cycle Shed",
+          "Detergent Manufacturing (Others)",
+          "Distilleries",
+          "Dehydration Factories",
+          "Detergent Manufacturing with Sulphonation Plant",
+          "Basket Weavers and Cane Furniture Makers",
+          "Battery Manufacturing",
+          "Duplicating,stencil paper Manufacturing",
+          "Bakeries",
+          "Condensed Milk Factories, Milk Pasturisings Plants and Dairies",
+          "Confectionery Manufacturing",
+          "Arms and Ammunition dealers",
+          "Collieries , underground Mechinery and pit head gear",
+          "Cotton Gin and Press Houses",
+          "Cotton Seed cleaning , Delinting Factory",
+          "Contractors Plant and Machinery At one location only",
+          "Cork Products Manufacturing",
+          "Oil and Leather Cloth Factories",
+          "Garment Makers, Topee, Hats and the like makers",
+          "Oil Mills refining ( Veg,Animal)",
+          "Oil Mills (Vegetable)",
+          "Glass wool Manufacturing",
+          "Glass Manufacturing",
+          "Ghee Factories including vegetable Ghee mfg.",
+          "Glass Fibre Manufacturing",
+          "Mosaic Factories",
+          "Mushroom Growing Premises (Excluding Crops)",
+          "Mica Products Manufacturing",
+          "Mineral Oil blending and processing",
+          "Oil Extraction",
+          "Oil Distillation Plants (essential)",
+          "Nitro Cellulose Manufacturing",
+          "Non,woven fabric Manufacturing",
+          "Coal,Coke,Charcoal ball and briquettes Manufacturing",
+          "Coal Processing Plants",
+          "Circus, Touring Drama Troupes and Touring Cinema Theatres",
+          "Cloth Processing units situated outside the compound of Textile mills",
+          "Electric Generation Stations- Thermal Power Stations",
+          "Sec IV - Tyres & tube",
+          "Coffee Curing, Roasting , Grinding",
+          "Coir Factories",
+          "Granite Factories (Others)",
+          "Graphite electrode Manufacturing",
+          "Gold thread factories , Gilding factories",
+          "Granite Factories using inflammable solvents",
+          "Green Houses, Algae, Spirulina and the like",
+          "Gum,Glue,Gelatine Manufacturing",
+          "Grain,seeds disintegrating,crushing, Decorticating factories, Dal mills.",
+          "Grease , Wax Manufacturing",
+          "Metal,Tin printers",
+          "Incandescent Gas mantle Manufacturing",
+          "Industrial Diamonds Manufacturing",
+          "Ice candy and Ice cream Manufacturing",
+          "Ice factories",
+          "Jaggery Manufacturing",
+          "Jute Mills",
+          "Industrial Gas Manufacturing",
+          "Ink (excluding printing ink) Manufacturing",
+          "Foam Rubber Manufacturing",
+          "French Polish Manufacturing",
+          "Cinematography Film Editing, Lab and Sound recording rooms without Film processi",
+          "Cinema Theatres",
+          "Gypsum board manufacturer",
+          "Hoisery,lace, Embroidery,Thread factories",
+          "Fruit and vegetable drying,dehydrating factories",
+          "Fruit products and Condiment Factories (including fruit pulp making)",
+          "Man,made Fibre Manufacturing Plant (Others)",
+          "Manure Blending works",
+          "Malt Extraction Plants",
+          "Man,made Fibre Manufacturing (using Cellulose)",
+          "Metallizing works ( involving metals only)",
+          "Metallising Works (others)",
+          "Match Factories",
+          "Mattress and Pillow making",
+          "Lac or Shellac Factories",
+          "Leather Cloth Factories",
+          "Katha Manufacturing",
+          "Khandsari Sugar Manufacturing",
+          "Lithographic presses",
+          "Liquified Gas Bottling Plants",
+          "Leather Goods Manufacturing ( incl. boot,shoe)",
+          "Lime Kiln",
+          "Sec IV - Oil mills",
+          "Sec IV - Match factories",
+          "Sec IV - Man made fibers",
+          "Sec IV - Packaging Industry",
+          "Sec IV - Plastic goods",
+          "Sec IV - Paper & Board",
+          "Sec IV - Paint",
+          "Sec IV - Jute Mills",
+          "Sec IV - Tiny Sector",
+          "Sec IV - Textiles",
+          "Sec IV - Tea",
+          "Sec IV - Any other than above",
+          "Sec V - Any other than above",
+          "Sec V - Pipe lines",
+          "Sec V - Electric Transmission Lines",
+          "Sec IV - Port Facility",
+          "Paint factories (Water based)",
+          "Sec VI - Any of Sec VI",
+          "Sec IV - Tyres & tube",
+          "Paint (others) and Varnish Factories",
+          "Paper and Cardboard Mills (including Lamination)",
+          "Pan Masala making",
+          "Paints , Nitrocellulose based",
+          "Sec IV - Rubber Goods/Tyres",
+          "Sec III - Offices etc",
+          "Sec IV - Printing Press",
+          "Sec IV - Power generation",
+          "Sec III - Hotels etc",
+          "Sec IV - Cables",
+          "Sec III - Any other than above",
+          "Sec III - Shops",
+          "Others",
+          "Silk Mills , Spun Silk Mills",
+          "Sea Food , Meat Processing",
+          "Saw Mills (including Timber Merchants premises where sawing is done).",
+          "Snuff Manufacturing",
+          "Spray Painting, Powder coating",
+          "Sponge Iron Plants",
+          "Soap Manufacturing",
+          "Salt crushing Factories and Refineries",
+          "Rice Polishing Units",
+          "Rice Mills",
+          "Presses for hides",
+          "Rope works (Plastic), Assembling of Plastic Goods such as Toys",
+          "Rubber Goods Manufacturing without spreading",
+          "Rubber Goods Mfg with Spreading",
+          "Rubber Factories",
+          "Stables (excluding animals)",
+          "Tea Factories",
+          "Tea blending,packing factories",
+          "Tarpaulin and canvas proofing factories",
+          "Telephone Exchanges",
+          "Tanks (others)",
+          "Tanks containing liquids flashing at 32 0C and below",
+          "Textile Mills Spinn",
+          "Tapioca factories",
+          "Sugar Candy Manufacturing",
+          "Stone quarries",
+          "Starch Factories",
+          "Sugar factories",
+          "Tanneries",
+          "Sweetmeat Manufacturing",
+          "Surgical Cotton Manufacturing",
+          "Particle Board Manufacturing",
+          "Sec IV - Cement",
+          "Sec III- Dwellings",
+          "Sec IV - Soap/Detergent",
+          "Sec IV - Chemicals",
+          "Sec IV - Cotton gin and press",
+          "Sec IV - Construction",
+          "Sec IV - Coal and Mining",
+          "Sec VII - Any of Sec VII",
+          "Arecanut and,or Betelnut factories",
+          "Aluminium ,Zinc,Copper Factories",
+          "Aluminium,Magnesium Powder Plants",
+          "Asbestos Steam Packing and lagging manufacturing",
+          "Automobile Manufacturing",
+          "Audio,Video Cassette Manufacturing",
+          "Atta and Cereal Grinding (excluding Dal Mills)",
+          "Sec IV - Dairy products/food Mfg",
+          "Museums",
+          "Libraries",
+          "Places of worships",
+          "Schools Colleges",
+          "Auditoriums Planetarium",
+          "Office premises,Meeting Rooms,",
+          "Hospitals including X,ray and other Diagnostic clinics",
+          "Sec IV - Sugar",
+          "Sec IV - Engineering workshops",
+          "Sec IV - Electronics Goods",
+          "Sec IV - Electronic/IT",
+          "Sec IV - Flour Mills",
+          "Sec IV - Steel/Metal",
+          "Sec IV - Glass",
+          "Sec IV - Fertilizers",
+          "Airport Terminal Buildings (including all facilities like Cafes, Shops etc)",
+          "Electric Generation Stations Hydro Power stations",
+          "Presses for carpets, rugs and tobacco",
+          "Presses for coir yarn , cotton,senna leaves",
+          "Electric Lamp ,T.V. Picture Tube Manufacturing",
+          "Enamel,ware factories",
+          "Electronic Software Parks",
+          "Electronic Goods Manufacturing ,Assembly",
+          "Presses for coir fibres,waste,Grass,fodder,boosa,Jute",
+          "Plastic Goods Manufacturing (excluding Foam Plastics)",
+          "Petroleum Coke Calcination",
+          "Pencil Manufacturing",
+          "Plywood , Wood veneering Factories, Laminating Factories",
+          "Poultry Farms (Excluding birds therein)",
+          "Port Premises including jetties and equipment thereon And other port facilities",
+          "Polyester Film Manufacturing , BOPP Film Manufacturing",
+          "Engineering Workshop ,Structural Steel fabricators, Sheet Metal fabricators,",
+          "Abrasive Manufacturing",
+          "Petrol,Diesel Kiosks",
+          "Motor Vehicle showroom including sales and service",
+          "Aerated Water Factories",
+          "Aircraft Hangers",
+          "Agarbatti manufacturing",
+          "Aerial Ropeway including trolley stations",
+          "Foamed Plastics Manufacturing and , or converting plants",
+          "Fertiliser Manufacturing (other than those rateable under Petrochemical Tariff)",
+          "Explosives , Blasting Factories",
+          "Engineering Workshop (Others), Clock,Watch Manufacturing , Motor Vehicle Garages",
+          "Filter and wax paper Manufacturing",
+          "Flour Mills",
+          "Flax , Hemp Mills",
+          "Fireworks Manufacturing"
+        ]
+      },
+      "fireSection": {
+        "kind": "select",
+        "options": ["Section - III", "Section - IV", "Section - V", "Section - VI", "Section - VII"]
+      },
+      "riskDescription3": {
+        "kind": "select",
+        "options": [
+          "Dwellings",
+          "Places of worships, Libraries, Museums, Schools, Colleges, Hospitals..",
+          "Cafes, Restaurants, Hotels, Confectioner & Sweet meat sellers, Health Resorts",
+          "Shops dealing in hazardous goods as per the list below & Arms Ammunition dealers",
+          "Shops dealing in goods otherwise not provided for including Laundries....",
+          "Places of worships",
+          "Libraries",
+          "Museums",
+          "Schools, Colleges",
+          "Hospitals including X-ray and other Diagnostic clinics",
+          "Office premises/Meeting Rooms",
+          "Auditoriums/Planetarium",
+          "Mess Houses/Clubs",
+          "Marriage Halls",
+          "Showrooms and display centres where goods are kept for display and no sales are",
+          "Educational and Research Institutes imparting training in various crafts",
+          "Lodging/Boarding Houses",
+          "Cycle Shed",
+          "Dish Antenna",
+          "Indoor stadiums/ Health club, Gymnasium and Swimming Pool/ Health Resorts",
+          "Laundries / Dry Cleaning",
+          "Battery Charging Service Stations",
+          "Amusement parks",
+          "Hoarding, Neon signs",
+          "Sports Galleries, Outdoor stadiums",
+          "Shops dealing in hazardous goods",
+          "Arms & Ammunition dealers",
+          "Motor Vehicle showroom including sales and service",
+          "Fuel Station - Petrol/Diesel Kiosks [without CNG]",
+          "Fuel Station - Petrol/Diesel Kiosks [with CNG]",
+          "Data Processing/Call Centres/Business Process Outsourcing Centres"
+        ]
+      },
+      "whetherStfiPerilDeleted": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "whetherRsmdPerilDeleted": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "whetherEscaltionClauseOpted": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "escalationPer": {
+        "kind": "text"
+      },
+      "technicalDiscountPer": {
+        "kind": "text"
+      },
+      "discretionaryDiscountPer": {
+        "kind": "text"
+      },
+      "circumstanceForAllowingDiscounts": {
+        "kind": "text"
+      },
+      "excessOptedByInsured": {
+        "kind": "select",
+        "options": ["Higher Excess", "Normal", "Voluntry"]
+      },
+      "voluntaryDeductiblesChosen": {
+        "kind": "select",
+        "options": [
+          "AOG perils = Rs 100lakhs, Other perils = Rs 50 lakhs",
+          "AOG perils = Rs 10lakhs, Other perils = Rs 5 lakhs",
+          "AOG perils = Rs 20lakhs, Other perils = Rs 10 lakhs",
+          "AOG perils = Rs 30lakhs, Other perils = Rs 15 lakhs",
+          "AOG perils = Rs 60lakhs, Other perils = Rs 30 lakhs",
+          "AOG perils > Rs 100lakhs, Other perils > Rs 50 lakhs"
+        ]
+      },
+      "applicableVoluntaryDiscountPer": {
+        "kind": "text"
+      },
+      "higherExcessForAOG": {
+        "kind": "text"
+      },
+      "higherExcessForNonAOG": {
+        "kind": "text"
+      },
+      "natureOfOccupancy": {
+        "kind": "select",
+        "options": ["Batch process", "Continuous process"]
+      },
+      "earthQuakeZone": {
+        "kind": "select",
+        "options": []
+      },
+      "whetherInsuredPremStorageActivity": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "cngInstallations": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "staffDiscountAllowed": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "staffDiscountFire": {
+        "kind": "text"
+      },
+      "isCooperativeHousingSociety": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "stifRevRate": {
+        "kind": "text"
+      },
+      "yearOfConstruction": {
+        "kind": "select",
+        "options": [
+          "2033",
+          "2032",
+          "2031",
+          "2030",
+          "2029",
+          "2028",
+          "2027",
+          "2026",
+          "2025",
+          "2024",
+          "2023",
+          "2022",
+          "2021",
+          "2020",
+          "2019",
+          "2018",
+          "2017",
+          "2016",
+          "2015",
+          "2014",
+          "2013",
+          "2012",
+          "2011",
+          "2010",
+          "2009",
+          "2008",
+          "2007",
+          "2006",
+          "2005",
+          "2004",
+          "2003",
+          "2002",
+          "2001",
+          "2000",
+          "1999",
+          "1998",
+          "1997",
+          "1996",
+          "1995",
+          "1994",
+          "1993",
+          "1992",
+          "1991",
+          "1990",
+          "1989",
+          "1988",
+          "1987",
+          "1986",
+          "1985",
+          "1984",
+          "1983",
+          "1982",
+          "1981",
+          "1980",
+          "1979",
+          "1978",
+          "1977",
+          "1976",
+          "1975",
+          "1974",
+          "1973",
+          "1972",
+          "1971",
+          "1970",
+          "1969",
+          "1968",
+          "1967",
+          "1966",
+          "1965",
+          "1964",
+          "1963",
+          "1962",
+          "1961"
+        ]
+      },
+      "yearOfOccupation": {
+        "kind": "select",
+        "options": [
+          "2039",
+          "2038",
+          "2037",
+          "2036",
+          "2035",
+          "2034",
+          "2033",
+          "2032",
+          "2031",
+          "2030",
+          "2029",
+          "2028",
+          "2027",
+          "2026",
+          "2025",
+          "2024",
+          "2023",
+          "2022",
+          "2021",
+          "2020",
+          "2019",
+          "2018",
+          "2017",
+          "2016",
+          "2015",
+          "2014",
+          "2013",
+          "2012",
+          "2011",
+          "2010",
+          "2009",
+          "2008",
+          "2007",
+          "2006",
+          "2005",
+          "2004",
+          "2003",
+          "2002",
+          "2001",
+          "2000",
+          "1999",
+          "1998",
+          "1997",
+          "1996",
+          "1995",
+          "1994",
+          "1993",
+          "1992",
+          "1991",
+          "1990",
+          "1989",
+          "1988",
+          "1987",
+          "1986",
+          "1985",
+          "1984",
+          "1983",
+          "1982",
+          "1981",
+          "1980",
+          "1979",
+          "1978",
+          "1977",
+          "1976",
+          "1975",
+          "1974",
+          "1973",
+          "1972",
+          "1971",
+          "1970",
+          "1969",
+          "1968",
+          "1967",
+          "1966",
+          "1965",
+          "1964",
+          "1963",
+          "1962",
+          "1961"
+        ]
+      },
+      "numberOfFloors": {
+        "kind": "text"
+      },
+      "onWhichFloor": {
+        "kind": "select",
+        "options": ["Ground Floor", "Higher Floor", "Mezzanine Floor"]
+      },
+      "fireFightingArrangementsForBuilding": {
+        "kind": "text"
+      },
+      "distanceFromPublicFireBrigade": {
+        "kind": "text"
+      },
+      "approxTimeOfArrival": {
+        "kind": "text"
+      },
+      "ownedBy": {
+        "kind": "text"
+      },
+      "occupiedAsFire": {
+        "kind": "select",
+        "options": ["Garage", "Hotels", "Office", "Any other of Sec III", "Shops"]
+      },
+      "willPremisesRemainUnoccupiedFor30Days": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "isBuildingAirConditioned": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "areDuctsHazardous": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "hasLift": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "contractPriceInsuranceClassOpted": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "typeOfInterior": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "riskLocatedInBasement": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "howPartialBasementIsCovered": {
+        "kind": "select",
+        "options": [
+          "Godown/Storage",
+          "Plant & Machinery",
+          "Electrical panels / sub station",
+          "Any other. Please specify"
+        ]
+      },
+      "electricalRegulation": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "buildingHeight": {
+        "kind": "text"
+      },
+      "buildingAge": {
+        "kind": "text"
+      },
+      "portableExtinguishers": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "smallBoreHoseReels": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "trailerPumpsFireEngines": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "foamSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "gasFloodingSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "spotProtection": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "otherProtections": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fireProtectionDetails": {
+        "kind": "text"
+      },
+      "operationalDetectors": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "electricalInstallations": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "waterDrainSystems": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "security": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "basementUsedforOperations": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "insuredPremisesLocatedWithin1KM": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "riskLocatedWithNoAcessToFireBrigade": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "contaminationComingling": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "expeditingExpenses": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "expensesLossMinimisation": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "hirePurchaseorLeaseAgreements": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "inadverentOmission": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "wantToOptDeclarationPolicy": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "builtInCoverForFloater": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "isPropertyMortgagedt": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "doYouHaveConcurrentInsurance": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "lossDueToFireOrAlliedPeril": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      }
+    }
+  },
+  "flexi-sookshma": {
+    "heading": "New India Flexi Sookshma Udyam Insurance",
+    "fields": {
+      "maxICRinLast3Yr": {
+        "kind": "text"
+      },
+      "icrDisclaimer": {
+        "kind": "checkbox"
+      },
+      "typeOfPolicy": {
+        "kind": "select",
+        "options": ["Commercial", "Retail"]
+      },
+      "whetherPolicyInPast0": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast0",
+        "value": "Y"
+      },
+      "whetherPolicyInPast1": {
+        "kind": "radio",
+        "name": "whetherPolicyInPast1",
+        "value": "N"
+      },
+      "preAcceptanceInspectionCarriedout": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "policyDuration": {
+        "kind": "text"
+      },
+      "pinCode": {
+        "kind": "text"
+      },
+      "doYouWantToOpt": {
+        "kind": "select",
+        "options": [
+          "Only Building & Contents",
+          "Building Contents & Stocks on Floater basis",
+          "Building Contents & Stocks on Declaration basis",
+          "Building, Contents & Stocks",
+          "Only Stocks on Floater basis",
+          "Only Stocks on Declaration & Floater Basis",
+          "Only Stocks on Declaration Basis"
+        ]
+      },
+      "riskLocationBuildingName": {
+        "kind": "text"
+      },
+      "riskLocationNearbyLandmark": {
+        "kind": "text"
+      },
+      "pinCode0": {
+        "kind": "text"
+      },
+      "addressOfTheLocation0": {
+        "kind": "text"
+      },
+      "buildingIncludingAdditionalStructuresI0": {
+        "kind": "text"
+      },
+      "furnitureFixFittEquip0": {
+        "kind": "text"
+      },
+      "plantMachinery0": {
+        "kind": "text"
+      },
+      "otherContentDetails0": {
+        "kind": "textarea"
+      },
+      "otherContentsSI0": {
+        "kind": "text"
+      },
+      "typeOfConstructionWalls0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "typeOfConstructionFloor0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "typeOfConstructionRoof0": {
+        "kind": "select",
+        "options": ["Kutcha", "Pucca"]
+      },
+      "typeOfIndustry": {
+        "kind": "select",
+        "options": [
+          "Hotels",
+          "Offices",
+          "Shops",
+          "Candle Works",
+          "Canning Factories",
+          "Cable Manufacturing",
+          "Camphor Manufacturing",
+          "Cardamom Factories",
+          "Cardboard Box Manufacturing",
+          "Capsule Manufacturing",
+          "Carbon paper,Typewriter Ribbon Manufacturing",
+          "Book Binders, Envelope and Paper Bag Manufacturing.",
+          "Breweries",
+          "Biscuit Factories",
+          "Bitumenised Paper and,or Hessian Cloth Manufacturing",
+          "Bridges,Wooden",
+          "Building In course of construction",
+          "Brickworks (including refractories and fire bricks)",
+          "Bridges,Concrete Steel",
+          "Chemical Manufacturing(others), Pharmaceuticals, Toiletry products",
+          "Cigar and Cigarette Manufacturing",
+          "Ceramic Factories and Crockery and Stoneware pipe Manufacturing,Clay Works.",
+          "Chemical Manufacturing(Using materials with Flash Point below 32OC)",
+          "Cinema Film Production Studios",
+          "Cinematography Film Editing, Lab and Sound recording rooms with Film processing",
+          "Cigarette Filter Manufacturing (Using Solvents with Flash Point below 32OC)",
+          "Cigarette Filter Manufacturing (Others)",
+          "Carpet and Drugget Manufacturing (Others)",
+          "Cashew nut Factories",
+          "Carpenters, Wood wool Manufacturing, Furniture Manufacturing",
+          "Carpet and Drugget Manufacturing (Cotton,jute,wool )",
+          "Cement,asbestos,concrete products Manufacturing",
+          "Cement Factories",
+          "Cattle feed Mill",
+          "Celluloid Goods Manufacturing",
+          "Beedi Factories",
+          "Battery Charging Service Stations",
+          "Amusement parks",
+          "Cafes, Restaurants, Hotels, Confectioner and Sweet meat sellers",
+          "Laundries,Dry Cleaning",
+          "Shops dealing in goods otherwise not provided for",
+          "Shops dealing in hazardous goods",
+          "Hoarding, Neon signs",
+          "Sports Galleries, Outdoor stadiums.",
+          "Showrooms and display centres where goods are kept for display and no sales are",
+          "Educational and Research Institutes imparting training in various crafts",
+          "Mess Houses,Clubs",
+          "Marriage Halls",
+          "Dish Antenna",
+          "Indoor stadiums.",
+          "Lodging,Boarding Houses",
+          "Cycle Shed",
+          "Detergent Manufacturing (Others)",
+          "Distilleries",
+          "Dehydration Factories",
+          "Detergent Manufacturing with Sulphonation Plant",
+          "Basket Weavers and Cane Furniture Makers",
+          "Battery Manufacturing",
+          "Duplicating,stencil paper Manufacturing",
+          "Bakeries",
+          "Condensed Milk Factories, Milk Pasturisings Plants and Dairies",
+          "Confectionery Manufacturing",
+          "Arms and Ammunition dealers",
+          "Collieries , underground Mechinery and pit head gear",
+          "Cotton Gin and Press Houses",
+          "Cotton Seed cleaning , Delinting Factory",
+          "Contractors Plant and Machinery At one location only",
+          "Cork Products Manufacturing",
+          "Oil and Leather Cloth Factories",
+          "Garment Makers, Topee, Hats and the like makers",
+          "Oil Mills refining ( Veg,Animal)",
+          "Oil Mills (Vegetable)",
+          "Glass wool Manufacturing",
+          "Glass Manufacturing",
+          "Ghee Factories including vegetable Ghee mfg.",
+          "Glass Fibre Manufacturing",
+          "Mosaic Factories",
+          "Mushroom Growing Premises (Excluding Crops)",
+          "Mica Products Manufacturing",
+          "Mineral Oil blending and processing",
+          "Oil Extraction",
+          "Oil Distillation Plants (essential)",
+          "Nitro Cellulose Manufacturing",
+          "Non,woven fabric Manufacturing",
+          "Coal,Coke,Charcoal ball and briquettes Manufacturing",
+          "Coal Processing Plants",
+          "Circus, Touring Drama Troupes and Touring Cinema Theatres",
+          "Cloth Processing units situated outside the compound of Textile mills",
+          "Electric Generation Stations- Thermal Power Stations",
+          "Sec IV - Tyres & tube",
+          "Coffee Curing, Roasting , Grinding",
+          "Coir Factories",
+          "Granite Factories (Others)",
+          "Graphite electrode Manufacturing",
+          "Gold thread factories , Gilding factories",
+          "Granite Factories using inflammable solvents",
+          "Green Houses, Algae, Spirulina and the like",
+          "Gum,Glue,Gelatine Manufacturing",
+          "Grain,seeds disintegrating,crushing, Decorticating factories, Dal mills.",
+          "Grease , Wax Manufacturing",
+          "Metal,Tin printers",
+          "Incandescent Gas mantle Manufacturing",
+          "Industrial Diamonds Manufacturing",
+          "Ice candy and Ice cream Manufacturing",
+          "Ice factories",
+          "Jaggery Manufacturing",
+          "Jute Mills",
+          "Industrial Gas Manufacturing",
+          "Ink (excluding printing ink) Manufacturing",
+          "Foam Rubber Manufacturing",
+          "French Polish Manufacturing",
+          "Cinematography Film Editing, Lab and Sound recording rooms without Film processi",
+          "Cinema Theatres",
+          "Gypsum board manufacturer",
+          "Hoisery,lace, Embroidery,Thread factories",
+          "Fruit and vegetable drying,dehydrating factories",
+          "Fruit products and Condiment Factories (including fruit pulp making)",
+          "Man,made Fibre Manufacturing Plant (Others)",
+          "Manure Blending works",
+          "Malt Extraction Plants",
+          "Man,made Fibre Manufacturing (using Cellulose)",
+          "Metallizing works ( involving metals only)",
+          "Metallising Works (others)",
+          "Match Factories",
+          "Mattress and Pillow making",
+          "Lac or Shellac Factories",
+          "Leather Cloth Factories",
+          "Katha Manufacturing",
+          "Khandsari Sugar Manufacturing",
+          "Lithographic presses",
+          "Liquified Gas Bottling Plants",
+          "Leather Goods Manufacturing ( incl. boot,shoe)",
+          "Lime Kiln",
+          "Sec IV - Oil mills",
+          "Sec IV - Match factories",
+          "Sec IV - Man made fibers",
+          "Sec IV - Packaging Industry",
+          "Sec IV - Plastic goods",
+          "Sec IV - Paper & Board",
+          "Sec IV - Paint",
+          "Sec IV - Jute Mills",
+          "Sec IV - Tiny Sector",
+          "Sec IV - Textiles",
+          "Sec IV - Tea",
+          "Sec IV - Any other than above",
+          "Sec V - Any other than above",
+          "Sec V - Pipe lines",
+          "Sec V - Electric Transmission Lines",
+          "Sec IV - Port Facility",
+          "Paint factories (Water based)",
+          "Sec VI - Any of Sec VI",
+          "Sec IV - Tyres & tube",
+          "Paint (others) and Varnish Factories",
+          "Paper and Cardboard Mills (including Lamination)",
+          "Pan Masala making",
+          "Paints , Nitrocellulose based",
+          "Sec IV - Rubber Goods/Tyres",
+          "Sec III - Offices etc",
+          "Sec IV - Printing Press",
+          "Sec IV - Power generation",
+          "Sec III - Hotels etc",
+          "Sec IV - Cables",
+          "Sec III - Any other than above",
+          "Sec III - Shops",
+          "Others",
+          "Silk Mills , Spun Silk Mills",
+          "Sea Food , Meat Processing",
+          "Saw Mills (including Timber Merchants premises where sawing is done).",
+          "Snuff Manufacturing",
+          "Spray Painting, Powder coating",
+          "Sponge Iron Plants",
+          "Soap Manufacturing",
+          "Salt crushing Factories and Refineries",
+          "Rice Polishing Units",
+          "Rice Mills",
+          "Presses for hides",
+          "Rope works (Plastic), Assembling of Plastic Goods such as Toys",
+          "Rubber Goods Manufacturing without spreading",
+          "Rubber Goods Mfg with Spreading",
+          "Rubber Factories",
+          "Stables (excluding animals)",
+          "Tea Factories",
+          "Tea blending,packing factories",
+          "Tarpaulin and canvas proofing factories",
+          "Telephone Exchanges",
+          "Tanks (others)",
+          "Tanks containing liquids flashing at 32 0C and below",
+          "Textile Mills Spinn",
+          "Tapioca factories",
+          "Sugar Candy Manufacturing",
+          "Stone quarries",
+          "Starch Factories",
+          "Sugar factories",
+          "Tanneries",
+          "Sweetmeat Manufacturing",
+          "Surgical Cotton Manufacturing",
+          "Particle Board Manufacturing",
+          "Sec IV - Cement",
+          "Sec III- Dwellings",
+          "Sec IV - Soap/Detergent",
+          "Sec IV - Chemicals",
+          "Sec IV - Cotton gin and press",
+          "Sec IV - Construction",
+          "Sec IV - Coal and Mining",
+          "Sec VII - Any of Sec VII",
+          "Arecanut and,or Betelnut factories",
+          "Aluminium ,Zinc,Copper Factories",
+          "Aluminium,Magnesium Powder Plants",
+          "Asbestos Steam Packing and lagging manufacturing",
+          "Automobile Manufacturing",
+          "Audio,Video Cassette Manufacturing",
+          "Atta and Cereal Grinding (excluding Dal Mills)",
+          "Sec IV - Dairy products/food Mfg",
+          "Museums",
+          "Libraries",
+          "Places of worships",
+          "Schools Colleges",
+          "Auditoriums Planetarium",
+          "Office premises,Meeting Rooms,",
+          "Hospitals including X,ray and other Diagnostic clinics",
+          "Sec IV - Sugar",
+          "Sec IV - Engineering workshops",
+          "Sec IV - Electronics Goods",
+          "Sec IV - Electronic/IT",
+          "Sec IV - Flour Mills",
+          "Sec IV - Steel/Metal",
+          "Sec IV - Glass",
+          "Sec IV - Fertilizers",
+          "Airport Terminal Buildings (including all facilities like Cafes, Shops etc)",
+          "Electric Generation Stations Hydro Power stations",
+          "Presses for carpets, rugs and tobacco",
+          "Presses for coir yarn , cotton,senna leaves",
+          "Electric Lamp ,T.V. Picture Tube Manufacturing",
+          "Enamel,ware factories",
+          "Electronic Software Parks",
+          "Electronic Goods Manufacturing ,Assembly",
+          "Presses for coir fibres,waste,Grass,fodder,boosa,Jute",
+          "Plastic Goods Manufacturing (excluding Foam Plastics)",
+          "Petroleum Coke Calcination",
+          "Pencil Manufacturing",
+          "Plywood , Wood veneering Factories, Laminating Factories",
+          "Poultry Farms (Excluding birds therein)",
+          "Port Premises including jetties and equipment thereon And other port facilities",
+          "Polyester Film Manufacturing , BOPP Film Manufacturing",
+          "Engineering Workshop ,Structural Steel fabricators, Sheet Metal fabricators,",
+          "Abrasive Manufacturing",
+          "Petrol,Diesel Kiosks",
+          "Motor Vehicle showroom including sales and service",
+          "Aerated Water Factories",
+          "Aircraft Hangers",
+          "Agarbatti manufacturing",
+          "Aerial Ropeway including trolley stations",
+          "Foamed Plastics Manufacturing and , or converting plants",
+          "Fertiliser Manufacturing (other than those rateable under Petrochemical Tariff)",
+          "Explosives , Blasting Factories",
+          "Engineering Workshop (Others), Clock,Watch Manufacturing , Motor Vehicle Garages",
+          "Filter and wax paper Manufacturing",
+          "Flour Mills",
+          "Flax , Hemp Mills",
+          "Fireworks Manufacturing"
+        ]
+      },
+      "excessOptedByInsured": {
+        "kind": "select",
+        "options": ["Normal", "Voluntry"]
+      },
+      "RiskInSez": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "natureOfOccupancy": {
+        "kind": "select",
+        "options": ["Batch process", "Continuous process"]
+      },
+      "contractPriceInsuranceClassOpted": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "typeOfInterior": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "sumInsuredFloater": {
+        "kind": "text"
+      },
+      "stocksInProcessSI0": {
+        "kind": "text"
+      },
+      "sectionCodeFloater": {
+        "kind": "select",
+        "options": ["Section - V", "Section - IV", "Section - VII", "Section - VI", "Section - III"]
+      },
+      "fireSection": {
+        "kind": "select",
+        "options": ["Section - V", "Section - IV", "Section - VII", "Section - VI", "Section - III"]
+      },
+      "stockDesc0": {
+        "kind": "text"
+      },
+      "earthQuakeState": {
+        "kind": "select",
+        "options": [
+          "ANDAMAN & NICOBAR ISLANDS",
+          "ANDHRA PRADESH",
+          "ARUNACHAL PRADESH",
+          "ASSAM",
+          "BIHAR",
+          "CHATTISGARH",
+          "CHANDIGARH",
+          "DELHI",
+          "GOA",
+          "GUJARAT",
+          "HIMACHAL PRADESH",
+          "HARYANA",
+          "JHARKHAND",
+          "JAMMU & KASHMIR",
+          "KARNATAKA",
+          "KERALA",
+          "LAKSHADWEEP",
+          "MAHARASHTRA",
+          "MEGHALAYA",
+          "MANIPUR",
+          "MADHYA PRADESH",
+          "MIZORAM",
+          "NAGALAND",
+          "ODISHA",
+          "PUNJAB",
+          "PONDICHERRY",
+          "RAJASTHAN",
+          "SIKKIM",
+          "TAMILNADU",
+          "TRIPURA",
+          "TELANGANA",
+          "UTTAR PRADESH",
+          "UTTARAKHAND",
+          "WEST BENGAL"
+        ]
+      },
+      "earthQuakeZone": {
+        "kind": "select",
+        "options": []
+      },
+      "yearOfConstruction": {
+        "kind": "select",
+        "options": [
+          "2026",
+          "2025",
+          "2024",
+          "2023",
+          "2022",
+          "2021",
+          "2020",
+          "2019",
+          "2018",
+          "2017",
+          "2016",
+          "2015",
+          "2014",
+          "2013",
+          "2012",
+          "2011",
+          "2010",
+          "2009",
+          "2008",
+          "2007",
+          "2006",
+          "2005",
+          "2004",
+          "2003",
+          "2002",
+          "2001",
+          "2000",
+          "1999",
+          "1998",
+          "1997",
+          "1996",
+          "1995",
+          "1994",
+          "1993",
+          "1992",
+          "1991",
+          "1990",
+          "1989",
+          "1988",
+          "1987",
+          "1986",
+          "1985",
+          "1984",
+          "1983",
+          "1982",
+          "1981",
+          "1980",
+          "1979",
+          "1978",
+          "1977",
+          "1976",
+          "1975",
+          "1974",
+          "1973",
+          "1972",
+          "1971",
+          "1970",
+          "1969",
+          "1968",
+          "1967",
+          "1966",
+          "1965",
+          "1964",
+          "1963",
+          "1962",
+          "1961",
+          "1960"
+        ]
+      },
+      "numberOfFloors": {
+        "kind": "text"
+      },
+      "entireRiskLocatedInBasement": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fireFightingArrangementsForRisk": {
+        "kind": "text"
+      },
+      "distanceFromPublicFireBrigade": {
+        "kind": "text"
+      },
+      "approxTimeOfArrival": {
+        "kind": "text"
+      },
+      "hasHydrantSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "howPartialBasementIsCovered": {
+        "kind": "select",
+        "options": [
+          "Plant & Machinery",
+          "Any other. Please specify",
+          "Electrical panels / sub station",
+          "Godown/Storage"
+        ]
+      },
+      "buildingHeight": {
+        "kind": "text"
+      },
+      "portableExtinguishers": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "smallBoreHoseReels": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "trailerPumpsFireEngines": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "hydrantSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "sprinklerSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fixedWaterSpraySystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "foamSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fireAlarmSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "cngInstallations": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "gasFloodingSystem": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "spotProtection": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "otherProtections": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "fireProtectionDetails": {
+        "kind": "text"
+      },
+      "operationalDetectors": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "electricalInstallations": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "waterDrainSystems": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "security": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "basementUsedforOperations": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "insuredPremisesLocatedWithin1KM": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "riskLocatedWithNoAcessToFireBrigade": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "basisOfMonthlyDeclaration": {
+        "kind": "select",
+        "options": [
+          "The highest value at risk during the month",
+          "The average of the values at risk on each day of the month"
+        ]
+      },
+      "expensesLossMinimisation": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "hirePurchaseorLeaseAgreements": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "inadverentOmission": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "contaminationComingling": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "expeditingExpenses": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "escalationCover": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "LeakageOverflow": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "claimsPreparationCost": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "involuntaryBetterment": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "decorationOfStocksInColdStoragePremises": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "spoilageMaterialDamageCover": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "lossOfRent": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "immediateRepair": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "impactDamageDueToInsuredOwnRail": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "terrorismAddOnCover": {
+        "kind": "select",
+        "options": ["NO", "YES"]
+      },
+      "brandsTrademarksClause": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "agreedBankClause": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "builtInCoverForFloater": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "wantToOptDeclarationPolicy": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "isPropertyMortgagedt": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "relatedBiPolicy": {
+        "kind": "select",
+        "options": ["No", "Yes"]
+      },
+      "lossDueToFireOrAlliedPeril": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      }
+    }
+  },
+  "war": {
+    "heading": "STANDALONE WAR Insurance",
+    "fields": {
+      "vTypePolicyDw": {
+        "kind": "select",
+        "options": ["Retail", "Commercial", "Residential"]
+      },
+      "vStatusRiskDw": {
+        "kind": "select",
+        "options": ["Capitalized Project", "Operational Risk"]
+      },
+      "vSubjectivities": {
+        "kind": "text"
+      },
+      "vExclusions": {
+        "kind": "text"
+      },
+      "vDeductibleRequired": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vDeductibleWords": {
+        "kind": "text"
+      },
+      "vInsuredInterestWordingPropertyDamage": {
+        "kind": "text"
+      },
+      "vNameBankerFinancialInstitution": {
+        "kind": "text"
+      },
+      "vPropertyStake": {
+        "kind": "text"
+      },
+      "vValueProperty": {
+        "kind": "text"
+      },
+      "vLocationAddress": {
+        "kind": "text"
+      },
+      "vIndemnityPeriodMonths": {
+        "kind": "text"
+      },
+      "vLimitLiabilityAggregate": {
+        "kind": "text"
+      },
+      "vLimitLiabilityPerEvent": {
+        "kind": "text"
+      },
+      "vMaximumIcPolicy": {
+        "kind": "text"
+      },
+      "vPropertySurroundedOtherProperty_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vPropertyProtectedCompoundWallFences_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vItMannedExclusiveAgency_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vWhetherSecurityGuardsAreArmed_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vAreThereGOVEstablishmentNearby_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vSerialNumberSa_1": {
+        "kind": "text"
+      },
+      "vAddressLocationSa_1": {
+        "kind": "text"
+      },
+      "vDistrictSa_1": {
+        "kind": "text"
+      },
+      "vPincodeSa_1": {
+        "kind": "text"
+      },
+      "vSiBuildings": {
+        "kind": "text"
+      },
+      "vSiPlantMachinery": {
+        "kind": "text"
+      },
+      "vSiFurnitureFixturesFittingsOtherContents": {
+        "kind": "text"
+      },
+      "vSiStocks": {
+        "kind": "text"
+      },
+      "vSiStocksProcess": {
+        "kind": "text"
+      },
+      "vGrossManualPremium": {
+        "kind": "text"
+      },
+      "vTotalSiBusinessInterruption": {
+        "kind": "text"
+      }
+    }
+  },
+  "sfsp": {
+    "heading": "Standard Fire and Special Perils Insurance",
+    "fields": {
+      "vRiskNew": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vItFreshBusinessRenewal": {
+        "kind": "select",
+        "options": ["Renewal", "Fresh"]
+      },
+      "vHasPropertyPerils": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vHasAnyProposalInsured": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vHasRenewalPolicy": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vUnderwritingClassification": {
+        "kind": "select",
+        "options": [
+          "Large Risks - Risks having SI more than Rs. 2500 Crores at one or more location",
+          "Listed Risks including IAR -(TSI of the Risk > Rs. 250 Cr. but < Rs. 2500 Cr.)",
+          "NRB - (TSI of the Risk upto Rs. 30 Crores)",
+          "RB -(TSI of the Risk > Rs. 30 Crores but < Rs. 250 Crores)"
+        ]
+      },
+      "vBusinessDirect": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vPropertyMortgaged": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vWhetherThereWillBeAnyRelatedBiLpPolicy": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vDoYouHaveInsurance_2": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vWhetherRiskPremises_2": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vArchitectsSurveyorsAdd1001_2": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vSumInsuredAdd1001_2": {
+        "kind": "text"
+      },
+      "vRemovalDebrisExcess1ClaimAmountAdd1002": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vSumInsuredAdd1002": {
+        "kind": "text"
+      },
+      "vOmissionInsureAdd1008": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vTypeTerrorismCoverRequired": {
+        "kind": "select",
+        "options": ["Not Required", "Individual Risk", "Floater"]
+      },
+      "vPreInspection": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vDatePreInspection": {
+        "kind": "text"
+      },
+      "vMaximumIcPolicy": {
+        "kind": "text"
+      },
+      "vPinCodeRisk": {
+        "kind": "text"
+      },
+      "vRiskLocationC": {
+        "kind": "text"
+      },
+      "vBlockNumberAsPerInsuredsInstructions0": {
+        "kind": "text"
+      },
+      "vNameBlock0": {
+        "kind": "text"
+      },
+      "vBuildingSuperStructure0": {
+        "kind": "text"
+      },
+      "vBuildingPlinthFoundations0": {
+        "kind": "text"
+      },
+      "vPlantMachineryAccessories0": {
+        "kind": "text"
+      },
+      "vFurnitureFittingsFixturesOtherContents0": {
+        "kind": "text"
+      },
+      "vStocksStocksProcess0": {
+        "kind": "text"
+      },
+      "vStocksHeldTrust0": {
+        "kind": "text"
+      },
+      "vTotalSumInsuredExcludingBuildingPlinthFoundation0": {
+        "kind": "text"
+      },
+      "vTotalSumInsuredIncludingBuildingPlinthFoundations0": {
+        "kind": "text"
+      },
+      "vProductClassification_2": {
+        "kind": "select",
+        "options": [
+          "Class rated Risk Product(i.e. Risk having SI less than Rs 5 Cr.)",
+          "Individual rated Risk Product(i.e.Risk having SI equal to or more than Rs 5 Cr.)"
+        ]
+      },
+      "vTypeIndustryOccupation_3": {
+        "kind": "select",
+        "options": [
+          "Presses for hides",
+          "Rice Mills",
+          "Rice Polishing Units",
+          "Rope works (Plastic), Assembling of Plastic Goods such as Toys",
+          "Rubber Factories",
+          "Rubber Goods Mfg with Spreading",
+          "Rubber Goods Manufacturing without spreading",
+          "Salt crushing Factories and Refineries",
+          "Saw Mills (including Timber Merchants premises where sawing is done).",
+          "Sea Food , Meat Processing",
+          "Silk Mills , Spun Silk Mills",
+          "Snuff Manufacturing",
+          "Soap Manufacturing",
+          "Sponge Iron Plants",
+          "Spray Painting, Powder coating",
+          "Stables (excluding animals)",
+          "Starch Factories",
+          "Stone quarries",
+          "Sugar Candy Manufacturing",
+          "Sugar factories",
+          "Surgical Cotton Manufacturing",
+          "Sweetmeat Manufacturing",
+          "Tanneries",
+          "Tapioca factories",
+          "Tarpaulin and canvas proofing factories",
+          "Tea blending,packing factories",
+          "Tea Factories",
+          "Telephone Exchanges",
+          "Textile Mills Spinn",
+          "Tanks containing liquids flashing at 32 0C and below",
+          "Tanks (others)",
+          "Others",
+          "Sec IV - Tea",
+          "Sec IV - Textiles",
+          "Sec IV - Tiny Sector",
+          "Sec IV - Any other than above",
+          "Sec V - Electric Transmission Lines",
+          "Sec V - Pipe lines",
+          "Sec V - Any other than above",
+          "Sec IV - Jute Mills",
+          "Sec IV - Man made fibers",
+          "Sec IV - Match factories",
+          "Sec IV - Oil mills",
+          "Sec IV - Packaging Industry",
+          "Sec IV - Paint",
+          "Sec IV - Paper & Board",
+          "Sec IV - Plastic goods",
+          "Sec IV - Port Facility",
+          "Sec IV - Power generation",
+          "Sec IV - Printing Press",
+          "Sec III - Offices etc",
+          "Sec III - Hotels etc",
+          "Sec III - Shops",
+          "Sec III - Any other than above",
+          "Sec IV - Cables",
+          "Sec IV - Rubber Goods/Tyres",
+          "Sec IV - Tyres & tube",
+          "Sec VI - Any of Sec VI",
+          "Paint factories (Water based)",
+          "Paint (others) and Varnish Factories",
+          "Paints , Nitrocellulose based",
+          "Pan Masala making",
+          "Paper and Cardboard Mills (including Lamination)",
+          "Particle Board Manufacturing",
+          "Pencil Manufacturing",
+          "Petroleum Coke Calcination",
+          "Plastic Goods Manufacturing (excluding Foam Plastics)",
+          "Plywood , Wood veneering Factories, Laminating Factories",
+          "Polyester Film Manufacturing , BOPP Film Manufacturing",
+          "Port Premises including jetties and equipment thereon And other port facilities",
+          "Poultry Farms (Excluding birds therein)",
+          "Presses for coir fibres,waste,Grass,fodder,boosa,Jute",
+          "Presses for coir yarn , cotton,senna leaves",
+          "Presses for carpets, rugs and tobacco",
+          "Electric Generation Stations Hydro Power stations",
+          "Electric Lamp ,T.V. Picture Tube Manufacturing",
+          "Electronic Goods Manufacturing ,Assembly",
+          "Electronic Software Parks",
+          "Enamel,ware factories",
+          "Engineering Workshop ,Structural Steel fabricators, Sheet Metal fabricators,",
+          "Engineering Workshop (Others), Clock,Watch Manufacturing , Motor Vehicle Garages",
+          "Explosives , Blasting Factories",
+          "Fertiliser Manufacturing (other than those rateable under Petrochemical Tariff)",
+          "Filter and wax paper Manufacturing",
+          "Fireworks Manufacturing",
+          "Flax , Hemp Mills",
+          "Flour Mills",
+          "Foamed Plastics Manufacturing and , or converting plants",
+          "Motor Vehicle showroom including sales and service",
+          "Petrol,Diesel Kiosks",
+          "Abrasive Manufacturing",
+          "Aerated Water Factories",
+          "Aerial Ropeway including trolley stations",
+          "Agarbatti manufacturing",
+          "Aircraft Hangers",
+          "Airport Terminal Buildings (including all facilities like Cafes, Shops etc)",
+          "Aluminium,Magnesium Powder Plants",
+          "Aluminium ,Zinc,Copper Factories",
+          "Arecanut and,or Betelnut factories",
+          "Asbestos Steam Packing and lagging manufacturing",
+          "Atta and Cereal Grinding (excluding Dal Mills)",
+          "Audio,Video Cassette Manufacturing",
+          "Automobile Manufacturing",
+          "Sec VII - Any of Sec VII",
+          "Sec IV - Soap/Detergent",
+          "Sec III- Dwellings",
+          "Sec IV - Cement",
+          "Sec IV - Chemicals",
+          "Sec IV - Coal and Mining",
+          "Sec IV - Construction",
+          "Sec IV - Cotton gin and press",
+          "Sec IV - Dairy products/food Mfg",
+          "Sec IV - Electronic/IT",
+          "Sec IV - Electronics Goods",
+          "Sec IV - Engineering workshops",
+          "Sec IV - Flour Mills",
+          "Sec IV - Fertilizers",
+          "Sec IV - Glass",
+          "Sec IV - Steel/Metal",
+          "Sec IV - Sugar",
+          "Places of worships",
+          "Libraries",
+          "Museums",
+          "Schools Colleges",
+          "Hospitals including X,ray and other Diagnostic clinics",
+          "Office premises,Meeting Rooms,",
+          "Auditoriums Planetarium",
+          "Mess Houses,Clubs",
+          "Marriage Halls",
+          "Showrooms and display centres where goods are kept for display and no sales are",
+          "Educational and Research Institutes imparting training in various crafts",
+          "Lodging,Boarding Houses",
+          "Cycle Shed",
+          "Dish Antenna",
+          "Indoor stadiums.",
+          "Cafes, Restaurants, Hotels, Confectioner and Sweet meat sellers",
+          "Laundries,Dry Cleaning",
+          "Battery Charging Service Stations",
+          "Amusement parks",
+          "Hoarding, Neon signs",
+          "Sports Galleries, Outdoor stadiums.",
+          "Shops dealing in goods otherwise not provided for",
+          "Shops dealing in hazardous goods",
+          "Arms and Ammunition dealers",
+          "Collieries , underground Mechinery and pit head gear",
+          "Condensed Milk Factories, Milk Pasturisings Plants and Dairies",
+          "Confectionery Manufacturing",
+          "Contractors Plant and Machinery At one location only",
+          "Cork Products Manufacturing",
+          "Cotton Gin and Press Houses",
+          "Cotton Seed cleaning , Delinting Factory",
+          "Dehydration Factories",
+          "Detergent Manufacturing with Sulphonation Plant",
+          "Detergent Manufacturing (Others)",
+          "Distilleries",
+          "Duplicating,stencil paper Manufacturing",
+          "Bakeries",
+          "Basket Weavers and Cane Furniture Makers",
+          "Battery Manufacturing",
+          "Beedi Factories",
+          "Biscuit Factories",
+          "Bitumenised Paper and,or Hessian Cloth Manufacturing",
+          "Book Binders, Envelope and Paper Bag Manufacturing.",
+          "Breweries",
+          "Brickworks (including refractories and fire bricks)",
+          "Bridges,Concrete Steel",
+          "Bridges,Wooden",
+          "Building In course of construction",
+          "Cable Manufacturing",
+          "Camphor Manufacturing",
+          "Candle Works",
+          "Canning Factories",
+          "Capsule Manufacturing",
+          "Carbon paper,Typewriter Ribbon Manufacturing",
+          "Cardamom Factories",
+          "Cardboard Box Manufacturing",
+          "Carpenters, Wood wool Manufacturing, Furniture Manufacturing",
+          "Carpet and Drugget Manufacturing (Cotton,jute,wool )",
+          "Carpet and Drugget Manufacturing (Others)",
+          "Cashew nut Factories",
+          "Cattle feed Mill",
+          "Celluloid Goods Manufacturing",
+          "Cement,asbestos,concrete products Manufacturing",
+          "Cement Factories",
+          "Ceramic Factories and Crockery and Stoneware pipe Manufacturing,Clay Works.",
+          "Chemical Manufacturing(Using materials with Flash Point below 32 degree C)",
+          "Chemical Manufacturing(others), Pharmaceuticals, Toiletry products",
+          "Cigar and Cigarette Manufacturing",
+          "Cigarette Filter Manufacturing (Using Solvents with Flash Point below 32OC)",
+          "Cigarette Filter Manufacturing (Others)",
+          "Cinema Film Production Studios",
+          "Cinematography Film Editing, Lab and Sound recording rooms with Film processing",
+          "Cinematography Film Editing, Lab and Sound recording rooms without Film processi",
+          "Cinema Theatres",
+          "Foam Rubber Manufacturing",
+          "French Polish Manufacturing",
+          "Fruit and vegetable drying,dehydrating factories",
+          "Fruit products and Condiment Factories (including fruit pulp making)",
+          "Gypsum board manufacturer",
+          "Hoisery,lace, Embroidery,Thread factories",
+          "Ice candy and Ice cream Manufacturing",
+          "Ice factories",
+          "Incandescent Gas mantle Manufacturing",
+          "Industrial Diamonds Manufacturing",
+          "Industrial Gas Manufacturing",
+          "Ink (excluding printing ink) Manufacturing",
+          "Jaggery Manufacturing",
+          "Jute Mills",
+          "Katha Manufacturing",
+          "Khandsari Sugar Manufacturing",
+          "Lac or Shellac Factories",
+          "Leather Cloth Factories",
+          "Leather Goods Manufacturing ( incl. boot,shoe)",
+          "Lime Kiln",
+          "Lithographic presses",
+          "Liquified Gas Bottling Plants",
+          "Malt Extraction Plants",
+          "Man,made Fibre Manufacturing (using Cellulose)",
+          "Man,made Fibre Manufacturing Plant (Others)",
+          "Manure Blending works",
+          "Match Factories",
+          "Mattress and Pillow making",
+          "Metallizing works ( involving metals only)",
+          "Metallising Works (others)",
+          "Metal,Tin printers",
+          "Mica Products Manufacturing",
+          "Mineral Oil blending and processing",
+          "Mosaic Factories",
+          "Mushroom Growing Premises (Excluding Crops)",
+          "Nitro Cellulose Manufacturing",
+          "Non,woven fabric Manufacturing",
+          "Oil Extraction",
+          "Oil Distillation Plants (essential)",
+          "Oil Mills refining ( Veg,Animal)",
+          "Oil Mills (Vegetable)",
+          "Oil and Leather Cloth Factories",
+          "Garment Makers, Topee, Hats and the like makers",
+          "Ghee Factories including vegetable Ghee mfg.",
+          "Glass Fibre Manufacturing",
+          "Glass wool Manufacturing",
+          "Glass Manufacturing",
+          "Gold thread factories , Gilding factories",
+          "Granite Factories using inflammable solvents",
+          "Granite Factories (Others)",
+          "Graphite electrode Manufacturing",
+          "Grain,seeds disintegrating,crushing, Decorticating factories, Dal mills.",
+          "Grease , Wax Manufacturing",
+          "Green Houses, Algae, Spirulina and the like",
+          "Gum,Glue,Gelatine Manufacturing",
+          "Circus, Touring Drama Troupes and Touring Cinema Theatres",
+          "Cloth Processing units situated outside the compound of Textile mills",
+          "Coal,Coke,Charcoal ball and briquettes Manufacturing",
+          "Coal Processing Plants",
+          "Coffee Curing, Roasting , Grinding",
+          "Coir Factories",
+          "Electric Generation Stations- Thermal Power Stations",
+          "Sec IV - Tyres & tube"
+        ]
+      },
+      "vSectionCodeFire_2": {
+        "kind": "select",
+        "options": ["Section - III", "Section - IV", "Section - V", "Section - VI", "Section - VII"]
+      },
+      "vRiskOpted_3": {
+        "kind": "select",
+        "options": ["Both Building and Content", "Buildings", "Contents"]
+      },
+      "vRiskDescriptionSection3_2": {
+        "kind": "select",
+        "options": [
+          "Dwellings",
+          "Places of worships, Libraries, Museums, Schools, Colleges, Hospitals..",
+          "Cafes, Restaurants, Hotels, Confectioner & Sweet meat sellers, Health Resorts",
+          "Shops dealing in hazardous goods as per the list below & Arms Ammunition dealers",
+          "Shops dealing in goods otherwise not provided for including Laundries....",
+          "Places of worships",
+          "Libraries",
+          "Museums",
+          "Schools, Colleges",
+          "Hospitals including X-ray and other Diagnostic clinics",
+          "Office premises/Meeting Rooms",
+          "Auditoriums/Planetarium",
+          "Mess Houses/Clubs",
+          "Marriage Halls",
+          "Showrooms and display centres where goods are kept for display and no sales are",
+          "Educational and Research Institutes imparting training in various crafts",
+          "Lodging/Boarding Houses",
+          "Cycle Shed",
+          "Dish Antenna",
+          "Indoor stadiums/ Health club, Gymnasium and Swimming Pool/ Health Resorts",
+          "Laundries / Dry Cleaning",
+          "Battery Charging Service Stations",
+          "Amusement parks",
+          "Hoarding, Neon signs",
+          "Sports Galleries, Outdoor stadiums",
+          "Shops dealing in hazardous goods",
+          "Arms & Ammunition dealers",
+          "Motor Vehicle showroom including sales and service",
+          "Fuel Station - Petrol/Diesel Kiosks [without CNG]",
+          "Fuel Station - Petrol/Diesel Kiosks [with CNG]",
+          "Data Processing/Call Centres/Business Process Outsourcing Centres"
+        ]
+      },
+      "vWhetherStfiPerilDeletedInception_4": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vWhetherRsmdPerilDeletedInception_2": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vWhetherEscalationClauseOpted_3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vExcessInsured": {
+        "kind": "select",
+        "options": ["Normal", "Voluntry", "Higher Excess"]
+      },
+      "vHigherExcessAog_4": {
+        "kind": "text"
+      },
+      "vHigherExcessNonAog_3": {
+        "kind": "text"
+      },
+      "vWhetherBuildingSituatedSez_3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vEarthquakeState_1": {
+        "kind": "select",
+        "options": [
+          "MEGHALAYA",
+          "MIZORAM",
+          "NAGALAND",
+          "ORISSA",
+          "PONDICHERRY",
+          "PUNJAB",
+          "RAJASTHAN",
+          "SIKKIM",
+          "TAMILNADU",
+          "TRIPURA",
+          "UTTAR PRADESH",
+          "WEST BENGAL",
+          "ANDAMAN & NICOBAR ISLANDS",
+          "ANDHRA PRADESH",
+          "ARUNACHAL PRADESH",
+          "ASSAM",
+          "BIHAR",
+          "CHANDIGARH",
+          "DELHI",
+          "GOA",
+          "GUJARAT",
+          "HARYANA",
+          "HIMACHAL PRADESH",
+          "JAMMU & KASHMIR",
+          "KARNATAKA",
+          "KERALA",
+          "LAKSHADWEEP",
+          "MADHYA PRADESH",
+          "MAHARASHTRA",
+          "MANIPUR",
+          "UTTARAKHAND",
+          "Telangana",
+          "CHATTISGARH",
+          "LADAKH",
+          "JHARKHAND"
+        ]
+      },
+      "vEarthquakeDistrictZone_3": {
+        "kind": "text"
+      },
+      "vWhetherCompoundWallDesiredInsuranceCover_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vWhetherCngInstallationsPetrolDiesalKisoksThere_3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vWhetherPolicyHolderCoOperativeHousingSociety_4": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vStfiRevRate_4": {
+        "kind": "text"
+      },
+      "vYearConstruction_2": {
+        "kind": "select",
+        "options": [
+          "1960",
+          "1961",
+          "1962",
+          "1963",
+          "1964",
+          "1965",
+          "1966",
+          "1967",
+          "1968",
+          "1969",
+          "1970",
+          "1971",
+          "1972",
+          "1973",
+          "1974",
+          "1975",
+          "1976",
+          "1977",
+          "1978",
+          "1979",
+          "1980",
+          "1981",
+          "1982",
+          "1983",
+          "1984",
+          "1985",
+          "1986",
+          "1987",
+          "1988",
+          "1989",
+          "1990",
+          "1991",
+          "1992",
+          "1993",
+          "1994",
+          "1995",
+          "1996",
+          "1997",
+          "1998",
+          "1999",
+          "2000",
+          "2001",
+          "2002",
+          "2003",
+          "2004",
+          "2005",
+          "2006",
+          "2007",
+          "2008",
+          "2009",
+          "2010",
+          "2011",
+          "2012",
+          "2013",
+          "2014",
+          "2015",
+          "2016",
+          "2017",
+          "2018",
+          "2019",
+          "2020",
+          "2021",
+          "2022",
+          "2023",
+          "2024",
+          "2025",
+          "2026",
+          "2027",
+          "2028",
+          "2029",
+          "2030",
+          "2031",
+          "2032"
+        ]
+      },
+      "vYearOccupation_1": {
+        "kind": "select",
+        "options": [
+          "1960",
+          "1961",
+          "1962",
+          "1963",
+          "1964",
+          "1965",
+          "1966",
+          "1967",
+          "1968",
+          "1969",
+          "1970",
+          "1971",
+          "1972",
+          "1973",
+          "1974",
+          "1975",
+          "1976",
+          "1977",
+          "1978",
+          "1979",
+          "1980",
+          "1981",
+          "1982",
+          "1983",
+          "1984",
+          "1985",
+          "1986",
+          "1987",
+          "1988",
+          "1989",
+          "1990",
+          "1991",
+          "1992",
+          "1993",
+          "1994",
+          "1995",
+          "1996",
+          "1997",
+          "1998",
+          "1999",
+          "2000",
+          "2001",
+          "2002",
+          "2003",
+          "2004",
+          "2005",
+          "2006",
+          "2007",
+          "2008",
+          "2009",
+          "2010",
+          "2011",
+          "2012",
+          "2013",
+          "2014",
+          "2015",
+          "2016",
+          "2017",
+          "2018",
+          "2019",
+          "2020",
+          "2021",
+          "2022",
+          "2023",
+          "2024",
+          "2025",
+          "2026",
+          "2027",
+          "2028",
+          "2029",
+          "2030",
+          "2031",
+          "2032",
+          "2033",
+          "2034",
+          "2035",
+          "2036",
+          "2037",
+          "2038"
+        ]
+      },
+      "vTypeConstructionFire": {
+        "kind": "select",
+        "options": ["RCC / MS Framed Structure", "Load Bearing Structure"]
+      },
+      "vSideWalls": {
+        "kind": "select",
+        "options": [
+          "Made of Brick / Concrete / Metal / Cement Seets",
+          "Party closed and Party open sides",
+          "Open Sided"
+        ]
+      },
+      "vNumberFloorsOccupancy": {
+        "kind": "text"
+      },
+      "vInsuredOccupancySituatedWhichFloor": {
+        "kind": "text"
+      },
+      "vEntireRiskLocatedBasement": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vDetailsFireFightingArrangementsBuilding": {
+        "kind": "text"
+      },
+      "vDistanceNearestPublicFireBrigadeKms_1": {
+        "kind": "text"
+      },
+      "vApproximateResponseTimeArrivalPublicFireBrigadeMinutes_1": {
+        "kind": "text"
+      },
+      "vOwned": {
+        "kind": "text"
+      },
+      "vOccupiedAsSF": {
+        "kind": "select",
+        "options": ["Residence", "Any other of Sec III", "Garage", "Hotels", "Shops", "Office"]
+      },
+      "vWillPremisesRemainUnoccupiedMoreThan30Days": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vBuildingCentrallyAirConditioned": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vAreDuctsCarryingCommonServMadeHazardousMaterials_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vDoesBuildingHasLiftElevator": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vTotalSumInsuredIncludingCompoundWallButExcludingBuildingPlinthFoundations_1": {
+        "kind": "text"
+      },
+      "vTotalSumInsuredIncludingCompoundWallButExcludingBuildingPlinthFoundations_2": {
+        "kind": "text"
+      },
+      "vWhetherContractPriceInsuranceClauseOpted_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vTypeInterior": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vFalseCeilingMadeHazardousMaterials_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vPartitionDecorationMadeHazardousMaterial_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vFalseCeilingMadeNonHazardousMaterials_2": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vPartitionDecorationMadeNonHazardousMaterial_2": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vElectricalWiringsConduitsCasings_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vConcealedWiring_2": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vLooseWiring_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vAnyOtherPleaseGiveDetails_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vElectricalRegulation_2": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vTypeConstruction_2": {
+        "kind": "select",
+        "options": [
+          "Earthquake Resistant Construction",
+          "Superior Construction",
+          "Class I Construction",
+          "Class II Construction",
+          "Open",
+          "Underground Construction",
+          "Other types of construction not mentioned above"
+        ]
+      },
+      "vHeightBuildingMeters_3": {
+        "kind": "text"
+      },
+      "vPortableExtinguishers_2": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vSmallBoreHoseReels_3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vTrailerPumpsFireEngines_3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vHydrantSystem_4": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vSprinklerSystemFire_3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vFixedWaterSpraySystem_3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vFoamSystems_4": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vFireAlarmSystems_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vGasFloodingSystems_4": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vSpotProtection_3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vFireProtectionDet": {
+        "kind": "text"
+      },
+      "vDeteriorationStocksColdStoragePremisesDueAccidentalPowerFailureConsequentDamagePremisesPowerStationDueInsuredPerilAdd1003_6": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vDeteriorationStocksColdStoragePremisesDueChangeTemperatureArisingOutLossDamageColdStorageMachineriesInsuredsPremisesDueOperationAdd1004_6": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vForestFireAdd1005_6": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vImpactDamageDueInsuredsOwnRailRoadVehiclesForkLiftsCranesStackersLikeArticlesDroppedThereAdd1006_3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vSpontaneousCombustionAdd1007_5": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vEarthquakeFireShockAdd1009_5": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vSpoilageMaterialDamageCoverStocksSpecifiedBlocksAdd1010_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vLeakageContaminationCoverWhereTanksAreWithinInsuredsOwnPremisesAdd1011_4": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vLeakageCoverWhereTanksAreWithinInsuredsOwnPremisesAddOn1012_5": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vTemporaryRemovalStocksClauseAdd1013_4": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vLossRentAdd1014_5": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vInsuranceAdditionalExpensesRentAlternativeAccommodationAdd1015_4": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vStartUpExpensesAdd1016_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vTypeRiskTerrorismCover_4": {
+        "kind": "select",
+        "options": ["Industrial Risk", "Non-Industrial risk", "Residential risk"]
+      },
+      "vDamageDueSpillageMoltenMetalAdd1018_5": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vSpoilageMaterialDamageCoverMachineryContainersEquipmentsSpecifiedBlocksAdd1110_3": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vLeakageContaminationCoverWhereTanksAreLocatedElsewhereAdd1111_1": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vLeakageCoverWhereTanksAreLocatedElsewhereAdd1112_2": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vWhetherAnyExpressConditionImposedAppliedPolicy_5": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vStartUpExpensesUnderTerrorismExtension_5": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      },
+      "vAlternateAccommodationUnderTerrorismExtension_5": {
+        "kind": "select",
+        "options": ["Yes", "No"]
+      }
+    }
+  }
+}

@@ -29,6 +29,12 @@ import { ruralClientSchema, ruralRecordSchema, ruralSummarySchema } from '../con
 import { marineClientSchema, marineRecordSchema, marineSummarySchema } from '../contracts/marine';
 import { niaShipmentSchema } from '../insurers/nia-marine';
 import { niaPaRunSchema } from '../insurers/nia-pa';
+import { niaFireRunSchema } from '../insurers/nia-fire';
+import {
+  propertyClientSchema,
+  propertyRecordSchema,
+  propertySummarySchema,
+} from '../contracts/property';
 import {
   hasControlCharacter,
   LOGIN_AUTOMATION,
@@ -199,6 +205,15 @@ export const saveMarineRequestSchema = z
   .strict();
 export type SaveMarineRequest = z.input<typeof saveMarineRequestSchema>;
 
+export const savePropertyRequestSchema = z
+  .object({
+    /** Absent for a new property client. */
+    id: entityIdSchema.optional(),
+    property: propertyClientSchema,
+  })
+  .strict();
+export type SavePropertyRequest = z.input<typeof savePropertyRequestSchema>;
+
 export const quoteRunResultSchema = z
   .object({
     outcome: z.enum(['ready', 'refused', 'failed']),
@@ -312,6 +327,15 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       noClaimsConfirmed: z.boolean(),
       /** The advisor confirms the insured has no physical disabilities or defects. */
       noDisabilitiesConfirmed: z.boolean(),
+    })
+    .strict(),
+  // New India fire forms, for a property client: the form and cover are chosen for this run.
+  z
+    .object({
+      product: z.literal('nia-fire'),
+      propertyId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      run: niaFireRunSchema,
     })
     .strict(),
   // New India's Marine Specific Voyage form, for a marine client: the shipment is for this run.
@@ -530,6 +554,22 @@ export const ipcContract = {
     response: z.object({ id: entityIdSchema }).strict(),
   },
   [IPC_CHANNELS.marineDelete]: {
+    request: clientOnly,
+    response: z.object({ deleted: z.boolean() }).strict(),
+  },
+  [IPC_CHANNELS.propertiesList]: {
+    request: z.object({}).strict(),
+    response: z.object({ properties: z.array(propertySummarySchema).max(10_000) }).strict(),
+  },
+  [IPC_CHANNELS.propertiesGet]: {
+    request: clientOnly,
+    response: propertyRecordSchema,
+  },
+  [IPC_CHANNELS.propertiesSave]: {
+    request: savePropertyRequestSchema,
+    response: z.object({ id: entityIdSchema }).strict(),
+  },
+  [IPC_CHANNELS.propertiesDelete]: {
     request: clientOnly,
     response: z.object({ deleted: z.boolean() }).strict(),
   },

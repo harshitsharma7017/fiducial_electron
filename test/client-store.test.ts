@@ -726,6 +726,71 @@ describe('the client service and IPC channels', () => {
     clients.close();
   });
 
+  // Property clients (schema version 9): an owner and their home or premises, for fire forms.
+  const PROPERTY = {
+    holder: {
+      kind: 'individual',
+      customer: { name: 'Synthetic Owner' },
+      pincode: '411001',
+      gender: 'female',
+    },
+    property: {
+      use: 'home',
+      address: 'Flat 4, Synthetic Heights, Pune',
+      pincode: '411001',
+      walls: 'pucca',
+      yearOfConstruction: 1990,
+      furnitureSumInsured: 300000,
+      claimRatio: '0-30',
+      risks: { lift: true, mortgaged: false },
+    },
+  };
+
+  it('saves, lists, reads and deletes property clients, apart from the others', async () => {
+    const { call, clients } = setup(true);
+    const id = idOf(await call('properties:save', { property: PROPERTY }));
+    expect(await call('properties:list', {})).toEqual({
+      ok: true,
+      data: {
+        properties: [
+          {
+            id,
+            name: 'Synthetic Owner',
+            pincode: '411001',
+            use: 'home',
+            updatedAt: expect.any(String) as string,
+          },
+        ],
+      },
+    });
+    expect(await call('properties:get', { id })).toMatchObject({
+      ok: true,
+      data: { id, property: PROPERTY },
+    });
+    expect(await clients.listMarine()).toEqual([]);
+    expect(await call('properties:delete', { id })).toEqual({ ok: true, data: { deleted: true } });
+    expect(await clients.listProperties()).toEqual([]);
+    clients.close();
+  });
+
+  it('rejects malformed property clients', async () => {
+    const { call, clients } = setup(true);
+    for (const property of [
+      { ...PROPERTY, property: { ...PROPERTY.property, walls: 'brick' } },
+      { ...PROPERTY, property: { ...PROPERTY.property, yearOfConstruction: 2099 } },
+      { ...PROPERTY, property: { ...PROPERTY.property, claimRatio: '50' } },
+      { ...PROPERTY, property: { ...PROPERTY.property, risks: { flood: true } } },
+      { ...PROPERTY, holder: { ...PROPERTY.holder, msme: true } },
+    ]) {
+      expect(await call('properties:save', { property })).toMatchObject({
+        ok: false,
+        error: { code: 'VALIDATION_FAILED' },
+      });
+    }
+    expect(await clients.listProperties()).toEqual([]);
+    clients.close();
+  });
+
   it('is off unless switched on: no database is created', async () => {
     const { call, p } = setup(false);
     expect(await call('clients:list', {})).toEqual({

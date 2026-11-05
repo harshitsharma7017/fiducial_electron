@@ -51,6 +51,12 @@ import {
   type MarineRecord,
   type MarineSummary,
 } from '../../shared/contracts/marine';
+import {
+  propertyClientSchema,
+  type PropertyClient,
+  type PropertyRecord,
+  type PropertySummary,
+} from '../../shared/contracts/property';
 import { VaultOpenError, type VaultOpener } from '../secrets/vault-opener';
 import { openDurable, type DurableStore } from './durable-db';
 import { openEncrypted } from './encrypted-db';
@@ -58,7 +64,7 @@ import type { StoreProblem } from './store-problems';
 
 const KEY_ENTRY = 'database-key';
 const KEY_HEX = /^[0-9a-f]{64}$/;
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 /** Why the store could not be used. `code` is safe to show; `reason` is for logs and support. */
 export class ClientStoreError extends Error {
@@ -108,6 +114,14 @@ export interface ClientStore {
     /** Creates a marine client (id null) or replaces an existing one. Returns the saved record. */
     save(id: string | null, input: MarineClient): MarineRecord;
     /** Removes the marine client. Returns whether it existed. */
+    delete(id: string): boolean;
+  };
+  properties: {
+    list(): PropertySummary[];
+    get(id: string): PropertyRecord | null;
+    /** Creates a property client (id null) or replaces an existing one. Returns the saved record. */
+    save(id: string | null, input: PropertyClient): PropertyRecord;
+    /** Removes the property client. Returns whether it existed. */
     delete(id: string): boolean;
   };
   /** Clients the last upgrade removed (vehicle-only clients, version 5): their Aadhaar entries
@@ -303,6 +317,22 @@ function migrate(
       d.pragma('user_version = 8');
     });
   }
+  // Version 9 (4 November 2026): property clients (an owner and their home or premises, for the
+  // fire forms), kept apart like marine clients (validated JSON).
+  if (version < 9) {
+    store.commit((d) => {
+      d.exec(`
+        CREATE TABLE property_client (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          property_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      d.pragma('user_version = 9');
+    });
+  }
   return removed;
 }
 
@@ -342,6 +372,14 @@ interface MarineRow {
   id: string;
   name: string;
   marine_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PropertyRow {
+  id: string;
+  name: string;
+  property_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -473,6 +511,16 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
     id: row.id,
     // Re-validated on the way out, like clients.
     marine: marineClientSchema.parse(JSON.parse(row.marine_json)),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+
+  const getPropertyRow = (id: string): PropertyRow | undefined =>
+    db.prepare('SELECT * FROM property_client WHERE id = ?').get(id) as PropertyRow | undefined;
+  const toPropertyRecord = (row: PropertyRow): PropertyRecord => ({
+    id: row.id,
+    // Re-validated on the way out, like clients.
+    property: propertyClientSchema.parse(JSON.parse(row.property_json)),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -805,6 +853,64 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
       },
       delete: (id) =>
         write((d) => d.prepare('DELETE FROM marine_client WHERE id = ?').run(id).changes > 0),
+    },
+
+    properties: {
+      list: () =>
+        (
+          db
+            .prepare(
+              'SELECT id, name, property_json, updated_at FROM property_client ORDER BY updated_at DESC, name',
+            )
+            .all() as PropertyRow[]
+        ).map((r) => {
+          const p = propertyClientSchema.parse(JSON.parse(r.property_json));
+          return {
+            id: r.id,
+            name: r.name,
+            pincode: p.property.pincode,
+            use: p.property.use,
+            updatedAt: r.updated_at,
+          };
+        }),
+      get: (id) => {
+        const row = getPropertyRow(id);
+        return row ? toPropertyRecord(row) : null;
+      },
+      save: (id, raw) => {
+        const input = propertyClientSchema.parse(raw);
+        const at = now().toISOString();
+        const existing = id === null ? undefined : getPropertyRow(id);
+        if (id !== null && !existing) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');
+        const propertyId = existing?.id ?? newId();
+        const values = {
+          id: propertyId,
+          name: input.holder.customer.name,
+          property_json: JSON.stringify(input),
+          created_at: existing?.created_at ?? at,
+          updated_at: at,
+        };
+        write((d) =>
+          existing
+            ? d
+                .prepare(
+                  `UPDATE property_client SET name = @name, property_json = @property_json,
+                     updated_at = @updated_at WHERE id = @id`,
+                )
+                .run(values)
+            : d
+                .prepare(
+                  `INSERT INTO property_client (id, name, property_json, created_at, updated_at)
+                   VALUES (@id, @name, @property_json, @created_at, @updated_at)`,
+                )
+                .run(values),
+        );
+        const saved = getPropertyRow(propertyId);
+        if (!saved) throw new ClientStoreError('STORAGE_ERROR', 'write-failed');
+        return toPropertyRecord(saved);
+      },
+      delete: (id) =>
+        write((d) => d.prepare('DELETE FROM property_client WHERE id = ?').run(id).changes > 0),
     },
 
     removedByUpgrade,

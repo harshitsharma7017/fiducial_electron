@@ -55,6 +55,12 @@ const insurerStubs: Omit<IpcHandlers, 'app:get-info'> = {
   },
   'marine:save': () => ({ id: '0f8fad5b-d9cb-469f-a165-70867728950e' }),
   'marine:delete': () => ({ deleted: false }),
+  'properties:list': () => ({ properties: [] }),
+  'properties:get': () => {
+    throw new Error('not used');
+  },
+  'properties:save': () => ({ id: '0f8fad5b-d9cb-469f-a165-70867728950e' }),
+  'properties:delete': () => ({ deleted: false }),
   'portals:tabs': () => ({ version: 1, tabs: [], active: null }),
   'portals:show': () => ({ shown: true }),
   'portals:close': () => ({ closed: true }),

@@ -6,6 +6,7 @@ import { VehiclesPanel } from './vehicles/VehiclesPanel';
 import { TravellersPanel } from './travellers/TravellersPanel';
 import { RuralPanel } from './rural/RuralPanel';
 import { MarinePanel } from './marine/MarinePanel';
+import { PropertyPanel } from './property/PropertyPanel';
 import { InsurerPortals } from './insurers/InsurerPortals';
 import { AppShell, type ViewId } from './shell/AppShell';
 import { Overview, type AppStatus } from './shell/Overview';
@@ -86,7 +87,15 @@ export function App(): React.JSX.Element {
   const renderHome = (dev: ReactNode) => {
     const available: ViewId[] = ['overview'];
     if (automation)
-      available.push('clients', 'travellers', 'rural', 'marine', 'vehicles', 'insurers');
+      available.push(
+        'clients',
+        'travellers',
+        'rural',
+        'marine',
+        'properties',
+        'vehicles',
+        'insurers',
+      );
     if (dev) available.push('development');
     const shown = available.includes(view) ? view : 'overview';
     return (
@@ -113,6 +122,9 @@ export function App(): React.JSX.Element {
             </div>
             <div className="page" hidden={shown !== 'marine'}>
               <MarinePanel />
+            </div>
+            <div className="page" hidden={shown !== 'properties'}>
+              <PropertyPanel />
             </div>
             <div className="page" hidden={shown !== 'vehicles'}>
               <VehiclesPanel />
