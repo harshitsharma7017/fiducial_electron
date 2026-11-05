@@ -3,7 +3,7 @@
 // temporary portal demo (scripts/demo-markers.mjs), or if a required fuse is not set.
 // Usage: node scripts/check-package.mjs mac|win
 import { existsSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractFile, listPackage, statFile } from '@electron/asar';
 import { FuseState, FuseV1Options, getCurrentFuseWire } from '@electron/fuses';
@@ -82,11 +82,14 @@ for (const { label, asar, binary } of locate()) {
   const unexpected = entries.filter(
     (e) => !ALLOWED.some((re) => re.test(e)) || (e.startsWith('/out/') && FORBIDDEN_IN_OUT.test(e)),
   );
+  // Entries are compared with "/" separators; the asar module looks them up with the platform's
+  // own (on Windows "\\": a "/" path is not found there).
+  const inAsar = (e) => e.slice(1).split('/').join(sep);
   const demo = entries
-    .filter((e) => e.startsWith('/out/') && 'size' in statFile(asar, e.slice(1)))
+    .filter((e) => e.startsWith('/out/') && 'size' in statFile(asar, inAsar(e)))
     .map((e) => ({
       file: e,
-      markers: demoMarkersIn(extractFile(asar, e.slice(1)).toString('latin1')),
+      markers: demoMarkersIn(extractFile(asar, inAsar(e)).toString('latin1')),
     }))
     .filter((found) => found.markers.length > 0);
   const wire = await getCurrentFuseWire(binary);
