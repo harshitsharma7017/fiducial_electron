@@ -1,5 +1,7 @@
-// The insurer portals feature behind the IPC handlers. Off unless FQF_INSURER_PORTALS=1: then
-// list() reports it disabled and every other call is refused, so nothing is stored or opened.
+// The insurer portals feature behind the IPC handlers. On, unless switched off with
+// FQF_INSURER_PORTALS=0 (decision of 5 November 2026, for the first release: it was off unless
+// FQF_INSURER_PORTALS=1 while the automations were being built). Switched off, list() reports it
+// disabled and every other call is refused, so nothing is stored or opened.
 import { findPortal, INSURER_PORTALS, usesSavedLogin } from '../../shared/insurers/portals';
 import type { InsurerPortalList, SaveLoginRequest } from '../../shared/ipc/contract';
 import { AppException } from '../ipc/dispatcher';
@@ -11,7 +13,7 @@ import type { PortalWindows } from './portal-windows';
 export const INSURER_PORTALS_FLAG = 'FQF_INSURER_PORTALS';
 
 export function insurerPortalsEnabled(env: Readonly<Record<string, string | undefined>>): boolean {
-  return env[INSURER_PORTALS_FLAG] === '1';
+  return env[INSURER_PORTALS_FLAG] !== '0';
 }
 
 export interface InsurerService {

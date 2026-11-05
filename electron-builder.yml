@@ -1,6 +1,8 @@
-# Packaging (DM-07: electron-builder). Unsigned until signing identities exist (S6, Q-D04/Q-D05).
-# appId is a placeholder until the client's identifier is confirmed (Q-B07/Q-D04).
-appId: local.fiducial.quotefetcher
+# Packaging (DM-07: electron-builder). Unsigned until signing identities exist (S6, Q-D04/Q-D05):
+# the first release (1.0.0, decision of 5 November 2026) ships unsigned, with install steps in
+# docs/RELEASE.md. appId decided 5 November 2026 (Q-B07/Q-D04); it must not change after release,
+# or the operating systems treat the app as a different one.
+appId: in.fiducial.quotefetcher
 productName: Fiducial Quote Fetcher
 directories:
   output: release

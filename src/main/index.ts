@@ -3,7 +3,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { app, powerSaveBlocker, safeStorage, session, type BrowserWindow } from 'electron';
+import { app, dialog, powerSaveBlocker, safeStorage, session, type BrowserWindow } from 'electron';
 import { createAadhaarVault, createPassportVault } from './clients/aadhaar-vault';
 import { createClientService } from './clients/service';
 import { createInsurerCredentials } from './insurers/credentials';
@@ -22,7 +22,8 @@ import { createHandlers } from './ipc/handlers';
 import { registerIpc } from './ipc/register';
 import { createSenderPolicy } from './ipc/sender-policy';
 import { consoleSink } from './logging/console-sink';
-import { createLogger } from './logging/logger';
+import { fileSink } from './logging/file-sink';
+import { createLogger, type LogSink } from './logging/logger';
 import { installAppProtocol, registerAppScheme } from './security/app-protocol';
 import { developmentCsp } from './security/csp';
 import {
@@ -36,7 +37,9 @@ import { runSmokeChecks } from './smoke';
 import { createMainWindow } from './windows/main-window';
 
 const EXIT_UNSAFE_LAUNCH = 78;
-const logger = createLogger([consoleSink]);
+// The log file joins once the app's folders are known (start); the console has it from the first record.
+const sinks: LogSink[] = [consoleSink];
+const logger = createLogger(sinks);
 const smoke = process.argv.includes(SMOKE_TEST_FLAG);
 
 function start(): void {
@@ -68,6 +71,27 @@ function start(): void {
     return;
   }
 
+  // Support log: <logs>/fqf.log (macOS ~/Library/Logs/Fiducial Quote Fetcher, Windows
+  // %APPDATA%\Fiducial Quote Fetcher\logs), allowlisted fields only. Not for smoke runs.
+  if (!smoke) sinks.push(fileSink(app.getPath('logs')));
+
+  // An unexpected error must not pass unnoticed: it is logged (its type only, never its text, which
+  // may hold client data) and, for an exception, the advisor is told to restart the app.
+  const nameOf = (err: unknown): string =>
+    err instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(err.name) ? err.name : 'Unknown';
+  process.on('unhandledRejection', (reason) => {
+    logger.error('app.unhandled-error', { errorKind: 'rejection', errorName: nameOf(reason) });
+  });
+  process.on('uncaughtException', (err) => {
+    logger.error('app.unhandled-error', { errorKind: 'exception', errorName: nameOf(err) });
+    if (app.isReady() && !smoke) {
+      dialog.showErrorBox(
+        'Fiducial Quote Fetcher',
+        'Something went wrong inside the app. Your saved clients are safe. Please quit and open the app again; if it happens again, send the app\u2019s log file to support (the release notes say where it is).',
+      );
+    }
+  });
+
   registerAppScheme();
   installNavigationPolicy(logger);
   const devUrl = app.isPackaged || smoke ? undefined : process.env['ELECTRON_RENDERER_URL'];
@@ -98,7 +122,7 @@ function start(): void {
     const origin = devOrigin ?? APP_ORIGIN;
     const senderPolicy = createSenderPolicy(origin);
     // Automation features: insurer portals (sign-in autofill, 12-hour sessions) and saved
-    // clients. Off unless FQF_INSURER_PORTALS=1. Secrets (sign-in details, the database key) are
+    // clients. On unless FQF_INSURER_PORTALS=0 (a support switch). Secrets (sign-in details, the database key) are
     // kept only in the encrypted vault under <userData>/secrets; clients in the encrypted
     // database under <userData>/data.
     const userData = app.getPath('userData');

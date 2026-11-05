@@ -67,7 +67,7 @@ export function App(): React.JSX.Element {
 
   // The Health clients, Travel clients, Vehicles and Insurer portals screens exist only when the
   // automation features are
-  // on (FQF_INSURER_PORTALS=1); each of them also hides itself when they are off.
+  // on (unless FQF_INSURER_PORTALS=0); each of them also hides itself when they are off.
   const [automation, setAutomation] = useState(false);
   const [view, setView] = useState<ViewId>('overview');
   useEffect(() => {

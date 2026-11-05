@@ -1,7 +1,8 @@
 # Saved clients (M4 storage, first slice)
 
 Status, 2 November 2026: **built and tested** in development and packaged macOS builds. Off by
-default, behind the same switch as the insurer portals (`FQF_INSURER_PORTALS=1`). Not yet run on
+default until the first release (5 November 2026); now on, behind the same switch as the insurer
+portals (switched off with `FQF_INSURER_PORTALS=0`). Not yet run on
 Windows outside CI, and the encrypted-storage design (DM-02, Q-M1-01) still awaits its independent
 security review.
 

@@ -164,7 +164,7 @@ export function ClientsPanel(): React.JSX.Element | null {
     void refresh();
   }, [refresh]);
 
-  // The automation features are off (FQF_INSURER_PORTALS): no clients screen.
+  // The automation features are switched off (FQF_INSURER_PORTALS=0): no clients screen.
   if (list && !list.enabled) return null;
 
   const edit = async (summary: ClientSummary) => {

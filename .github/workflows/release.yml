@@ -1,0 +1,83 @@
+# Release builds (first release 1.0.0, decision of 5 November 2026). The Windows installer must be
+# built on Windows: the encrypted database module (better-sqlite3-multiple-ciphers) cannot be
+# cross-compiled from macOS. Each job checks the code, builds the installers, checks the package
+# (contents allowlist, fuses, no demo code: scripts/check-package.mjs, run by build:mac/build:win)
+# and runs the smoke test against the packaged app. Unsigned until signing identities exist
+# (docs/RELEASE.md). Actions are pinned to commit SHAs.
+#
+# Run it by hand (Actions > release > Run workflow) for installers as artifacts, or push a tag
+# such as v1.0.0 for a draft GitHub release with the installers attached. A draft is published
+# by hand, after checking it.
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: mac
+            files: release/*.dmg
+          - os: windows-latest
+            target: win
+            files: release/*.exe
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx install-electron
+      - run: npm run secrets:scan
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      # Builds the installer and checks the package (contents, fuses, no demo code).
+      - run: npm run build:${{ matrix.target }}
+      # The packaged app: in-app checks, then the launch guard refusing debugging switches.
+      - run: node scripts/smoke.mjs --packaged
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer-${{ matrix.target }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 30
+
+  draft-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Draft the release with the installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" installers/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --title "Fiducial Quote Fetcher $TAG" \
+            --notes "Unsigned build. Install steps, first run, data and log locations, and known limitations: docs/RELEASE.md."

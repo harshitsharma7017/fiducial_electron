@@ -15,6 +15,7 @@ export const LOG_EVENTS = [
   'app.ready',
   'app.launch-refused',
   'app.second-instance',
+  'app.unhandled-error',
   'ipc.call',
   'security.navigation-blocked',
   'security.redirect-blocked',
@@ -90,6 +91,9 @@ const FIELD_SCHEMAS = {
   insurer: z.string().refine((value) => INSURER_PORTALS.some((p) => p.id === value)),
   /** What happened when the app tried to fill an insurer's sign-in form. */
   fillOutcome: z.enum(FILL_OUTCOMES),
+  /** An unexpected error in the main process: where it surfaced, and its type (never its text). */
+  errorKind: z.enum(['exception', 'rejection']),
+  errorName: token(/^[A-Za-z][A-Za-z0-9_]{0,39}$/),
   /** Why an insurer session ended. */
   sessionEnd: z.enum(['expired', 'signed-out']),
   /** Why the client database could not be used (never any client data). */

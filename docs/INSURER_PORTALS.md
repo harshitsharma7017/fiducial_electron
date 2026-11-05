@@ -1,7 +1,8 @@
 # Insurer portals: sign-in autofill (phase 1)
 
 Status, 2 November 2026: **built and tested against local copies of the sign-in pages; not yet
-verified with a real sign-in.** Off by default.
+verified with a real sign-in.** On by default since the first release (1.0.0, 5 November 2026);
+`FQF_INSURER_PORTALS=0` switches it off.
 
 ## Scope decisions (2 November 2026)
 
@@ -731,12 +732,12 @@ Verified in the built app (scratch profile; Bajaj and New India login pages only
 
 ## How to switch it on
 
-```sh
-npm run dev:prod
-```
+On by default since the first release (decision of 5 November 2026): the installed app and
+`npm run dev` both show it. `npm run dev:prod` still works and does the same.
 
-This is `npm run dev` with `FQF_INSURER_PORTALS=1` set, and works the same on macOS and Windows.
-Without the variable the screen is hidden and every insurer channel refuses (`UNSUPPORTED_FLOW`).
+To switch it off (for example while supporting a user), start the app with
+`FQF_INSURER_PORTALS=0`. Then the screen is hidden and every insurer and client channel refuses
+(`UNSUPPORTED_FLOW`).
 
 ## Safeguards
 

@@ -1,9 +1,10 @@
 {
   "name": "fiducial-quote-fetcher",
   "productName": "Fiducial Quote Fetcher",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Fiducial Quote Fetcher desktop application. M3: domain contracts and quote comparison engine.",
+  "description": "Fiducial Quote Fetcher: fills insurers' quote forms from saved clients, vehicles and properties, and reads the premiums.",
+  "author": "Fiducial Insurance Brokers India Pvt. Ltd.",
   "license": "UNLICENSED",
   "main": "./out/main/index.js",
   "packageManager": "npm@11.6.2",

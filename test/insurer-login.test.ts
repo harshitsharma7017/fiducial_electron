@@ -194,10 +194,10 @@ function service(enabled: boolean, credentials = memoryCredentials()) {
 }
 
 describe('the insurer service', () => {
-  it('is off unless FQF_INSURER_PORTALS=1', async () => {
-    expect(insurerPortalsEnabled({})).toBe(false);
-    expect(insurerPortalsEnabled({ FQF_INSURER_PORTALS: 'true' })).toBe(false);
+  it('is on unless switched off with FQF_INSURER_PORTALS=0; switched off, refuses everything', async () => {
+    expect(insurerPortalsEnabled({})).toBe(true);
     expect(insurerPortalsEnabled({ FQF_INSURER_PORTALS: '1' })).toBe(true);
+    expect(insurerPortalsEnabled({ FQF_INSURER_PORTALS: '0' })).toBe(false);
 
     const { insurers, credentials, opened } = service(false);
     expect(await insurers.list()).toEqual({ enabled: false, vaultError: null, portals: [] });

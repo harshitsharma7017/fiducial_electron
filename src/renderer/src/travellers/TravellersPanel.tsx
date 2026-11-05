@@ -162,7 +162,7 @@ export function TravellersPanel(): React.JSX.Element | null {
       setTravellers(result.data.travellers);
       setError(null);
     } else if (result && result.error.code === 'UNSUPPORTED_FLOW') {
-      // The automation features are off (FQF_INSURER_PORTALS): no travel clients screen.
+      // The automation features are switched off (FQF_INSURER_PORTALS=0): no travel clients screen.
       setHidden(true);
     } else {
       setError(result ? result.error.message : 'Travel clients could not be loaded.');

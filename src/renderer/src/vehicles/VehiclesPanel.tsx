@@ -49,7 +49,7 @@ export function VehiclesPanel(): React.JSX.Element | null {
       setVehicles(result.data.vehicles);
       setError(null);
     } else if (result && result.error.code === 'UNSUPPORTED_FLOW') {
-      // The automation features are off (FQF_INSURER_PORTALS): no vehicles screen.
+      // The automation features are switched off (FQF_INSURER_PORTALS=0): no vehicles screen.
       setHidden(true);
     } else {
       setError(result ? result.error.message : 'Vehicles could not be loaded.');

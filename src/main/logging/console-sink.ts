@@ -1,4 +1,4 @@
-// Writes allowlisted log records as JSON lines to stderr. A rotating file sink comes later (M10).
+// Writes allowlisted log records as JSON lines to stderr. The rotating file sink is file-sink.ts.
 import type { LogSink } from './logger';
 
 export const consoleSink: LogSink = (record) => {

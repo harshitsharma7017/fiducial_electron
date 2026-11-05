@@ -102,7 +102,7 @@ export type InsurerPortalView = z.infer<typeof insurerPortalViewSchema>;
 
 export const insurerPortalListSchema = z
   .object({
-    /** False unless the insurer portals feature is switched on (FQF_INSURER_PORTALS=1). */
+    /** False unless the insurer portals feature is switched on (unless FQF_INSURER_PORTALS=0). */
     enabled: z.boolean(),
     /** Null when the vault could not be opened (for example OS secure storage is unavailable). */
     vaultError: z.enum(['SECRET_STORE_UNAVAILABLE', 'STORAGE_ERROR']).nullable(),
@@ -135,7 +135,7 @@ const clientOnly = z.object({ id: entityIdSchema }).strict();
 
 export const clientListSchema = z
   .object({
-    /** False unless the automation features are switched on (FQF_INSURER_PORTALS=1). */
+    /** False unless the automation features are switched on (unless FQF_INSURER_PORTALS=0). */
     enabled: z.boolean(),
     storageError: z.enum(['SECRET_STORE_UNAVAILABLE', 'STORAGE_ERROR']).nullable(),
     clients: z.array(clientSummarySchema).max(10_000),

@@ -2,13 +2,13 @@
 
 Desktop application for insurance advisors (Windows and macOS). Requirements are in the PDF pack (`00`–`19`); planning and status are in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) and [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
 
-**Status (3 November 2026):** insurer portal automation behind a switch, off by default:
-- sign-in autofill for password-based insurer portals, with 12-hour sessions that survive restarts;
-- saved clients and, separately, saved vehicles, in an encrypted database;
-- United India: health and motor premium calculators; the Family Medicare, Individual Health,
-  Arogya Sanjeevani, Super Top-up and Yuvaan Health e-proposals; and the Overseas Travel and Overseas Mediclaim
-  (B&H, SCHENGEN, Studies) e-proposals, with their premiums (all filled, never saved or
-  submitted).
+**Status (5 November 2026): first release, 1.0.0.** Install guide, first run, data and log
+locations, the first-week checks and known limitations: [docs/RELEASE.md](docs/RELEASE.md).
+- Insurer portals in the app, with sign-in autofill and sessions kept signed in for up to 12 hours,
+  across restarts. On by default (`FQF_INSURER_PORTALS=0` switches the features off).
+- Clients, vehicles, travellers, rural, marine and property clients, in an encrypted database.
+- Quote automation for United India, New India Assurance, Niva Bupa and HDFC ERGO (filled, and
+  where the form shows it, the premium read; never saved or submitted).
 
 Tested against local copies of the insurer pages; live runs are done by the advisor. Details:
 [docs/INSURER_PORTALS.md](docs/INSURER_PORTALS.md) and [docs/CLIENTS.md](docs/CLIENTS.md).

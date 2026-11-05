@@ -1,6 +1,6 @@
-// Saved clients behind the IPC handlers. Off unless the automation features are switched on
-// (FQF_INSURER_PORTALS=1, see ../insurers/service.ts): then list() reports it disabled and every
-// other call is refused, so no database is created.
+// Saved clients behind the IPC handlers. On with the automation features (they are switched off
+// with FQF_INSURER_PORTALS=0, see ../insurers/service.ts): switched off, list() reports it
+// disabled and every other call is refused, so no database is created.
 // The store opens on first use; if it cannot (secure storage unavailable, key or database
 // refused), the list says so and the next call tries again.
 import {
