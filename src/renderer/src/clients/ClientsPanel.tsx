@@ -57,6 +57,7 @@ import {
 import type { HdfcMstRun } from '../../../shared/insurers/hdfc';
 import { HdfcRetailPanel } from '../insurers/HdfcPanels';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
+import { runQuote } from '../quote/run';
 
 const RELATIONSHIP_LABELS: Record<Relationship, string> = {
   self: 'Self',
@@ -432,14 +433,12 @@ function HdfcMstPanel(props: { clientId: string }): React.JSX.Element {
   const run = async () => {
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({
-        clientId: props.clientId,
-        insurerId: 'hdfc-ergo',
-        product: 'hdfc-mst',
-        run: { cover, years },
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      clientId: props.clientId,
+      insurerId: 'hdfc-ergo',
+      product: 'hdfc-mst',
+      run: { cover, years },
+    }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
   };
@@ -811,14 +810,12 @@ function QuotePanel(props: { clientId: string }): React.JSX.Element {
   const run = async () => {
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({
-        clientId: props.clientId,
-        insurerId: 'united-india',
-        product: 'health',
-        goodHealthConfirmed: goodHealth,
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      clientId: props.clientId,
+      insurerId: 'united-india',
+      product: 'health',
+      goodHealthConfirmed: goodHealth,
+    }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
   };
@@ -889,14 +886,12 @@ function ProposalPanel(props: {
   const run = async () => {
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({
-        clientId: props.clientId,
-        insurerId: 'united-india',
-        product: form.product,
-        goodHealthConfirmed: false,
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      clientId: props.clientId,
+      insurerId: 'united-india',
+      product: form.product,
+      goodHealthConfirmed: false,
+    }).catch(() => null);
     setBusy(false);
     setResult(
       r?.ok ? r.data : { error: r ? r.error.message : 'The proposal could not be started.' },
@@ -972,22 +967,20 @@ function NivaHealthPanel(props: { clientId: string }): React.JSX.Element {
         .map((a) => a.trim())
         .filter((a) => a.length >= 2),
     ];
-    const r = await window.fqf.quotes
-      .run({
-        clientId: props.clientId,
-        insurerId: 'niva-bupa',
-        product: 'niva-health',
-        run: {
-          plan,
-          sumInsured,
-          years,
-          addOns,
-          tieredNetwork,
-          medicalPractitioner,
-          ...(porting && previousEnd ? { previousPolicyEndDate: previousEnd } : {}),
-        },
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      clientId: props.clientId,
+      insurerId: 'niva-bupa',
+      product: 'niva-health',
+      run: {
+        plan,
+        sumInsured,
+        years,
+        addOns,
+        tieredNetwork,
+        medicalPractitioner,
+        ...(porting && previousEnd ? { previousPolicyEndDate: previousEnd } : {}),
+      },
+    }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
   };
@@ -1131,15 +1124,13 @@ function NiaHealthPanel(props: { clientId: string }): React.JSX.Element {
   const run = async () => {
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({
-        clientId: props.clientId,
-        insurerId: 'new-india',
-        product: 'nia-health',
-        policy,
-        goodHealthConfirmed: goodHealth,
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      clientId: props.clientId,
+      insurerId: 'new-india',
+      product: 'nia-health',
+      policy,
+      goodHealthConfirmed: goodHealth,
+    }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
   };
@@ -1233,16 +1224,14 @@ function NiaPaPanel(props: { clientId: string }): React.JSX.Element {
     event.preventDefault();
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({
-        clientId: props.clientId,
-        insurerId: 'new-india',
-        product: 'nia-pa',
-        run: runOf(),
-        noClaimsConfirmed: noClaims,
-        noDisabilitiesConfirmed: noDisabilities,
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      clientId: props.clientId,
+      insurerId: 'new-india',
+      product: 'nia-pa',
+      run: runOf(),
+      noClaimsConfirmed: noClaims,
+      noDisabilitiesConfirmed: noDisabilities,
+    }).catch(() => null);
     setBusy(false);
     setResult(
       r?.ok

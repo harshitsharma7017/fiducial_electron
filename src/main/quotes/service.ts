@@ -17,12 +17,15 @@ import type { PortalPage } from '../insurers/portal-host';
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
 import type { QuoteRunRequest } from '../../shared/ipc/contract';
+import { findPortal, mayFillLogin } from '../../shared/insurers/portals';
 import {
   runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
   runUiicOmpProposal,
   runUiicTravelProposal,
+  exec,
+  followWork,
   type QuoteRunResult,
 } from './run-uiic-health';
 import type { UiicProposalForm } from './uiic-health-proposal';
@@ -73,6 +76,57 @@ export function createQuoteService(deps: {
   now?: () => Date;
 }): QuoteService {
   let running = false;
+  /**
+   * While a run works, the tab it fills is brought to the front (once per change of tab), so the
+   * advisor watches the insurer's form, including a pop-up such as United India's calculator.
+   */
+  /**
+   * Whether the insurer's portal can be worked in: its tab is open and past the sign-in page.
+   * The sign-in page is told by its address and, for portals with a sign-in form, by the password
+   * box on screen (a portal may keep the sign-in address after signing in). Nothing is filled or
+   * pressed. Returns the refusal to show, or null when the portal is ready.
+   */
+  const portalNotReady = async (insurerId: string): Promise<QuoteRunResult | null> => {
+    const portal = findPortal(insurerId);
+    const name = portal?.displayName ?? 'the insurer';
+    const page = deps.windowsOf(insurerId).find((p) => !p.isDestroyed());
+    if (!page) {
+      return {
+        outcome: 'refused',
+        step: null,
+        message: `Please log in to ${name}'s portal and keep it open: open it from the Insurers screen, sign in, and leave its tab open. Then press again.`,
+        problems: [],
+      };
+    }
+    if (!portal || !mayFillLogin(portal, page.webContents.getURL())) return null;
+    const onSignIn = portal.form
+      ? (
+          await exec(page.webContents, {
+            op: 'waitFor',
+            selector: portal.form.password,
+            timeoutMs: 1500,
+          })
+        ).ok
+      : true;
+    return onSignIn
+      ? {
+          outcome: 'refused',
+          step: null,
+          message: `Please log in to ${name}'s portal and keep it open: its tab is on the sign-in page. Sign in, leave the tab open, then press again.`,
+          problems: [],
+        }
+      : null;
+  };
+  const follow = (insurerId: string): void => {
+    let shown: unknown = null;
+    followWork((wc) => {
+      if (wc === shown) return;
+      const page = deps.windowsOf(insurerId).find((p) => !p.isDestroyed() && p.webContents === wc);
+      if (!page) return;
+      shown = wc;
+      page.focus();
+    });
+  };
   return {
     run: async (request) => {
       if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
@@ -112,6 +166,8 @@ export function createQuoteService(deps: {
           problems: [],
         };
       }
+      const notReady = await portalNotReady(insurerId);
+      if (notReady) return notReady;
       // Read before the run starts: an unknown client, travel client, rural client or vehicle is
       // refused at once.
       if (
@@ -140,6 +196,7 @@ export function createQuoteService(deps: {
                   shipment: request.shipment,
                 };
         running = true;
+        follow(insurerId);
         try {
           const result =
             start.kind === 'rural'
@@ -159,6 +216,7 @@ export function createQuoteService(deps: {
           return result;
         } finally {
           running = false;
+          followWork(null);
         }
       }
       const subject =
@@ -177,6 +235,7 @@ export function createQuoteService(deps: {
               }
             : { kind: 'client' as const, record: await deps.clients.get(request.clientId) };
       running = true;
+      follow(insurerId);
       try {
         const today = (deps.now ?? (() => new Date()))();
         const windows = () => deps.windowsOf(insurerId);
@@ -286,6 +345,7 @@ export function createQuoteService(deps: {
         return result;
       } finally {
         running = false;
+        followWork(null);
       }
     },
   };

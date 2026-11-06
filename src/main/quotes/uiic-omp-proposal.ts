@@ -133,6 +133,7 @@ export function planUiicOmpProposal(
     op: 'setField',
     selector: destination,
     value: DESTINATION[trip.destination],
+    waitMs: 15_000,
   });
   add('Travel days', { op: 'setField', selector: '#travelNoOfDays', value: String(trip.days) });
   add('Travel start date', {

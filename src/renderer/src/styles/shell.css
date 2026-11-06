@@ -325,6 +325,8 @@ html.theme-transition *::after {
 
 .topbar-context {
   display: inline-flex;
+  flex: none;
+  white-space: nowrap;
   align-items: center;
   gap: var(--space-2);
   padding: 0 var(--space-3);
@@ -383,85 +385,129 @@ html.theme-transition *::after {
 
 .portal-tabs {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
+  height: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
+  /* Tabs that do not fit fade out at the edge (the strip scrolls sideways). */
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
 }
 
+.portal-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* One pill per tab: its title, and (insurer pages) a small close button inside it. The app's
+ * general button style (`:is(.app, …) button`: bordered, shadowed, 36 px tall, never shrinking)
+ * outranks a single class and loads later, so these rules are scoped under .topbar. */
 .portal-tab {
   display: inline-flex;
+  /* Each tab keeps its title's width up to a limit (long titles end in "…"); when the tabs do
+   * not all fit, the strip scrolls sideways rather than squeezing short names. */
+  flex: none;
   align-items: center;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 240px;
+  gap: 2px;
+  max-width: 200px;
   height: 30px;
+  box-sizing: border-box;
   padding: 0 4px 0 10px;
-  font: inherit;
   font-size: var(--text-sm);
   color: var(--text-2);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
   transition:
     background-color var(--dur-fast) ease,
-    color var(--dur-fast) ease;
+    color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
 }
 
-.portal-tab:hover {
+.portal-tabs .portal-tab:hover {
   color: var(--text);
   background: var(--surface-hover);
 }
 
-button.portal-tab {
-  padding-right: 10px;
-}
-
-.portal-tab[aria-current='page'] {
+.portal-tabs .portal-tab[aria-current='page'] {
   font-weight: var(--weight-semibold);
   color: var(--primary-text);
   background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 25%, transparent);
 }
 
-.portal-tab-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+.topbar .portal-tabs button {
+  min-height: 0;
   padding: 0;
   font: inherit;
   color: inherit;
   background: none;
   border: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: none;
   cursor: pointer;
 }
 
+.topbar .portal-tabs button:hover:not(:disabled),
+.topbar .portal-tabs button:active:not(:disabled) {
+  background: none;
+  transform: none;
+}
+
+/* The App tab is itself a button. */
+.topbar .portal-tabs button.portal-tab {
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.topbar .portal-tabs button.portal-tab:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.topbar .portal-tabs button.portal-tab[aria-current='page'] {
+  color: var(--primary-text);
+  background: var(--primary-soft);
+}
+
+.topbar .portal-tabs .portal-tab-open {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+  text-align: left;
+}
+
 .portal-tab-title {
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.portal-tab-close {
+.topbar .portal-tabs button.portal-tab-close {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  flex: none;
   width: 20px;
   height: 20px;
-  margin-left: 4px;
-  padding: 0;
-  color: inherit;
-  background: none;
-  border: 0;
-  border-radius: var(--radius-xs);
-  cursor: pointer;
+  color: var(--text-3);
 }
 
-.portal-tab-close:hover {
+.topbar .portal-tabs button.portal-tab-close:hover:not(:disabled) {
+  color: var(--text);
   background: var(--neutral-soft);
+}
+
+.topbar .portal-tabs button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 .portal-area {

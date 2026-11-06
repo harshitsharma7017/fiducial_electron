@@ -23,7 +23,7 @@ export const pathOf = (url: string): string => {
 
 /** What a step's failure means, in the advisor's words. */
 function explain(label: string, detail: string | undefined): string {
-  if (detail === 'option-missing') {
+  if (detail?.startsWith('option-missing')) {
     return `New India does not list this ${label.toLowerCase()} as saved. Change it on the vehicle to the name New India uses, or choose it by hand.`;
   }
   if (detail?.startsWith('no-match')) {

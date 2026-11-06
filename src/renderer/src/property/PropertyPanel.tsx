@@ -30,6 +30,7 @@ import {
   holderToInput,
   type HolderDraft,
 } from '../marine/MarinePanel';
+import { runQuote } from '../quote/run';
 
 type Tri = '' | 'yes' | 'no';
 const RISK_LABELS: Record<keyof RiskAnswers, string> = {
@@ -696,14 +697,12 @@ function NiaFirePanel(props: { propertyId: string; use: 'home' | 'business' }): 
     event.preventDefault();
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({
-        product: 'nia-fire',
-        propertyId: props.propertyId,
-        insurerId: 'new-india',
-        run: { form, cover },
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      product: 'nia-fire',
+      propertyId: props.propertyId,
+      insurerId: 'new-india',
+      run: { form, cover },
+    }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
   };

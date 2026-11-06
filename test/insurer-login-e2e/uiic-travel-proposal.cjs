@@ -130,16 +130,17 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Proposal F
     if (chosen('proposalfilledBy') === 'agent' && chosen('chooseProposal') === 'new') setTimeout(() => show('proposal', true), 300);
   }));
 
-  // Each choice loads the next list from the server.
+  // Each choice loads the next list from the server: slowly, as the live site did on 6 November
+  // 2026 (the destination list was not there 1.5 s after the purpose).
   $('#travelPurpose').addEventListener('change', () => setTimeout(() => {
     $('#travelDestination').innerHTML = '<option value="">Select</option><option value="Worldwide Including USA Or CANADA">Worldwide</option><option value="Worldwide Excluding USA Or CANADA">World Wide Restricted-(Excluding USA &amp; Canada)</option>';
-  }, 600));
+  }, 4000));
   $('#travelDestination').addEventListener('change', (e) => setTimeout(() => {
     const plans = e.target.value.includes('Excluding')
       ? [['PLAN A1', '50000'], ['PLAN A2', '100000'], ['PLAN A3', '250000']]
       : [['PLAN B1', '50000'], ['PLAN B2', '100000'], ['PLAN B3', '250000'], ['PLAN B4', '500000']];
     $('#planType').innerHTML = '<option value="">Select</option>' + plans.map(([v, s]) => '<option value="' + v + '">' + v + '-' + s + '</option>').join('');
-  }, 600));
+  }, 4000));
 
   const missingBefore = (sec) => {
     const lines = [];

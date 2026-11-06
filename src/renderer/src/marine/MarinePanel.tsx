@@ -26,6 +26,7 @@ import {
 } from '../../../shared/insurers/nia-marine';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
 import { MARITAL_LABELS } from '../clients/proposal-fields';
+import { runQuote } from '../quote/run';
 
 type OrgType = (typeof NIA_ORGANISATION_TYPES)[number];
 type Draft = HolderDraft;
@@ -575,38 +576,36 @@ function NiaMarinePanel(props: { marineId: string }): React.JSX.Element {
     event.preventDefault();
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({
-        product: 'nia-marine',
-        marineId: props.marineId,
-        insurerId: 'new-india',
-        shipment: {
-          voyageType,
-          startDate,
-          transitType,
-          mode,
-          fromCountry: fromCountry.trim(),
-          toCountry: toCountry.trim(),
-          portOfLoading: portOfLoading.trim(),
-          portOfDischarge: portOfDischarge.trim(),
-          billType,
-          ...(billNumber.trim() ? { billNumber: billNumber.trim() } : {}),
-          ...(billDate ? { billDate } : {}),
-          ...(markNo.trim() ? { markNo: markNo.trim() } : {}),
-          showPremium,
-          cargoType,
-          sumInsuredRupees: Number(sumInsured || 'NaN'),
-          ratePercent: rate,
-          extraPercent: extra,
-          invoiceNumber: invoiceNumber.trim(),
-          ...(invoiceDate ? { invoiceDate } : {}),
-          excessOn,
-          excessPercent: excess,
-          minimumExcessRupees: Number(minimumExcess || 'NaN'),
-          clause,
-        },
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      product: 'nia-marine',
+      marineId: props.marineId,
+      insurerId: 'new-india',
+      shipment: {
+        voyageType,
+        startDate,
+        transitType,
+        mode,
+        fromCountry: fromCountry.trim(),
+        toCountry: toCountry.trim(),
+        portOfLoading: portOfLoading.trim(),
+        portOfDischarge: portOfDischarge.trim(),
+        billType,
+        ...(billNumber.trim() ? { billNumber: billNumber.trim() } : {}),
+        ...(billDate ? { billDate } : {}),
+        ...(markNo.trim() ? { markNo: markNo.trim() } : {}),
+        showPremium,
+        cargoType,
+        sumInsuredRupees: Number(sumInsured || 'NaN'),
+        ratePercent: rate,
+        extraPercent: extra,
+        invoiceNumber: invoiceNumber.trim(),
+        ...(invoiceDate ? { invoiceDate } : {}),
+        excessOn,
+        excessPercent: excess,
+        minimumExcessRupees: Number(minimumExcess || 'NaN'),
+        clause,
+      },
+    }).catch(() => null);
     setBusy(false);
     setResult(
       r?.ok

@@ -111,6 +111,7 @@ export function planNiaTravelQuote(
       op: 'setField',
       selector: 'select[name="TravelDestination"]',
       value: trip.destination,
+      waitMs: 10_000,
     });
   } else {
     add('Travel destination', {

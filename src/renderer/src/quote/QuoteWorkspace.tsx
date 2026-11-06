@@ -1,10 +1,15 @@
 // The quote workspace: a drawer for one client (or vehicle), where the advisor chooses the
 // insurer and product, then fills the run's details and starts it. The product panels are the
 // screens' own (their fields, checks and automation calls are unchanged); this only hosts them.
-import { MousePointerClick } from 'lucide-react';
-import type { ReactNode } from 'react';
+// While a run fills the insurer's form, and whenever an insurer's tab is shown, the drawer steps
+// aside (kept, with its fields and result); after a run it offers the insurer's tab, where the
+// advisor finishes what the run left (./run.ts).
+import { ExternalLink, MousePointerClick } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { InsurerAvatar } from '../insurers/branding';
+import { usePortalTabs } from '../insurers/PortalTabs';
 import { Modal } from '../ui/Modal';
+import { onQuoteRun, showInsurerTab } from './run';
 
 export interface QuoteOption {
   key: string;
@@ -27,13 +32,27 @@ export function QuoteWorkspace(props: {
   children: ReactNode;
 }): React.JSX.Element {
   const { options, selected } = props;
+  const [running, setRunning] = useState(false);
+  const [ranFor, setRanFor] = useState<{ insurerId: string; tabId: string | null } | null>(null);
+  const tabs = usePortalTabs(props.open);
+  useEffect(() => {
+    if (!props.open) return;
+    return onQuoteRun((event) => {
+      setRunning(event.phase === 'start');
+      if (event.phase === 'end') setRanFor({ insurerId: event.insurerId, tabId: event.tabId });
+    });
+  }, [props.open]);
+  useEffect(() => {
+    setRanFor(null);
+  }, [selected, props.open]);
+  const hidden = running || (tabs?.active ?? null) !== null;
   const single = options.length === 1;
   const chosen = options.find((o) => o.key === selected) ?? null;
   const insurers = [...new Set(options.map((o) => o.insurer))];
   const steps = single
     ? ['Fill the details', 'Run in the insurer portal']
     : ['Choose product', 'Fill the details', 'Run in the insurer portal'];
-  const current = single || chosen ? steps.length - 2 : 0;
+  const current = ranFor ? steps.length - 1 : single || chosen ? steps.length - 2 : 0;
 
   return (
     <Modal
@@ -43,6 +62,7 @@ export function QuoteWorkspace(props: {
       title={chosen ? `${chosen.insurer} · ${chosen.label}` : 'New quote'}
       subtitle={`For ${props.subject}`}
       onClose={props.onClose}
+      hidden={hidden}
     >
       <ol className="qw-steps" aria-label="Steps">
         {steps.map((s, i) => (
@@ -52,6 +72,15 @@ export function QuoteWorkspace(props: {
           </li>
         ))}
       </ol>
+      {ranFor && (
+        <div className="qw-continue">
+          <span>Check the insurer&rsquo;s form, and finish anything listed below there.</span>
+          <button type="button" onClick={() => void showInsurerTab(ranFor.insurerId, ranFor.tabId)}>
+            <ExternalLink size={16} aria-hidden="true" />
+            Go to {chosen?.insurer ?? 'the insurer'}&rsquo;s tab
+          </button>
+        </div>
+      )}
       {!single && (
         <div className="qw-groups">
           {insurers.map((insurer) => (

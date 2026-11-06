@@ -1437,6 +1437,10 @@ label.check input {
   animation: fade-in var(--dur) ease both;
 }
 
+.modal-backdrop[hidden] {
+  display: none;
+}
+
 .modal-backdrop[data-state='closing'] {
   pointer-events: none;
   animation: fade-out 180ms ease both;
@@ -1446,6 +1450,7 @@ label.check input {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  min-height: 0;
   width: min(640px, 100%);
   max-height: min(90vh, 940px);
   background: var(--surface);
@@ -1469,6 +1474,7 @@ label.check input {
 }
 
 .modal-header {
+  flex: none;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1491,8 +1497,12 @@ label.check input {
 }
 
 .modal-body {
+  /* Scrolls inside the dialog: a flex child may not shrink below its content unless told. */
+  flex: 1 1 auto;
+  min-height: 0;
   padding: var(--space-5) var(--space-6) var(--space-6);
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal .client-form,
@@ -1508,16 +1518,26 @@ label.check input {
   margin-top: var(--space-5);
 }
 
-/* Drawer: the same dialog, docked to the right edge (quote workspaces). */
+/* Drawer: the same dialog as a side panel, flush with the right edge and the window's full height
+   (quote workspaces). Fixed to the edges, not laid out in the grid: a grid row grows with its
+   content, which made the drawer taller than the window, so its body never scrolled. */
 .modal-backdrop[data-variant='drawer'] {
-  place-items: stretch end;
-  padding: var(--space-3);
+  display: block;
+  padding: 0;
 }
 
 .modal-backdrop[data-variant='drawer'] .modal {
-  width: min(var(--drawer-width), 100%);
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(var(--drawer-width), 100vw);
+  height: auto;
   max-height: none;
-  height: 100%;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: var(--shadow-lg);
   animation: drawer-in var(--dur-slow) var(--ease) both;
 }
 
@@ -1526,7 +1546,7 @@ label.check input {
 }
 
 .modal-backdrop[data-variant='drawer'] .modal.modal-wide {
-  width: min(820px, 100%);
+  width: min(820px, 100vw);
 }
 
 /* ------------------------------------------------------------------------------------------ */
@@ -1658,6 +1678,27 @@ label.check input {
 .qw-panel {
   padding-top: var(--space-5);
   border-top: 1px solid var(--border);
+}
+
+.qw-continue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 10px);
+}
+
+.qw-continue button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .qw-empty {
@@ -1889,15 +1930,13 @@ label.check input {
 
 @keyframes drawer-in {
   from {
-    opacity: 0;
-    transform: translateX(32px);
+    transform: translateX(100%);
   }
 }
 
 @keyframes drawer-out {
   to {
-    opacity: 0;
-    transform: translateX(24px);
+    transform: translateX(100%);
   }
 }
 

@@ -93,7 +93,7 @@ function explain(step: HdfcStep, detail: string | undefined): string {
     const offered = /\(offered: (.*)\)$/.exec(detail)?.[1];
     return `PIE does not list this at "${step.label}"${offered ? ` (it offers: ${offered})` : ''}. Choose it by hand, then press Calculate Premium.`;
   }
-  if (detail === 'option-missing') {
+  if (detail?.startsWith('option-missing')) {
     return `PIE does not offer this value at "${step.label}". Choose it by hand, then press Calculate Premium.`;
   }
   const stuck = /^stuck at (\d+)$/.exec(detail ?? '');

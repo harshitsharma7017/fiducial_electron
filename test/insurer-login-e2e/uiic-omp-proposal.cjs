@@ -164,6 +164,8 @@ const formPage = ({
     if (!$('#travelNoOfDays').value) lines.push('* Please Enter Travel Days.');
     if (!$('#travelStartDate').value) lines.push('* Please Select Travel Start Date.');
     if (age() === null) lines.push('* Please Select Date of Birth of Insured.');
+    // As live (6 November 2026): a date shown in the box but not confirmed with OK is not kept.
+    else if (window.__confirmed?.insuredDOB !== $('#sec1 #insuredDOB').value) lines.push('* Please Enter Date of Birth.');
     if (lines.length) { error(lines); return; }
     $('#insuredAge').value = String(age());
     const codes = destination() === 'World_Wide' ? ['B-1', 'B-2', 'B-3', 'B-4'] : ['A-1', 'A-2', 'A-3'];
@@ -226,13 +228,20 @@ const formPage = ({
       const b = e.target.closest('button');
       if (!b) return;
       const t = b.textContent;
-      if (b.dataset.d) { chosenDay = Number(b.dataset.d); render(); return; }
+      // As live: the day shows in the box at once; it is kept only when OK is pressed.
+      if (b.dataset.d) {
+        chosenDay = Number(b.dataset.d);
+        target.value = String(chosenDay).padStart(2, '0') + '/' + String(m + 1).padStart(2, '0') + '/' + y;
+        render();
+        return;
+      }
       if (t === '«') y--; else if (t === '»') y++;
       else if (t === '‹') { m--; if (m < 0) { m = 11; y--; } }
       else if (t === '›') { m++; if (m > 11) { m = 0; y++; } }
       else if (t === 'Cancel') { pop.remove(); return; }
       else if (t === 'OK') {
         if (chosenDay) target.value = String(chosenDay).padStart(2, '0') + '/' + String(m + 1).padStart(2, '0') + '/' + y;
+        window.__confirmed = { ...(window.__confirmed ?? {}), [target.id]: target.value };
         pop.remove(); return;
       } else return;
       chosenDay = null;

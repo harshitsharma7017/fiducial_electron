@@ -35,6 +35,7 @@ import {
 } from '../../../shared/insurers/nia-rural';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
 import { MARITAL_LABELS } from '../clients/proposal-fields';
+import { runQuote } from '../quote/run';
 
 const KIND_LABELS: Record<AnimalKind, string> = {
   cattle: 'Cattle',
@@ -876,9 +877,12 @@ function NiaRuralPanel(props: { ruralId: string }): React.JSX.Element {
     event.preventDefault();
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({ product: 'nia-rural', ruralId: props.ruralId, insurerId: 'new-india', run: runOf() })
-      .catch(() => null);
+    const r = await runQuote({
+      product: 'nia-rural',
+      ruralId: props.ruralId,
+      insurerId: 'new-india',
+      run: runOf(),
+    }).catch(() => null);
     setBusy(false);
     setResult(
       r?.ok

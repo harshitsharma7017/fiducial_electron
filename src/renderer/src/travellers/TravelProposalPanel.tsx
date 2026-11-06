@@ -11,6 +11,7 @@ import {
   type TravelSumInsured,
 } from '../../../shared/contracts/travel';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
+import { runQuote } from '../quote/run';
 
 const SUMS: { value: TravelSumInsured; label: string }[] = [
   { value: '50000', label: '50,000' },
@@ -73,23 +74,21 @@ export function TravelProposalPanel(props: {
       startDate,
       days: Number(days),
     };
-    const r = await window.fqf.quotes
-      .run(
-        ompForm
-          ? {
-              product: 'omp-proposal',
-              travellerId: props.travellerId,
-              insurerId: 'united-india',
-              trip: { ...common, form: ompForm, plan: planPlace },
-            }
-          : {
-              product: 'travel-proposal',
-              travellerId: props.travellerId,
-              insurerId: 'united-india',
-              trip: { ...common, sumInsured },
-            },
-      )
-      .catch(() => null);
+    const r = await runQuote(
+      ompForm
+        ? {
+            product: 'omp-proposal',
+            travellerId: props.travellerId,
+            insurerId: 'united-india',
+            trip: { ...common, form: ompForm, plan: planPlace },
+          }
+        : {
+            product: 'travel-proposal',
+            travellerId: props.travellerId,
+            insurerId: 'united-india',
+            trip: { ...common, sumInsured },
+          },
+    ).catch(() => null);
     setBusy(false);
     setResult(
       r?.ok

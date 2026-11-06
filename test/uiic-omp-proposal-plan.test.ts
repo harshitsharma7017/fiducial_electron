@@ -89,6 +89,8 @@ describe('planUiicOmpProposal', () => {
       selector:
         'select[ng-model$=".trvDestGrp"], select[data-ng-model$=".trvDestGrp"], select[x-ng-model$=".trvDestGrp"]',
       value: 'World_Wide_Restricted',
+      // United India loads the destinations from its server: the run waits for the option.
+      waitMs: 15_000,
     });
     expect(list).toContainEqual({
       op: 'pickDate',

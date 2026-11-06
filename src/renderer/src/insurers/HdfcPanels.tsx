@@ -11,6 +11,7 @@ import {
   type HdfcRetailRun,
 } from '../../../shared/insurers/hdfc';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
+import { runQuote } from '../quote/run';
 
 type Result = QuoteRunResultView | { error: string } | null;
 const POSP_KEY = 'fqf.hdfc.posp';
@@ -98,25 +99,23 @@ export function HdfcRetailPanel(props: { clientId: string }): React.JSX.Element 
     setBusy(true);
     setResult(null);
     remember(posp.trim());
-    const r = await window.fqf.quotes
-      .run({
-        clientId: props.clientId,
-        insurerId: 'hdfc-ergo',
-        product: 'hdfc-retail',
-        run: {
-          product,
-          cover: product === 'energy' ? 'individual' : cover,
-          years,
-          city,
-          posp,
-          ...(product !== 'energy' ? { sumInsuredLacs } : {}),
-          ...(plan ? { plan } : {}),
-          ...(product === 'energy' && Number(existing) > 0
-            ? { existingSumInsured: Number(existing) }
-            : {}),
-        },
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      clientId: props.clientId,
+      insurerId: 'hdfc-ergo',
+      product: 'hdfc-retail',
+      run: {
+        product,
+        cover: product === 'energy' ? 'individual' : cover,
+        years,
+        city,
+        posp,
+        ...(product !== 'energy' ? { sumInsuredLacs } : {}),
+        ...(plan ? { plan } : {}),
+        ...(product === 'energy' && Number(existing) > 0
+          ? { existingSumInsured: Number(existing) }
+          : {}),
+      },
+    }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
   };
@@ -242,14 +241,12 @@ export function HdfcTravelPanel(props: { travellerId: string }): React.JSX.Eleme
   const run = async () => {
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({
-        travellerId: props.travellerId,
-        insurerId: 'hdfc-ergo',
-        product: 'hdfc-travel',
-        run: { departureDate: departure, returnDate: ret, plan },
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      travellerId: props.travellerId,
+      insurerId: 'hdfc-ergo',
+      product: 'hdfc-travel',
+      run: { departureDate: departure, returnDate: ret, plan },
+    }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
   };

@@ -27,6 +27,7 @@ import {
   vehicleToInput,
   type VehicleDraft,
 } from './VehicleFields';
+import { runQuote } from '../quote/run';
 
 interface Draft {
   id: string | null;
@@ -266,9 +267,9 @@ function MotorQuotePanel(props: { vehicle: VehicleSummary }): React.JSX.Element 
   const run = async (insurerId: 'united-india' | 'new-india') => {
     setBusy(insurerId);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({ product: 'motor', vehicleId: vehicle.id, insurerId })
-      .catch(() => null);
+    const r = await runQuote({ product: 'motor', vehicleId: vehicle.id, insurerId }).catch(
+      () => null,
+    );
     setBusy(null);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
     // The premium is shown here: come back from the calculator's tab (left open to check it).
@@ -370,30 +371,28 @@ function HdfcMotorSection(props: { vehicle: VehicleSummary }): React.JSX.Element
   const run = async () => {
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({
-        product: 'hdfc-motor',
-        vehicleId: vehicle.id,
-        insurerId: 'hdfc-ergo',
-        run: {
-          product,
-          cover,
-          customerType,
-          rtoCity,
-          ...(registrationNumber.trim() ? { registrationNumber } : {}),
-          ...(renewal
-            ? {
-                previous: {
-                  endDate: previousEnd,
-                  policyType: previousType,
-                  ...(previousInsurer ? { insurer: previousInsurer } : {}),
-                },
-              }
-            : {}),
-          customer: { name, email, mobile },
-        },
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      product: 'hdfc-motor',
+      vehicleId: vehicle.id,
+      insurerId: 'hdfc-ergo',
+      run: {
+        product,
+        cover,
+        customerType,
+        rtoCity,
+        ...(registrationNumber.trim() ? { registrationNumber } : {}),
+        ...(renewal
+          ? {
+              previous: {
+                endDate: previousEnd,
+                policyType: previousType,
+                ...(previousInsurer ? { insurer: previousInsurer } : {}),
+              },
+            }
+          : {}),
+        customer: { name, email, mobile },
+      },
+    }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
     if (r?.ok && r.data.premium) showAppScreens();

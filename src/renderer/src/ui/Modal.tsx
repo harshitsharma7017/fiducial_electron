@@ -20,9 +20,16 @@ export function Modal(props: {
   size?: 'narrow' | 'default' | 'wide';
   /** Kept for older callers: the same as size="wide". */
   wide?: boolean;
+  /**
+   * Out of sight but kept (its fields and results stay as they were): a quote drawer while the
+   * app fills the insurer's form in its tab.
+   */
+  hidden?: boolean;
   children: ReactNode;
 }): React.JSX.Element | null {
   const { open, title, subtitle, onClose, children } = props;
+  const hiddenRef = useRef(props.hidden ?? false);
+  hiddenRef.current = props.hidden ?? false;
   const [mounted, setMounted] = useState(open);
   const last = useRef<{ title: string; subtitle?: string; children: ReactNode }>({
     title,
@@ -56,6 +63,8 @@ export function Modal(props: {
     );
     (first ?? dialog)?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
+      // Hidden: the keys belong to whatever is shown.
+      if (hiddenRef.current) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         onCloseRef.current();
@@ -90,6 +99,7 @@ export function Modal(props: {
       className="modal-backdrop"
       data-state={open ? 'open' : 'closing'}
       data-variant={props.variant ?? 'dialog'}
+      hidden={props.hidden}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

@@ -45,9 +45,18 @@ export interface QuoteRunResult {
   toDo?: string[];
 }
 
+/** Told of each page a run's step works in (the quote service brings it to the front). */
+let workFollower: ((wc: WebContents) => void) | null = null;
+
+/** While set, every page a step works in is reported, so the advisor sees the form being filled. */
+export function followWork(follower: ((wc: WebContents) => void) | null): void {
+  workFollower = follower;
+}
+
 /** Performs one operation in the page (isolated world); shared with the New India runner. */
 export async function exec(wc: WebContents, op: PageOp): Promise<PageOpResult> {
   if (wc.isDestroyed()) return { ok: false, detail: 'window-closed' };
+  workFollower?.(wc);
   try {
     return (await wc.executeJavaScriptInIsolatedWorld(WORLD_ID, [
       { code: `(${AGENT_SOURCE})(${JSON.stringify(op)})` },
@@ -200,7 +209,13 @@ async function runInCalculator(deps: {
           step.label,
           /^only-\d+$/.test(last.detail ?? '')
             ? `United India offers ${last.detail!.slice(5)} choices here for this trip: pick a lower one, or choose it by hand.`
-            : `Stopped at "${step.label}" (${last.detail ?? 'unknown'}). The calculator may have changed; finish this quote by hand.`,
+            : last.detail?.startsWith('option-missing')
+              ? `United India's list at "${step.label}" did not offer this choice${
+                  /\(offered: (.*)\)$/.exec(last.detail)?.[1]
+                    ? ` (it showed: ${/\(offered: (.*)\)$/.exec(last.detail)![1]})`
+                    : ''
+                }. If it showed only "Select", United India had not loaded the list yet: try again, or choose it by hand and finish this quote.`
+              : `Stopped at "${step.label}" (${last.detail ?? 'unknown'}). The calculator may have changed; finish this quote by hand.`,
         ),
         last,
         notes,

@@ -23,7 +23,7 @@ const PAN_QUESTION = 'Do you have PAN Number';
 
 /** What a step's failure means, in the advisor's words. */
 function explain(label: string, detail: string | undefined): string {
-  if (detail === 'option-missing') {
+  if (detail?.startsWith('option-missing')) {
     return `New India does not offer this value at "${label}". Choose it by hand, then fill the rest.`;
   }
   if (detail === 'read-only') {

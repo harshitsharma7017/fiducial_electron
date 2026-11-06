@@ -14,6 +14,7 @@ import {
   type NiaTravelForm,
 } from '../../../shared/insurers/nia-travel';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
+import { runQuote } from '../quote/run';
 
 const PLAN_PLACES = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
@@ -72,15 +73,13 @@ export function NiaTravelPanel(props: { travellerId: string }): React.JSX.Elemen
     event.preventDefault();
     setBusy(true);
     setResult(null);
-    const r = await window.fqf.quotes
-      .run({
-        product: 'nia-travel',
-        travellerId: props.travellerId,
-        insurerId: 'new-india',
-        trip: trip(),
-        noPreExistingConfirmed: noPreExisting,
-      })
-      .catch(() => null);
+    const r = await runQuote({
+      product: 'nia-travel',
+      travellerId: props.travellerId,
+      insurerId: 'new-india',
+      trip: trip(),
+      noPreExistingConfirmed: noPreExisting,
+    }).catch(() => null);
     setBusy(false);
     setResult(
       r?.ok

@@ -189,7 +189,17 @@ export type PageOp =
    */
   | { op: 'clickLink'; text: string; numbered?: boolean }
   /** Chooses an option (by value or visible text) or fills a box; re-checked like select. */
-  | { op: 'setField'; selector: string; value: string; within?: string }
+  | {
+      op: 'setField';
+      selector: string;
+      value: string;
+      within?: string;
+      /**
+       * A dropdown whose options the page loads after an earlier answer (United India's travel
+       * destinations and plans): waits up to this long for the option to appear.
+       */
+      waitMs?: number;
+    }
   /** Ticks or unticks a checkbox (or picks a radio) by selector; re-checked like select. */
   | { op: 'check'; selector: string; checked: boolean; within?: string }
   /**
@@ -848,16 +858,31 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           detail: `day-not-found (calendar shows ${shown()?.month}/${shown()?.year})`,
         };
       press(day);
-      let set = await until(() => (sameDate(box()?.value ?? '') ? true : null), 2500);
-      if (!set) {
-        // Some calendars need OK (or Done) after the day.
+      const confirm = (): HTMLElement | null => {
+        if (!picker.isConnected) return null;
         const ok =
           buttonWithText(picker, 'OK') ??
           buttonWithText(picker, 'Ok') ??
           buttonWithText(picker, 'Done');
-        if (ok && visible(ok)) {
+        return ok && visible(ok) ? ok : null;
+      };
+      let set = await until(() => (sameDate(box()?.value ?? '') ? true : null), 2500);
+      if (!set) {
+        // Some calendars need OK (or Done) after the day.
+        const ok = confirm();
+        if (ok) {
           ok.click();
           set = await until(() => (sameDate(box()?.value ?? '') ? true : null), 2500);
+        }
+      } else {
+        // Others show the day in the box at once but keep the date only once OK is pressed
+        // (United India's Overseas Mediclaim: closed any other way, its plan check then asks for
+        // the date of birth, 6 November 2026). Still open with OK or Done: press it, as a person
+        // would.
+        const ok = confirm();
+        if (ok) {
+          ok.click();
+          await sleep(300);
         }
       }
       return set
@@ -880,26 +905,56 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           : null;
       };
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        const el = find();
+        let el = find();
         if (!el) return { ok: false, detail: attempt === 0 ? 'not-found' : 'reset-by-page' };
         let want = command.value;
         if (el instanceof HTMLSelectElement) {
           // The visible text matched exactly first, then ignoring case and spacing (place names
           // come back in capitals).
           const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
-          const options = Array.from(el.options);
+          const match = (select: HTMLSelectElement): HTMLOptionElement | undefined => {
+            const options = Array.from(select.options);
+            return (
+              options.find(
+                (o) =>
+                  o.value === command.value ||
+                  o.value === `string:${command.value}` ||
+                  o.value === `number:${command.value}` ||
+                  o.text.trim() === command.value,
+              ) ?? options.find((o) => loose(o.text) === loose(command.value))
+            );
+          };
+          // A list the page is still loading: wait for the option (bounded).
           const option =
-            options.find(
-              (o) =>
-                o.value === command.value ||
-                o.value === `string:${command.value}` ||
-                o.value === `number:${command.value}` ||
-                o.text.trim() === command.value,
-            ) ?? options.find((o) => loose(o.text) === loose(command.value));
-          if (!option) return { ok: false, detail: 'option-missing' };
+            match(el) ??
+            (command.waitMs
+              ? ((await until(() => {
+                  const now = find();
+                  return now instanceof HTMLSelectElement ? (match(now) ?? null) : null;
+                }, command.waitMs)) ?? undefined)
+              : undefined);
+          if (!option) {
+            const now = find();
+            const offered =
+              now instanceof HTMLSelectElement
+                ? Array.from(now.options)
+                    .map((o) => o.text.trim())
+                    .filter(Boolean)
+                    .slice(0, 10)
+                    .join('; ')
+                : '';
+            return {
+              ok: false,
+              detail: `option-missing${offered ? ` (offered: ${offered})` : ''}`,
+            };
+          }
           want = option.value;
-          el.focus();
-          el.value = want;
+          // The dropdown the option is in (the page may have drawn it again while it loaded).
+          const owner = option.closest('select');
+          const select = owner instanceof HTMLSelectElement ? owner : el;
+          el = select;
+          select.focus();
+          select.value = want;
         } else {
           el.focus();
           const proto =

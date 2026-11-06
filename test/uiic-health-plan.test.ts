@@ -193,15 +193,39 @@ describe('the quote service', () => {
     expect(result.message).toContain('not built for this insurer');
   });
 
-  it('asks the advisor to open and sign in to United India first', async () => {
-    expect(await service(true).run(request)).toMatchObject({
-      outcome: 'refused',
-      message: 'Open United India and sign in first.',
+  /** A tab of United India's at `url`; `passwordShown`: what the page check finds. */
+  const tab = (url: string, passwordShown = true) => ({
+    isDestroyed: () => false,
+    webContents: {
+      getURL: () => url,
+      isDestroyed: () => false,
+      executeJavaScriptInIsolatedWorld: () => Promise.resolve({ ok: passwordShown }),
+    },
+  });
+  const HOME = 'https://www.uiic.in/GCWebPortal/login/HomeAction.do';
+  const SIGN_IN = 'https://www.uiic.in/GCWebPortal/login/LoginAction.do';
+
+  it('asks the advisor to log in to the portal and keep it open, when it is not open', async () => {
+    const result = await service(true).run(request);
+    expect(result.outcome).toBe('refused');
+    expect(result.message).toContain("Please log in to United India's portal and keep it open");
+  });
+
+  it('asks the same when the portal is on its sign-in page, with its password box shown', async () => {
+    const onSignIn = await service(true, [tab(SIGN_IN)]).run(request);
+    expect(onSignIn.outcome).toBe('refused');
+    expect(onSignIn.message).toContain('its tab is on the sign-in page');
+    // The sign-in address without the password box: signed in, so the run goes on (here to the
+    // client's problems).
+    const signedIn = await service(true, [tab(SIGN_IN, false)]).run({
+      ...request,
+      goodHealthConfirmed: false,
     });
+    expect(signedIn.problems.join(' ')).toContain('good health');
   });
 
   it('lists every reason a client cannot be quoted, before touching the portal', async () => {
-    const result = await service(true).run({ ...request, goodHealthConfirmed: false });
+    const result = await service(true, [tab(HOME)]).run({ ...request, goodHealthConfirmed: false });
     expect(result.outcome).toBe('refused');
     expect(result.problems.join(' ')).toContain('good health');
   });

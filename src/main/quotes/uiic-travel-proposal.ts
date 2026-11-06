@@ -210,9 +210,11 @@ export function planUiicTravelProposal(
     op: 'setField',
     selector: '#travelDestination',
     value: DESTINATION[trip.destination],
+    // Loaded from United India's server after the purpose: on the live site it can take longer.
+    waitMs: 15_000,
   });
   add('Plans loaded', { op: 'pause', ms: 1500 });
-  add('Plan type', { op: 'setField', selector: '#planType', value: plan });
+  add('Plan type', { op: 'setField', selector: '#planType', value: plan, waitMs: 15_000 });
   add('Travel start date', {
     op: 'pickDate',
     input: 'input#travelStartDate',

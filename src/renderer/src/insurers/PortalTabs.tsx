@@ -35,10 +35,30 @@ export function showAppScreens(): void {
   void window.fqf.portals.show(null).catch(() => undefined);
 }
 
+/**
+ * A tab's title as the strip shows it: insurers' pop-ups are often titled in capitals with a
+ * shared opening ("PROPOSAL FORM FOR OVERSEAS MEDICLAIM …"), which makes their tabs look alike.
+ * The opening is dropped and capitals softened; the full title stays in the tooltip.
+ */
+export function tabLabel(title: string): string {
+  const trimmed = title.replace(/^\s*(proposal\s+form\s+for|quote\s*-|quote\s+for)\s+/i, '').trim();
+  const shown = trimmed || title.trim();
+  // Only titles of several words in capitals (a short name such as "UNO" stays as it is).
+  if (shown !== shown.toUpperCase() || !/[A-Z]{3}/.test(shown) || !/\s/.test(shown)) return shown;
+  return shown.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase());
+}
+
 export function PortalTabStrip(props: { state: PortalTabsView }): React.JSX.Element {
   const { state } = props;
+  const strip = useRef<HTMLElement>(null);
+  // The tab shown is kept in view when the strip scrolls (more tabs than room).
+  useEffect(() => {
+    strip.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [state.active, state.tabs.length]);
   return (
-    <nav className="portal-tabs" aria-label="Open pages">
+    <nav ref={strip} className="portal-tabs" aria-label="Open pages">
       <button
         type="button"
         className="portal-tab"
@@ -60,7 +80,7 @@ export function PortalTabStrip(props: { state: PortalTabsView }): React.JSX.Elem
             onClick={() => void window.fqf.portals.show(tab.id).catch(() => undefined)}
           >
             {tab.loading && <Loader2 size={13} className="spin" aria-label="Loading" />}
-            <span className="portal-tab-title">{tab.title}</span>
+            <span className="portal-tab-title">{tabLabel(tab.title)}</span>
           </button>
           <button
             type="button"
