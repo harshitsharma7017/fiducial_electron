@@ -1,7 +1,7 @@
 {
   "name": "fiducial-quote-fetcher",
   "productName": "Fiducial Quote Fetcher",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Fiducial Quote Fetcher: fills insurers' quote forms from saved clients, vehicles and properties, and reads the premiums.",
   "author": "Fiducial Insurance Brokers India Pvt. Ltd.",
