@@ -23,6 +23,7 @@ import { useState, type ReactNode } from 'react';
 import { ThemeSwitcher } from '../theme/ThemeSwitcher';
 import { Toaster } from '../ui/toast';
 import { PortalArea, PortalTabStrip, showAppScreens, usePortalTabs } from '../insurers/PortalTabs';
+import { QuoteRunCancel } from '../quote/QuoteRunCancel';
 
 export type ViewId =
   | 'overview'
@@ -201,6 +202,7 @@ export function AppShell(props: {
             </ol>
           )}
           <span className="topbar-spacer" />
+          <QuoteRunCancel />
           {signedIn > 0 && (
             <span className="topbar-context" title="Insurer portals open as tabs">
               <span className="status-dot" aria-hidden="true" />

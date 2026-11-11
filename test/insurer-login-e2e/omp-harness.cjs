@@ -6,9 +6,17 @@ const http = require('node:http');
 const { app, BrowserWindow, session } = require('electron');
 const FIXTURES = require('./uiic-omp-proposal.cjs');
 
-const { installNavigationPolicy, createLogger, runUiicOmpProposal, setSessionPolicy } = require(
-  process.env.FQF_LOGIN_E2E_BUNDLE,
-);
+const {
+  beginRun,
+  createLogger,
+  endRun,
+  exec,
+  installNavigationPolicy,
+  QuoteRunStopped,
+  runUiicOmpProposal,
+  setSessionPolicy,
+  stopRun,
+} = require(process.env.FQF_LOGIN_E2E_BUNDLE);
 
 app.on('window-all-closed', () => {});
 for (const event of ['unhandledRejection', 'uncaughtException']) {
@@ -268,7 +276,94 @@ app.whenReady().then(async () => {
     failures += problems.length ? 1 : 0;
   }
 
-  console.log(`\n${CASES.length - failures} of ${CASES.length} Overseas Mediclaim checks passed`);
+  // Cancelled while the run waits for the date box: the run stops at once, and nothing changes
+  // on the page afterwards (the box arrives, and no calendar opens). The form stays open.
+  {
+    const ses = session.fromPartition(`uiic-omp-cancel-${Math.random()}`);
+    setSessionPolicy(ses, {
+      navigate: (url) => url.startsWith(origin + '/'),
+      popup: (url) =>
+        url.startsWith(origin + '/')
+          ? { show: true, webPreferences: { session: ses, sandbox: true, contextIsolation: true } }
+          : null,
+    });
+    const home = new BrowserWindow({
+      show: true,
+      webPreferences: { session: ses, sandbox: true, contextIsolation: true },
+    });
+    await home.loadURL(origin + '/GCWebPortal/login/HomeAction.do');
+    const windows = () => [
+      home,
+      ...BrowserWindow.getAllWindows().filter(
+        (w) => w !== home && !w.isDestroyed() && w.webContents.session === ses,
+      ),
+    ];
+    const trip = CASES[0].trip;
+    const days = () => {
+      const form = windows().find((w) =>
+        w.webContents.getURL().includes(FIXTURES.PAGES[trip.form]),
+      );
+      return form
+        ? form.webContents
+            .executeJavaScript(`document.querySelector('#travelNoOfDays')?.value ?? ''`)
+            .catch(() => '')
+        : Promise.resolve('');
+    };
+    beginRun();
+    const run = runUiicOmpProposal({
+      windows,
+      traveller: FULL,
+      passportNumber: 'Z1234567',
+      trip,
+      aadhaar: null,
+      today: new Date(2026, 10, 3),
+    }).then(
+      () => 'finished',
+      (err) => (err instanceof QuoteRunStopped ? 'stopped' : `threw ${err.message}`),
+    );
+    for (let i = 0; i < 100 && !(await days()); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const asked = await new Promise((resolve) => setTimeout(() => resolve(stopRun()), 200));
+    const started = Date.now();
+    const ended = await run;
+    const tookMs = Date.now() - started;
+    endRun();
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    const form = windows().find((w) => w.webContents.getURL().includes(FIXTURES.PAGES[trip.form]));
+    const after = await form?.webContents.executeJavaScript(`({
+      days: document.querySelector('#travelNoOfDays').value,
+      start: document.querySelector('#travelStartDate')?.value,
+      calendar: document.querySelectorAll('.cal-pop').length,
+      saved: window.__saved,
+    })`);
+    // The stop ends with the run: the next run's steps work in the same page.
+    const next = form
+      ? await exec(form.webContents, {
+          op: 'waitFor',
+          selector: 'input#travelStartDate',
+          timeoutMs: 1000,
+        })
+      : null;
+    const problems = [];
+    if (!asked) problems.push('stopRun said no run was in progress');
+    if (ended !== 'stopped') problems.push(`run ended: ${ended}`);
+    if (tookMs > 1000) problems.push(`took ${tookMs}ms to stop`);
+    if (!after?.days) problems.push('the days were not left in the form');
+    if (after?.start !== '')
+      problems.push(`date filled after the cancel: ${JSON.stringify(after?.start)}`);
+    if (after?.calendar) problems.push('a calendar opened after the cancel');
+    if (after?.saved) problems.push('saved');
+    if (!next?.ok) problems.push(`next run's step failed: ${next?.detail}`);
+    for (const w of windows()) w.destroy();
+    console.log(
+      `${problems.length ? 'FAIL' : 'pass'}  United India Overseas Mediclaim: cancelled while waiting: stops at once, the page does not change after it${problems.length ? `\n      ${problems.join('\n      ')}` : ''}`,
+    );
+    failures += problems.length ? 1 : 0;
+  }
+
+  const checks = CASES.length + 1;
+  console.log(`\n${checks - failures} of ${checks} Overseas Mediclaim checks passed`);
   server.close();
   app.exit(failures ? 1 : 0);
 });

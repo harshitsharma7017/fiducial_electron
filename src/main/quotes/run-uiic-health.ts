@@ -33,7 +33,7 @@ const WORLD_ID = 1803;
 const HOME_PATH = '/GCWebPortal/login/HomeAction.do';
 
 export interface QuoteRunResult {
-  outcome: 'ready' | 'refused' | 'failed';
+  outcome: 'ready' | 'refused' | 'failed' | 'cancelled';
   /** The step that stopped the run, if any. */
   step: string | null;
   message: string;
@@ -41,8 +41,14 @@ export interface QuoteRunResult {
   problems: string[];
   /** The premium read from the insurer's page (motor), as shown there. */
   premium?: { label: string; amount: string };
+  /** Every plan the insurer quoted for the same request, with its premium, as shown there. */
+  plans?: { name: string; amount: string }[];
+  /** What the plans' amounts are ("Premium (excluding GST)"). */
+  amountLabel?: string;
   /** What the advisor still fills by hand (e-proposals), and the insurer's messages about it. */
   toDo?: string[];
+  /** The quote saved as a PDF (the insurer's page, with the premium): the file's name. */
+  pdf?: { name: string };
 }
 
 /** Told of each page a run's step works in (the quote service brings it to the front). */
@@ -53,15 +59,80 @@ export function followWork(follower: ((wc: WebContents) => void) | null): void {
   workFollower = follower;
 }
 
-/** Performs one operation in the page (isolated world); shared with the New India runner. */
+/** Thrown out of a run when the advisor cancels it (the quote service turns it into the result). */
+export class QuoteRunStopped extends Error {}
+
+/** The run in progress, if any: aborted when the advisor cancels it. */
+let currentRun: AbortController | null = null;
+/** The page the run's last step worked in (where it read the premium, at the end). */
+let lastWorked: WebContents | null = null;
+
+export function beginRun(): void {
+  currentRun = new AbortController();
+  lastWorked = null;
+}
+
+/** The page the current or last run's last step worked in, if still open. */
+export function lastWorkedPage(): WebContents | null {
+  return lastWorked && !lastWorked.isDestroyed() ? lastWorked : null;
+}
+
+export function endRun(): void {
+  currentRun = null;
+}
+
+/** Asks the run in progress to stop; false if there is none (or it is already stopping). */
+export function stopRun(): boolean {
+  if (!currentRun || currentRun.signal.aborted) return false;
+  currentRun.abort();
+  return true;
+}
+
+/** `work`, abandoned as soon as the run is cancelled. */
+function orStopped<T>(work: Promise<T>, onStop?: () => void): Promise<T> {
+  const signal = currentRun?.signal;
+  if (!signal) return work;
+  return new Promise<T>((resolve, reject) => {
+    const stop = () => {
+      onStop?.();
+      reject(new QuoteRunStopped());
+    };
+    if (signal.aborted) {
+      stop();
+      return;
+    }
+    signal.addEventListener('abort', stop, { once: true });
+    void work.then(resolve, reject).finally(() => signal.removeEventListener('abort', stop));
+  });
+}
+
+/** A wait in a run's own code (between page operations), which cancelling cuts short. */
+export function runPause(ms: number): Promise<void> {
+  return orStopped(new Promise((resolve) => setTimeout(resolve, ms)));
+}
+
+/**
+ * Performs one operation in the page (isolated world); shared with the New India runner. Throws
+ * QuoteRunStopped once the run is cancelled, whatever step it is on, optional steps included.
+ */
 export async function exec(wc: WebContents, op: PageOp): Promise<PageOpResult> {
+  if (currentRun?.signal.aborted) throw new QuoteRunStopped();
   if (wc.isDestroyed()) return { ok: false, detail: 'window-closed' };
   workFollower?.(wc);
+  lastWorked = wc;
   try {
-    return (await wc.executeJavaScriptInIsolatedWorld(WORLD_ID, [
-      { code: `(${AGENT_SOURCE})(${JSON.stringify(op)})` },
-    ])) as PageOpResult;
+    const agent = wc.executeJavaScriptInIsolatedWorld(WORLD_ID, [
+      { code: `(window.__fqfStop = false, (${AGENT_SOURCE})(${JSON.stringify(op)}))` },
+    ]) as Promise<PageOpResult>;
+    return await orStopped(agent, () => {
+      // Ends the wait the operation is in, so that nothing changes on the page after the cancel.
+      if (wc.isDestroyed()) return;
+      void wc
+        .executeJavaScriptInIsolatedWorld(WORLD_ID, [{ code: 'window.__fqfStop = true' }])
+        .catch(() => undefined);
+    });
   } catch (err) {
+    if (err instanceof QuoteRunStopped) throw err;
     // The page went away (navigation) or the script failed: say which, for support.
     const reason = err instanceof Error ? err.message.slice(0, 120) : 'unknown';
     return { ok: false, detail: `page-changed: ${reason}` };
@@ -141,7 +212,7 @@ async function runInCalculator(deps: {
     deps.windows().filter((w) => !before.has(w.webContents.id) && !w.isDestroyed());
   let calculator: PortalPage | undefined;
   for (let waited = 0; waited < 20_000 && !calculator; waited += 300) {
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await runPause(300);
     calculator = newPages().find((w) => isCalculator(pathOf(w.webContents.getURL())));
   }
   if (!calculator) {
@@ -215,7 +286,9 @@ async function runInCalculator(deps: {
                     ? ` (it showed: ${/\(offered: (.*)\)$/.exec(last.detail)![1]})`
                     : ''
                 }. If it showed only "Select", United India had not loaded the list yet: try again, or choose it by hand and finish this quote.`
-              : `Stopped at "${step.label}" (${last.detail ?? 'unknown'}). The calculator may have changed; finish this quote by hand.`,
+              : step.ifStuck
+                ? `Stopped at "${step.label}": ${step.ifStuck}`
+                : `Stopped at "${step.label}" (${last.detail ?? 'unknown'}). The calculator may have changed; finish this quote by hand.`,
         ),
         last,
         notes,
@@ -237,21 +310,24 @@ export async function runUiicHealthQuote(deps: {
 }): Promise<QuoteRunResult> {
   const plan = planUiicHealthQuote(deps.client, { goodHealth: deps.goodHealth, today: deps.today });
   if (!plan.ok) return refused('This client cannot be quoted automatically yet.', plan.problems);
-  const { result } = await runInCalculator({
+  const { result, last } = await runInCalculator({
     windows: deps.windows,
     tile: 'Health Policy Premium Calculator',
     calculatorPath: '/CustomerAppLive/data/HealthPolicyNewQuote.html',
     steps: plan.steps,
   });
-  return (
-    result ?? {
-      outcome: 'ready',
-      step: null,
-      message:
-        'United India calculator filled. Enter or check the email and mobile in the "User Details" pop-up, then press Check Premium.',
-      problems: [],
-    }
-  );
+  if (result) return result;
+  const plans = last?.plans ?? [];
+  const first = plans[0] ?? { name: 'Premium', amount: '' };
+  return {
+    outcome: 'ready',
+    step: null,
+    message: `United India health premiums (excluding GST): ${plans.map((p) => `${p.name} ₹${p.amount}`).join('; ')}.`,
+    problems: [],
+    premium: { label: first.name, amount: first.amount },
+    plans,
+    amountLabel: 'Premium (excluding GST)',
+  };
 }
 
 export async function runUiicMotorQuote(deps: {

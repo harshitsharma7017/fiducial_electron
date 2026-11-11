@@ -51,8 +51,10 @@ export const LOG_EVENTS = [
   'storage.open-failed',
   'storage.write-failed',
   'quote.run',
+  'quote.pdf-failed',
   'import.previewed',
   'import.saved',
+  'clients.exported',
 ] as const;
 
 export type LogEvent = (typeof LOG_EVENTS)[number];
@@ -99,7 +101,7 @@ const FIELD_SCHEMAS = {
   /** Why the client database could not be used (never any client data). */
   storeProblem: z.enum(STORE_PROBLEMS),
   /** How a quote run ended (never client data). */
-  quoteOutcome: z.enum(['ready', 'refused', 'failed']),
+  quoteOutcome: z.enum(['ready', 'refused', 'failed', 'cancelled']),
   /** Which client import (never anything about the file or its rows). */
   importKind: z.enum(IMPORT_KINDS),
   /** How many rows an import read or saved. */

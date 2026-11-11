@@ -2,7 +2,9 @@
 // 2 November 2026: the same element ids and ng-model names, a calendar with « ‹ › » navigation
 // whose days are table cells (other months' days greyed), the Good Health Declaration pop-up, the
 // Add Spouse pop-up, an ERRORS pop-up for a sum insured too low for floater cover, and the
-// "User Details" pop-up with Check Premium (which the automation must never press).
+// "User Details" pop-up (e-mail, mobile and Check Premium, as recorded), then United India's
+// "Insurance Quotes" table as the advisor's screenshot of 11 November 2026 shows it: one column per
+// plan, a "Premium (Excluding GST)" row.
 // Plain script, no framework: it only has to behave like the portal at the points the automation
 // touches.
 const M = 'healthPolicyData.HealthPolicyFormBean';
@@ -13,6 +15,7 @@ const SI = [
 
 const page = `<!doctype html><html><head><meta charset="utf-8"><title>HEALTH PREMIUM CALCULATOR | UIIC</title>
 <style>.modal-content{border:1px solid #888;padding:8px;margin:8px;background:#fff}.hidden{display:none}.text-muted{color:#aaa}td{padding:2px}</style></head><body>
+<div class="panel"><div class="panel-heading">Premium Calculator - Health Policies</div>
 <form name="healthNewQuoteFirstPageForm" onsubmit="return false">
   <input id="policyStartDate" readonly value="03/11/2026"><input id="policyExpiryDate" readonly value="02/11/2027">
   <select id="selectProductType" ng-model="${M}.productType"><option value="">Select</option><option>Base</option><option>Super Topup</option></select>
@@ -30,7 +33,7 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>HEALTH PRE
   <div id="savedChildren"></div>
   <button type="button" id="spouseBtn">Spouse</button><button type="button" id="childrenBtn">Children</button><button type="button">Parent</button>
   <button type="submit" name="proceedstep" id="getQuote">Get Quote</button><button type="button" name="exit">Back</button>
-</form>
+</form></div>
 
 <div id="goodHealth" class="modal hidden"><div class="modal-content"><p>Good Health Declaration I declare that I/Person(s) proposed for insurance am/are in good health</p><button type="button" id="ghOk">Ok</button></div></div>
 
@@ -54,9 +57,19 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>HEALTH PRE
 <div id="errors" class="modal hidden"><div class="modal-content"><h4>ERRORS</h4><p id="errText"></p><button type="button" name="choosePlan" id="errClose">Close</button></div></div>
 
 <div id="userDetails" class="modal hidden"><div class="modal-content"><h4>User Details</h4>
-  Email ID:* <input type="email" name="email"> Mobile No. :* <input name="sideCar">
-  <button type="button" name="choosePlan" id="udClose">Close</button><button type="button" name="choosePlan" id="checkPremium">Check Premium</button>
+  <div id="udBody"></div>
 </div></div>
+<template id="confirmPopUp"><form name="myForm">
+  <div>Email ID:* <input type="email" name="email"> Mobile No. :* <input name="sideCar"></div>
+  <p id="udMessage"></p>
+  <div><button type="button" name="choosePlan" id="udClose">Close</button><button type="button" name="choosePlan" id="checkPremium">Check Premium</button></div>
+</form></template>
+<div id="premiumSummary" class="hidden"><h4>Insurance Quotes</h4>
+  <table><tr><th>Policy Type</th><th>Individual Family Medicare Policy</th><th>Arogya Sanjeevani Policy</th></tr>
+  <tr><td>Premium (Excluding GST)</td><td>11948</td><td>14605</td></tr>
+  <tr><td>Worksheet</td><td><a href="#">Worksheet</a></td><td><a href="#">Worksheet</a></td></tr>
+  <tr><td>Prospectus</td><td><a href="#">Prospectus</a></td><td><a href="#">Prospectus</a></td></tr></table>
+  <button type="button">Back</button></div>
 
 <script>
   const $ = (s) => document.querySelector(s);
@@ -64,6 +77,13 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>HEALTH PRE
   window.__calls = [];
   $('#pincodeString').addEventListener('change', () => {
     window.__calls.push('getPincodeAndZone');
+    // As live (11 November 2026): United India's first lookup can fail on its server ("Some
+    // Error occure please try again[object Object]", in an alert there): no zone comes back.
+    // Asked again, it answers.
+    if (!window.__pinFailed && $('#pincodeString').value) {
+      window.__pinFailed = true;
+      return;
+    }
     setTimeout(() => { if (/^\\d{6}$/.test($('#pincodeString').value)) document.querySelector('input[name=pincodeZone]').value = 'Zone A'; }, 300);
   });
   const ageOf = (d, m, y) => { const t = new Date(2026, 10, 2); let a = t.getFullYear() - y; if (t.getMonth() + 1 < m || (t.getMonth() + 1 === m && t.getDate() < d)) a--; return a; };
@@ -167,7 +187,16 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>HEALTH PRE
         if (!tr.isConnected) { clearInterval(watch); return; }
         if (dobBox.value && dobBox.value !== before) {
           clearInterval(watch);
-          setTimeout(() => tr.replaceWith(childRow(dobBox.value)), 300);
+          setTimeout(() => {
+            tr.replaceWith(childRow(dobBox.value));
+            // As live (11 November 2026): United India's reply to the date (dobChange) replaces the
+            // member list. The other children come back in its read-only layout (the date, relation
+            // and marital status as plain boxes, no calendar) with their good-health answers empty.
+            document.querySelectorAll('#childRows tr').forEach((row) => {
+              if (row.querySelector('input#childDOB')?.value === dobBox.value) return;
+              row.replaceWith(savedRow(row));
+            });
+          }, 300);
         }
       }, 100);
     });
@@ -176,14 +205,35 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>HEALTH PRE
     tr.querySelectorAll('input[type=radio]').forEach((r) => r.addEventListener('click', () => { tr.dataset.health = r.value; if (r.value === 'No') show('goodHealth', true); }));
     return tr;
   }
+  // A child United India has taken in, as it redraws it: read-only boxes, the radios left empty.
+  function savedRow(row) {
+    const val = (field) => row.querySelector('[ng-model="' + CM + '.' + field + '"]')?.value ?? '';
+    const dob = (row.querySelector('input#childDOB') ?? row.querySelector('input[ng-model="' + CM + '.dob"]')).value;
+    const gender = val('gender');
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td><input ng-model="' + CM + '.dob" readonly value="' + dob + '"></td>' +
+      '<td><input class="age" ng-model="newChild.age" readonly value="0"></td>' +
+      '<td><select ng-model="' + CM + '.gender"><option value="">select</option><option>Male</option><option>Female</option><option>Transgender</option></select></td>' +
+      '<td><input ng-model="' + CM + '.relationType" readonly value="' + val('relationType') + '"></td>' +
+      '<td><input ng-model="' + CM + '.maritalStatus" readonly value="' + val('maritalStatus') + '"></td>' +
+      '<td><fieldset><input type="radio" name="ynHyperDiaChol" value="OK">Yes <input type="radio" name="ynHyperDiaChol" value="No">No</fieldset></td>';
+    tr.querySelector('select').value = gender;
+    tr.dataset.health = '';
+    tr.querySelectorAll('input[type=radio]').forEach((r) => r.addEventListener('click', () => { tr.dataset.health = r.value; if (r.value === 'No') show('goodHealth', true); }));
+    return tr;
+  }
   $('#addChild').addEventListener('click', () => $('#childRows').appendChild(childRow('')));
   $('#chSave').addEventListener('click', () => {
     const rows = [...document.querySelectorAll('#childRows tr')];
-    const complete = rows.length > 0 && rows.every((tr) => tr.querySelector('input#childDOB').value &&
-      [...tr.querySelectorAll('select')].every((s) => s.value) && tr.dataset.health === 'No');
+    // Save takes the rows as they are; an empty good-health answer only fails later, on the server.
+    const values = (tr) => [
+      (tr.querySelector('input#childDOB') ?? tr.querySelector('input[ng-model="' + CM + '.dob"]')).value,
+      ...['gender', 'relationType', 'maritalStatus'].map((f) => tr.querySelector('[ng-model="' + CM + '.' + f + '"]').value),
+    ];
+    const complete = rows.length > 0 && rows.every((tr) => values(tr).every((v) => v));
+    window.__childHealth = rows.map((tr) => tr.dataset.health ?? '');
     if (!complete) { $('#errText').textContent = 'Please enter all details for every child.'; show('errors', true); return; }
-    $('#savedChildren').innerHTML = rows.map((tr) => '<input class="savedChild" readonly value="' + tr.querySelector('input#childDOB').value + '|' +
-      [...tr.querySelectorAll('select')].map((s) => s.value).join('|') + '">').join('');
+    $('#savedChildren').innerHTML = rows.map((tr) => '<input class="savedChild" readonly value="' + values(tr).join('|') + '">').join('');
     show('addChildren', false);
   });
   $('#getQuote').addEventListener('click', () => {
@@ -198,10 +248,32 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>HEALTH PRE
       $('#errText').textContent = "Please select the proposer's gender, marital status and pre-existing disease.";
       show('errors', true); return;
     }
+    // As live (11 November 2026): the pop-up and its title show first; its form comes from
+    // confirmPopUp.html, downloaded when Get Quote is pressed, and arrives a moment later.
     show('userDetails', true);
+    setTimeout(() => {
+      if ($('#udBody').children.length) return;
+      $('#udBody').appendChild($('#confirmPopUp').content.cloneNode(true));
+      $('#checkPremium').addEventListener('click', checkPremium);
+    }, 1500);
   });
   $('#errClose').addEventListener('click', () => show('errors', false));
-  $('#checkPremium').addEventListener('click', () => { window.__checkPremium = true; });
+  function checkPremium() {
+    window.__checkPremium = true;
+    const email = document.querySelector('#userDetails input[name=email]').value;
+    const mobile = document.querySelector('#userDetails input[name=sideCar]').value;
+    window.__userDetails = { email, mobile };
+    // As live (11 November 2026): a member's empty good-health answer fails on the server.
+    if ((window.__childHealth ?? []).some((h) => h !== 'No')) {
+      $('#udMessage').textContent = '{ "ErrorList": [ "Conversion from string \\"\\" to type Boolean is not valid." ], "ErrorCode": "10" }';
+      return;
+    }
+    if (!/^[6-9]\\d{9}$/.test(mobile)) { $('#udMessage').textContent = 'Please enter valid mobile number.'; return; }
+    if (!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email)) { $('#udMessage').textContent = 'Please enter valid Email address.'; return; }
+    // The real quote comes from United India's server a few seconds later (11 November 2026: the
+    // app must wait for it, not read a number already on the page).
+    setTimeout(() => { show('userDetails', false); show('premiumSummary', true); }, 3000);
+  }
 </script></body></html>`;
 
 const home = `<!doctype html><html><head><meta charset="utf-8"><title>UIIC - Intermediary Portal Home</title></head><body>

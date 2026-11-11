@@ -48,6 +48,10 @@ export interface FqfApi {
     /** Fills the insurer's quote form for a saved client (United India health so far). */
     /** Motor: for a saved vehicle; health: for a client; travel: for a travel client. */
     run(request: QuoteRunRequest): Promise<AppResult<QuoteRunResultView>>;
+    /** Stops the run in progress where it is. */
+    cancel(): Promise<AppResult<{ cancelled: boolean }>>;
+    /** Opens a quote PDF the app saved (by its file name). */
+    openPdf(name: string): Promise<AppResult<{ opened: boolean }>>;
   };
   clients: {
     list(): Promise<AppResult<ClientListResponse>>;
@@ -55,6 +59,8 @@ export interface FqfApi {
     get(id: string): Promise<AppResult<ClientView>>;
     save(request: SaveClientRequest): Promise<AppResult<{ id: string }>>;
     delete(id: string): Promise<AppResult<{ deleted: boolean }>>;
+    /** Every saved client, a sheet per kind, in an Excel file (save dialog). */
+    exportAll(): Promise<AppResult<{ saved: boolean; file: string | null }>>;
   };
   /** Insurer pages as tabs of the app window. */
   portals: {
@@ -117,8 +123,8 @@ export interface FqfApi {
 export const API_SHAPE = {
   app: ['getInfo'],
   insurers: ['list', 'saveLogin', 'forgetLogin', 'openPortal', 'signOut', 'record'],
-  quotes: ['run'],
-  clients: ['list', 'get', 'save', 'delete'],
+  quotes: ['run', 'cancel', 'openPdf'],
+  clients: ['list', 'get', 'save', 'delete', 'exportAll'],
   portals: ['tabs', 'show', 'close', 'setBounds'],
   travellers: ['list', 'get', 'save', 'delete'],
   rural: ['list', 'get', 'save', 'delete'],

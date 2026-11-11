@@ -12,7 +12,7 @@ import type { ClientInput } from '../../shared/contracts/client';
 import type { NiaHealthPolicy } from '../../shared/insurers/nia-health';
 import { niaHealthForm, planNiaHealthQuote, type NiaHealthStep } from './nia-health';
 import { FORM_PATH, openNiaForm, pathOf, type NiaFormToOpen } from './run-nia-motor';
-import { exec, type QuoteRunResult } from './run-uiic-health';
+import { exec, runPause, type QuoteRunResult } from './run-uiic-health';
 
 /** The question New India asks on the dashboard before it opens some forms (text it starts with). */
 const ASKED_ON_OPEN = [
@@ -117,7 +117,7 @@ export async function fillNiaForm(deps: {
     if ('message' in opened) return opened;
     page = opened.page;
     // New India may ask its PAN question a moment after the form shows.
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await runPause(1500);
   }
   const wc = page.webContents;
   const before = await exec(wc, { op: 'popup' });

@@ -149,6 +149,12 @@ export type PageOp =
       errorPattern?: string;
       /** Other captions the amount may follow, tried after `label`. */
       alsoLabels?: string[];
+      /**
+       * Only an amount the page shows after this step starts (a quote worked out by the server),
+       * never text already on the page (United India's "Premium Calculator" heading above its
+       * sum-insured list: 11 November 2026).
+       */
+      fresh?: boolean;
     }
   /**
    * A box that opens a list of links or items when pressed (HDFC PIE's retail health forms:
@@ -171,6 +177,12 @@ export type PageOp =
       rowKey?: RowKey;
       /** Carry on when the wait times out (the wait only helps; it is not a check). */
       soft?: boolean;
+      /**
+       * If nothing comes in time, clear this box and type `value` again (as a person would after
+       * the page's own error), then wait once more. United India's PIN code lookup can fail on its
+       * server ("Some Error occure please try again", 11 November 2026).
+       */
+      retype?: { selector: string; value: string };
     }
   | { op: 'pause'; ms: number }
   | {
@@ -178,8 +190,13 @@ export type PageOp =
       name: string;
       value: string;
       within?: string;
-      row?: 'current';
+      /**
+       * 'current': the row the last ensureEmptyRow marked (else found by `rowKey`); 'key': the row
+       * found by `rowKey` alone (its `keyIndex`-th match, for twins), whichever row was marked.
+       */
+      row?: 'current' | 'key';
       rowKey?: RowKey;
+      keyIndex?: number;
     }
   | { op: 'clickButton'; text: string; within?: string; timeoutMs: number }
   /**
@@ -212,6 +229,19 @@ export type PageOp =
    * value (for example the plans a form offers, lowest first).
    */
   | { op: 'pickNth'; name: string; index: number; timeoutMs: number }
+  /**
+   * Reads every plan of a quotes table whose plans are its columns (United India's "Insurance
+   * Quotes": a "Policy Type" header row naming the plans, a "Premium (Excluding GST)" row): each
+   * plan's name and the amount in the row whose first cell holds `row`. Waits for the table (the
+   * server works the quote out); fails `page-says: …` when the page shows `errorPattern` instead.
+   */
+  | {
+      op: 'readPlans';
+      header: string;
+      row: string;
+      timeoutMs: number;
+      errorPattern?: string;
+    }
   /** Reads the first data row of the pop-up's table: its label and the cell under `column`. */
   | { op: 'readTable'; within: string; column: string; timeoutMs: number }
   | {
@@ -224,6 +254,8 @@ export type PageOp =
       date: string;
       within?: string;
       row?: 'current';
+      /** How long to wait for the date box to appear; 15 seconds if absent. */
+      waitMs?: number;
     }
   | { op: 'errors' }
   /** The text of any visible pop-up (dialog), whatever it says: `ok: false` with `errors`. */
@@ -275,6 +307,8 @@ export interface PageOpResult {
   /** For "readTable": the cell read, and the row's label; "readValue", "pickNth": the value. */
   value?: string;
   label?: string;
+  /** For "readPlans": each plan's name and amount, as the page shows them. */
+  plans?: { name: string; amount: string }[];
 }
 
 export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
@@ -296,6 +330,18 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
     // The innermost matching pop-up (a modal-content inside a modal, for example).
     return roots.sort((a, b) => text(a).length - text(b).length)[0] ?? null;
   };
+  /** Every visible pop-up containing `within`, innermost first (the title's may not hold the form). */
+  const scopes = (within: string): Element[] =>
+    Array.from(document.querySelectorAll(DIALOGS))
+      .filter((el) => visible(el) && text(el).includes(within))
+      .sort((a, b) => text(a).length - text(b).length);
+  /** For support: the boxes a pop-up shows, by name or id. */
+  const boxesIn = (root: ParentNode): string =>
+    Array.from(root.querySelectorAll('input, select, textarea'))
+      .filter(visible)
+      .map((el) => el.getAttribute('name') ?? el.id ?? el.tagName.toLowerCase())
+      .slice(0, 8)
+      .join(', ');
   const mark = (row: Element): Element => {
     for (const marked of Array.from(document.querySelectorAll('[data-fqf-row]'))) {
       if (marked !== row) marked.removeAttribute('data-fqf-row');
@@ -324,16 +370,39 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
     const found = rows.find((tr) => pending?.(tr) ?? true) ?? rows[0];
     return found ? mark(found) : null;
   };
+  /** The row showing `key` (its `index`-th match), marked as the current row. */
+  const keyedRow = (key: RowKey, index = 0): Element | null => {
+    const root = scope(key.within);
+    const rows = root
+      ? Array.from(root.querySelectorAll('tr')).filter(
+          (tr) =>
+            visible(tr) &&
+            Array.from(tr.querySelectorAll(key.input)).some(
+              (i) => (i as HTMLInputElement).value === key.value,
+            ),
+        )
+      : [];
+    const found = rows[index];
+    return found ? mark(found) : null;
+  };
   const rootFor = (
-    c: { within?: string; row?: 'current'; rowKey?: RowKey },
+    c: { within?: string; row?: 'current' | 'key'; rowKey?: RowKey; keyIndex?: number },
     pending?: (row: Element) => boolean,
-  ): ParentNode | null => (c.row === 'current' ? currentRow(c.rowKey, pending) : scope(c.within));
+  ): ParentNode | null =>
+    c.row === 'current'
+      ? currentRow(c.rowKey, pending)
+      : c.row === 'key' && c.rowKey
+        ? keyedRow(c.rowKey, c.keyIndex)
+        : scope(c.within);
+  /** The advisor cancelled the run: exec (run-uiic-health.ts) has set this. */
+  const cancelled = (): boolean => (window as { __fqfStop?: boolean }).__fqfStop === true;
   const until = async <T>(
     find: () => T | null | undefined,
     timeoutMs: number,
   ): Promise<T | null> => {
     const deadline = Date.now() + Math.min(timeoutMs, 60_000);
     for (;;) {
+      if (cancelled()) return null;
       const found = find();
       if (found) return found;
       if (Date.now() >= deadline) return null;
@@ -564,11 +633,31 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         const root = rootFor(command);
         return root ? (first(root, command.selector) as HTMLInputElement | null) : null;
       };
-      const found = await until(() => {
+      const filled = () => {
         const value = box()?.value.trim() ?? '';
         return value !== '' && !rejected.includes(value) ? true : null;
-      }, command.timeoutMs);
-      if (found) return { ok: true };
+      };
+      let found = await until(filled, command.timeoutMs);
+      if (!found && command.retype) {
+        const input = first(document, command.retype.selector);
+        if (input instanceof HTMLInputElement) {
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+          const put = (value: string) => {
+            if (setter?.set) setter.set.call(input, value);
+            else input.value = value;
+            fire(input, 'input');
+            fire(input, 'keyup');
+            fire(input, 'change');
+          };
+          input.focus();
+          put('');
+          await sleep(400);
+          put(command.retype.value);
+          input.blur();
+          found = await until(filled, command.timeoutMs);
+        }
+      }
+      if (found) return { ok: true, ...(command.retype ? { detail: 'filled' } : {}) };
       if (command.soft) return { ok: true, detail: 'wait-timed-out' };
       // What the box showed, without its value: missing, empty, or one of the rejected values.
       const last = box();
@@ -611,8 +700,12 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
     }
     case 'clickButton': {
       const button = await until(() => {
-        const root = scope(command.within);
-        return root ? buttonWithText(root, command.text) : null;
+        if (!command.within) return buttonWithText(document, command.text);
+        for (const root of scopes(command.within)) {
+          const found = buttonWithText(root, command.text);
+          if (found) return found;
+        }
+        return null;
       }, command.timeoutMs);
       if (!button) return { ok: false, detail: 'not-found' };
       if ((button as HTMLButtonElement).disabled) return { ok: false, detail: 'disabled' };
@@ -665,7 +758,16 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           v.includes(String(y)) && v.includes(mon) && new RegExp(`(^|\\D)0?${d}(\\D|$)`).test(v)
         );
       };
-      const root = rootFor(command);
+      // The box may arrive after the fields around it: United India draws its date boxes from a
+      // template downloaded when the proposal opens (slower on a fresh install, 6 November 2026).
+      const drawn = (): ParentNode | null => {
+        const here = rootFor(command);
+        if (!here) return null;
+        const ready =
+          first(here, command.input) ?? (command.trigger ? first(here, command.trigger) : null);
+        return ready ? here : null;
+      };
+      const root = (await until(drawn, command.waitMs ?? 15_000)) ?? rootFor(command);
       if (!root) return { ok: false, detail: 'scope-not-shown' };
       const box = () => first(root, command.input) as HTMLInputElement | null;
       // Already showing that date (United India fills the risk start date with today itself).
@@ -691,7 +793,10 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       let trigger: HTMLElement | null = command.trigger ? first(root, command.trigger) : null;
       if (!trigger) {
         const input = first(root, command.input);
-        if (!input) return { ok: false, detail: 'trigger-not-found' };
+        if (!input) {
+          const onPage = root.querySelectorAll(command.input).length > 0;
+          return { ok: false, detail: onPage ? 'date-box-hidden' : 'date-box-not-shown' };
+        }
         const looksLikeOpener = (el: Element): boolean => {
           const marks = [
             el.getAttribute('class'),
@@ -896,16 +1001,34 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       // A dropdown (option by value, AngularJS "string:" value, or visible text), a box or a
       // text area (New India's address).
       const find = (): HTMLSelectElement | HTMLInputElement | HTMLTextAreaElement | null => {
-        const root = scope(command.within);
-        const el = root ? first(root, command.selector) : null;
+        // Within a pop-up: any pop-up showing that text (the one with the title may not hold the
+        // form, United India's User Details).
+        const roots: ParentNode[] = command.within ? scopes(command.within) : [document];
+        let el: HTMLElement | null = null;
+        for (const root of roots) {
+          el = first(root, command.selector);
+          if (el) break;
+        }
         return el instanceof HTMLSelectElement ||
           el instanceof HTMLInputElement ||
           el instanceof HTMLTextAreaElement
           ? el
           : null;
       };
+      // A box the page is still drawing (a pop-up whose form is a template it downloads): waited
+      // for, when the step allows it.
+      if (!find() && command.waitMs) await until(find, command.waitMs);
       for (let attempt = 0; attempt < 2; attempt += 1) {
         let el = find();
+        if (!el && attempt === 0 && command.within) {
+          const shown = scopes(command.within)[0];
+          return {
+            ok: false,
+            detail: shown
+              ? `not-found (the "${command.within}" pop-up shows boxes: ${boxesIn(shown) || 'none'})`
+              : `not-found (no "${command.within}" pop-up shown)`,
+          };
+        }
         if (!el) return { ok: false, detail: attempt === 0 ? 'not-found' : 'reset-by-page' };
         let want = command.value;
         if (el instanceof HTMLSelectElement) {
@@ -995,6 +1118,58 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         if (find()?.checked === command.checked) return { ok: true };
       }
       return { ok: false, detail: 'reset-by-page' };
+    }
+    case 'readPlans': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim();
+      const has = (cell: Element | undefined, words: string) =>
+        !!cell && loose(text(cell)).toLowerCase().startsWith(words.toLowerCase());
+      // A cell's amount: its text, or a box's value (some pages show it in a read-only box).
+      const amountIn = (cell: Element): string => {
+        const shown =
+          loose(text(cell)) || (cell.querySelector<HTMLInputElement>('input')?.value ?? '');
+        const m = /(\d[\d,]*(?:\.\d{1,2})?)/.exec(shown);
+        return m && m[1]!.replace(/\D/g, '').length >= 2 ? m[1]! : '';
+      };
+      const read = (): { name: string; amount: string }[] | null => {
+        for (const table of Array.from(document.querySelectorAll('table'))) {
+          if (!visible(table)) continue;
+          const rows = Array.from(table.rows).filter((r) => visible(r));
+          const header = rows.find((r) => has(r.cells[0], command.header));
+          const amounts = rows.find((r) => r !== header && has(r.cells[0], command.row));
+          if (!header || !amounts) continue;
+          const plans = Array.from(header.cells)
+            .slice(1)
+            .map((cell, i) => {
+              const amountCell = amounts.cells[i + 1];
+              return { name: loose(text(cell)), amount: amountCell ? amountIn(amountCell) : '' };
+            })
+            .filter((p) => p.name && p.amount);
+          if (plans.length > 0) return plans;
+        }
+        return null;
+      };
+      const errors = command.errorPattern ? new RegExp(command.errorPattern, 'i') : null;
+      const complaint = (): string | null => {
+        if (!errors) return null;
+        const hit = Array.from(
+          document.querySelectorAll<HTMLElement>('label, span, div, p, li, strong'),
+        ).find((el) => el.children.length === 0 && visible(el) && errors.test(text(el)));
+        return hit ? text(hit).slice(0, 200) : null;
+      };
+      const found = await until(
+        () => read() ?? (complaint() ? 'complaint' : null),
+        command.timeoutMs,
+      );
+      if (found && found !== 'complaint') return { ok: true, plans: found };
+      const said = complaint();
+      if (said) return { ok: false, detail: `page-says: ${said}` };
+      const seen = Array.from(document.querySelectorAll<HTMLElement>('body *'))
+        .filter((el) => el.children.length === 0 && visible(el) && /premium|quote/i.test(text(el)))
+        .map((el) => text(el).slice(0, 60))
+        .filter((t, i, all) => all.indexOf(t) === i)
+        .slice(0, 4)
+        .join(' | ');
+      return { ok: false, detail: seen ? `not-shown (page shows: ${seen})` : 'not-shown' };
     }
     case 'readTable': {
       // The first data row of the table in the pop-up: the label and the cell under the header
@@ -1664,23 +1839,57 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       const loose = (t: string) => t.replace(/\s+/g, ' ').trim();
       const labels = [command.label, ...(command.alsoLabels ?? [])].map((l) => l.toLowerCase());
       const errors = command.errorPattern ? new RegExp(command.errorPattern, 'i') : null;
-      const AMOUNT = /(?:rs\.?|₹|inr)?\s*([\d,]+(?:\.\d{1,2})?)/i;
-      const amount = (): string | null => {
-        for (const label of labels) {
-          const holders = Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(
+      // A number standing alone: not part of a date (11/11/2026) or a longer number.
+      const AMOUNT = /(?<![\d/])(?:rs\.?|₹|inr)?\s*(\d[\d,]*(?:\.\d{1,2})?)(?![\d/]|-\d)/i;
+      // The text a person reads as a caption and its amount: never the options of a list, a
+      // button's words or anything hidden.
+      const readable = (el: Element): string => {
+        const parts: string[] = [];
+        const walk = (node: Node): void => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            parts.push(node.textContent ?? '');
+            return;
+          }
+          if (!(node instanceof Element)) return;
+          if (/^(SELECT|OPTION|SCRIPT|STYLE|TEXTAREA|BUTTON)$/.test(node.tagName)) return;
+          if (node !== el && !visible(node)) return;
+          node.childNodes.forEach(walk);
+        };
+        walk(el);
+        return loose(parts.join(' '));
+      };
+      const chains = (label: string): Element[][] =>
+        Array.from(document.querySelectorAll<HTMLElement>('body *'))
+          .filter(
             (el) =>
               el.children.length <= 3 &&
               visible(el) &&
+              !el.closest('select') &&
               loose(text(el)).toLowerCase().includes(label),
-          );
-          for (const el of holders) {
-            // The amount after the label in its own text, else in its row (the next cell).
-            for (let n: Element | null = el, up = 0; n && up < 3; n = n.parentElement, up += 1) {
-              const t = loose(text(n));
+          )
+          .map((el) => {
+            // The label's own element, then up to two around it (its row: the next cell).
+            const chain: Element[] = [];
+            for (let n: Element | null = el; n && chain.length < 3; n = n.parentElement)
+              chain.push(n);
+            return chain;
+          });
+      // What the page already said when the step began (left out when only fresh text counts).
+      const before = new Map<Element, string>();
+      if (command.fresh) {
+        for (const label of labels)
+          for (const chain of chains(label)) for (const n of chain) before.set(n, readable(n));
+      }
+      const amount = (): string | null => {
+        for (const label of labels) {
+          for (const chain of chains(label)) {
+            for (const n of chain) {
+              const t = readable(n);
+              if (before.get(n) === t) continue;
               const at = t.toLowerCase().indexOf(label);
               if (at < 0) continue;
               const m = AMOUNT.exec(t.slice(at + label.length));
-              if (m && /\d/.test(m[1]!) && m[1]!.replace(/\D/g, '').length >= 2) return m[1]!;
+              if (m && m[1]!.replace(/\D/g, '').length >= 2) return m[1]!;
             }
           }
         }
@@ -1699,9 +1908,15 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       );
       if (found && found !== 'complaint') return { ok: true, value: found };
       const said = complaint();
-      return said
-        ? { ok: false, detail: `page-says: ${said}` }
-        : { ok: false, detail: 'not-shown' };
+      if (said) return { ok: false, detail: `page-says: ${said}` };
+      // For support (a page not recorded): what the page says about premiums instead.
+      const seen = Array.from(document.querySelectorAll<HTMLElement>('body *'))
+        .filter((el) => el.children.length === 0 && visible(el) && /premium/i.test(text(el)))
+        .map((el) => text(el).slice(0, 60))
+        .filter((t, i, all) => all.indexOf(t) === i)
+        .slice(0, 4)
+        .join(' | ');
+      return { ok: false, detail: seen ? `not-shown (page shows: ${seen})` : 'not-shown' };
     }
     case 'pickFromList': {
       const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();

@@ -132,7 +132,7 @@ module.exports = {
      <div id="result"></div>
      <script>
        document.getElementById('next').addEventListener('click', async () => {
-         const body = { proposer: { name: nm.value, dob: dob.value, mobile: mob.value, email: em.value }, relation: rel.value, si: Number(si.value) };
+         const body = { proposer: { name: nm.value, dob: dob.value, mobile: mob.value, email: em.value }, relation: rel.value, si: Number(si.value), ynDeclared: '' };
          const r = await fetch('/api/quote', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
          const data = await r.json();
          document.getElementById('q').style.display = 'none';

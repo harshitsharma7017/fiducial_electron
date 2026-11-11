@@ -4,13 +4,14 @@
 // While recording, every window of the insurer (the portal and its pop-ups, including ones that
 // open during the recording, such as a premium calculator) is drained every 700 ms
 // (form-recorder-agent.ts), and the portal's own requests are noted: method, redacted address, resource type and, for request
-// bodies, field names only. Every string is redacted again here before it is kept. On stop the
+// bodies, field names only (and which were sent empty). Every string is redacted again here before it is kept. On stop the
 // recording is written to <userData>/recordings (owner-only), and its path is returned.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { OnBeforeRequestListenerDetails, Session } from 'electron';
 import type { PortalPage } from './portal-host';
 import {
+  bodyEmptyFieldNames,
   bodyFieldNames,
   RECORDING_FORMAT,
   redactChoice,
@@ -51,6 +52,8 @@ type Entry =
       url: string;
       resourceType: string;
       bodyFields: string[] | null;
+      /** The body's fields sent empty, by name. */
+      emptyFields: string[] | null;
     }
   | { at: number; kind: 'page'; page: number; window: number; url: string };
 
@@ -152,6 +155,7 @@ export function createFormRecorder(deps: { dir: string; logger: Logger }): FormR
       details.resourceType === ('fetch' as string);
     if (!interesting || rec.entries.length > 5000) return;
     let bodyFields: string[] | null = null;
+    let emptyFields: string[] | null = null;
     const bytes = details.uploadData?.[0]?.bytes;
     if (bytes && bytes.length < 256 * 1024) {
       const body = bytes.toString('utf8');
@@ -161,6 +165,7 @@ export function createFormRecorder(deps: { dir: string; logger: Logger }): FormR
           ? 'application/x-www-form-urlencoded'
           : '';
       bodyFields = bodyFieldNames(body, guess);
+      emptyFields = bodyEmptyFieldNames(body, guess);
     }
     rec.entries.push({
       at: Date.now(),
@@ -169,6 +174,7 @@ export function createFormRecorder(deps: { dir: string; logger: Logger }): FormR
       url: redactUrl(details.url),
       resourceType: details.resourceType,
       bodyFields,
+      emptyFields,
     });
   };
 

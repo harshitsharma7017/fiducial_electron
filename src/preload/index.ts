@@ -53,6 +53,14 @@ const api: FqfApi = {
   quotes: {
     run: (request) =>
       ipcRenderer.invoke(IPC_CHANNELS.quotesRun, request) as Promise<AppResult<QuoteRunResultView>>,
+    cancel: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.quotesCancel, {}) as Promise<
+        AppResult<{ cancelled: boolean }>
+      >,
+    openPdf: (name) =>
+      ipcRenderer.invoke(IPC_CHANNELS.quotesOpenPdf, { name }) as Promise<
+        AppResult<{ opened: boolean }>
+      >,
   },
   clients: {
     list: () =>
@@ -64,6 +72,10 @@ const api: FqfApi = {
     delete: (id) =>
       ipcRenderer.invoke(IPC_CHANNELS.clientsDelete, { id }) as Promise<
         AppResult<{ deleted: boolean }>
+      >,
+    exportAll: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.clientsExport, {}) as Promise<
+        AppResult<{ saved: boolean; file: string | null }>
       >,
   },
   portals: {

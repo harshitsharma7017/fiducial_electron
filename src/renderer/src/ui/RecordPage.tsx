@@ -5,6 +5,7 @@
 import { CalendarClock, Plus, Search, SearchX, type LucideIcon } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { ImportKind } from '../../../shared/import/import-kinds';
+import { ExportButton } from '../import/ExportButton';
 import { ImportButton } from '../import/ImportDialog';
 import { ActionMenu, type MenuEntry } from './Menu';
 import { EmptyState, PageHeader, SkeletonCards } from './PageHeader';
@@ -100,6 +101,7 @@ export function RecordPage(props: {
         actions={
           all && (
             <>
+              <ExportButton />
               {importButton}
               {add}
             </>

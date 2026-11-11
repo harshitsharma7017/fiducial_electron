@@ -12,6 +12,13 @@ import {
 } from '../../../shared/contracts/travel';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
 import { runQuote } from '../quote/run';
+import {
+  TRAVEL_OCCUPATION_LABELS,
+  UiicRequiredFields,
+  useUiicRequired,
+} from '../quote/UiicRequiredFields';
+
+export { TRAVEL_OCCUPATION_LABELS };
 
 const SUMS: { value: TravelSumInsured; label: string }[] = [
   { value: '50000', label: '50,000' },
@@ -19,14 +26,6 @@ const SUMS: { value: TravelSumInsured; label: string }[] = [
   { value: '250000', label: '2,50,000' },
   { value: '500000', label: '5,00,000 (Worldwide only)' },
 ];
-
-export const TRAVEL_OCCUPATION_LABELS: Record<TravelOccupation, string> = {
-  SelfEmployed: 'Self-employed',
-  Unemployed: 'Unemployed',
-  Salaried: 'Salaried',
-  Service: 'Service',
-  Professional: 'Professional',
-};
 
 /** The travel occupations, in the form's order. */
 export const TRAVEL_OCCUPATION_LIST: readonly TravelOccupation[] = TRAVEL_OCCUPATIONS;
@@ -63,12 +62,23 @@ export function TravelProposalPanel(props: {
   const [days, setDays] = useState('7');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const required = useUiicRequired({
+    kind: 'traveller',
+    id: props.travellerId,
+    form: mediclaim ? 'omp' : 'travel',
+  });
 
   const excludesUsa = destination === 'worldwide-excluding-usa-canada';
   const run = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setResult(null);
+    const problem = await required.save();
+    if (problem) {
+      setBusy(false);
+      setResult({ error: problem });
+      return;
+    }
     const common = {
       destination,
       startDate,
@@ -187,8 +197,9 @@ export function TravelProposalPanel(props: {
           required
         />
       </label>
+      <UiicRequiredFields required={required} />
       <div className="insurer-actions">
-        <button type="submit" disabled={busy}>
+        <button type="submit" disabled={busy || required.loading || !required.complete}>
           {busy
             ? 'Filling United India…'
             : ompForm

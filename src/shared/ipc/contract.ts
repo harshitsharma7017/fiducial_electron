@@ -223,7 +223,7 @@ export type SavePropertyRequest = z.input<typeof savePropertyRequestSchema>;
 
 export const quoteRunResultSchema = z
   .object({
-    outcome: z.enum(['ready', 'refused', 'failed']),
+    outcome: z.enum(['ready', 'refused', 'failed', 'cancelled']),
     step: z.string().max(120).nullable(),
     message: z.string().max(1200),
     problems: z.array(z.string().max(400)).max(20),
@@ -234,6 +234,17 @@ export const quoteRunResultSchema = z
       .optional(),
     /** E-proposals: what the advisor still fills by hand, and the insurer's messages about it. */
     toDo: z.array(z.string().max(400)).max(30).optional(),
+    /** Every plan quoted for the same request, and what their amounts are. */
+    plans: z
+      .array(z.object({ name: z.string().max(200), amount: z.string().max(40) }).strict())
+      .max(20)
+      .optional(),
+    amountLabel: z.string().max(80).optional(),
+    /** The quote saved as a PDF in the Downloads folder: the file's name. */
+    pdf: z
+      .object({ name: z.string().max(200) })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -510,6 +521,16 @@ export const ipcContract = {
     request: quoteRunRequestSchema,
     response: quoteRunResultSchema,
   },
+  [IPC_CHANNELS.quotesOpenPdf]: {
+    /** A quote PDF the app saved, by its file name (never a path). */
+    request: z.object({ name: z.string().min(1).max(200) }).strict(),
+    response: z.object({ opened: z.boolean() }).strict(),
+  },
+  [IPC_CHANNELS.quotesCancel]: {
+    request: z.object({}).strict(),
+    /** False when no run was in progress to stop. */
+    response: z.object({ cancelled: z.boolean() }).strict(),
+  },
   [IPC_CHANNELS.portalsTabs]: {
     /** Answers once the tabs changed after version `since` (or after 20 seconds anyway). */
     request: z.object({ since: z.int().min(0) }).strict(),
@@ -534,6 +555,11 @@ export const ipcContract = {
       })
       .strict(),
     response: z.object({ set: z.literal(true) }).strict(),
+  },
+  [IPC_CHANNELS.clientsExport]: {
+    /** Every saved client, a sheet per kind, in an Excel file the advisor picks (save dialog). */
+    request: z.object({}).strict(),
+    response: z.object({ saved: z.boolean(), file: z.string().max(260).nullable() }).strict(),
   },
   [IPC_CHANNELS.clientsDelete]: {
     request: clientOnly,

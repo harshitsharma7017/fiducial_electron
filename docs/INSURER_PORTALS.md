@@ -37,8 +37,15 @@ From the signed-in home page the app:
 5. Adds the **children**, if any, in **Add Children**. For each child it works in a new row, pressing
    **Add Child** only when there is no empty row: date of birth, gender, **Son** or **Daughter**,
    marital status **Unmarried**, and good health **No**, then **Ok**. Then **Save**.
-6. Presses **Get Quote**, then **stops at "User Details"**. The advisor checks the email and mobile
-   and presses **Check Premium**; the app never presses it.
+6. Presses **Get Quote**, fills **User Details** with the client's own e-mail and mobile, presses
+   **Check Premium** (decision of 11 November 2026: United India may send the quote to that e-mail
+   and mobile) and reads the premium. What United India shows after Check Premium was not
+   recorded: if the premium is not found, the run says what the page showed instead.
+
+Before a United India run, the quote drawer asks for any detail the form requires that the
+client's record lacks (e-mail, mobile, marital status, occupation, PAN, Aadhaar or passport number,
+state, city, village, address, nominee, the intermediary's place), saves it to the client, and the
+run fills it (src/shared/insurers/uiic-required.ts).
 
 **Refused before anything is touched, with the reason:**
 - parents, individual cover, or Super Topup;

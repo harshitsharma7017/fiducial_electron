@@ -3,7 +3,15 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { app, dialog, powerSaveBlocker, safeStorage, session, type BrowserWindow } from 'electron';
+import {
+  app,
+  dialog,
+  powerSaveBlocker,
+  safeStorage,
+  session,
+  shell,
+  type BrowserWindow,
+} from 'electron';
 import { createAadhaarVault, createPassportVault } from './clients/aadhaar-vault';
 import { createClientService } from './clients/service';
 import { createInsurerCredentials } from './insurers/credentials';
@@ -12,8 +20,11 @@ import { createPortalHost } from './insurers/portal-host';
 import { createPortalWindows } from './insurers/portal-windows';
 import { createSessionClock } from './insurers/session-clock';
 import { createSessionKeeper } from './insurers/session-keeper';
+import { createQuotePdfs } from './quotes/quote-pdf';
+import { createPdfRenderer } from './quotes/render-pdf';
 import { createQuoteService } from './quotes/service';
 import { createImportService } from './import/service';
+import { createClientExportService } from './export/clients-export';
 import { createVaultOpener } from './secrets/vault-opener';
 import { openClientStore } from './storage/client-store';
 import { createInsurerService, insurerPortalsEnabled } from './insurers/service';
@@ -174,11 +185,17 @@ function start(): void {
       clients,
       windowsOf: (id) => portalWindows.pagesOf(id),
       logger,
+      pdfs: createQuotePdfs({
+        dir: () => app.getPath('downloads'),
+        openPath: (path) => shell.openPath(path),
+        render: createPdfRenderer(logger),
+      }),
     });
     const imports = createImportService({ clients, window: () => appWindow, logger });
+    const exports = createClientExportService({ clients, window: () => appWindow, logger });
     registerIpc(
       createDispatcher(
-        createHandlers({ insurers, clients, quotes, imports, portals: portalHost }),
+        createHandlers({ insurers, clients, quotes, imports, exports, portals: portalHost }),
         {
           isTrustedSender: senderPolicy.isTrusted,
           logger,

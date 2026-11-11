@@ -9,8 +9,11 @@ import { showAppScreens } from '../insurers/PortalTabs';
 
 export type QuoteRunEvent =
   | { phase: 'start'; insurerId: string }
-  /** `tabId`: the tab the run ended in (the form it filled), if it was one of the insurer's. */
-  | { phase: 'end'; insurerId: string; tabId: string | null };
+  /**
+   * `tabId`: the tab the run ended in (the form it filled), if it was one of the insurer's.
+   * `pdf`: the quote saved as a PDF in the Downloads folder (its file name), if any.
+   */
+  | { phase: 'end'; insurerId: string; tabId: string | null; pdf: string | null };
 const listeners = new Set<(event: QuoteRunEvent) => void>();
 
 export function onQuoteRun(listener: (event: QuoteRunEvent) => void): () => void {
@@ -42,14 +45,29 @@ async function activeTabOf(insurerId: string): Promise<string | null> {
   return active?.insurerId === insurerId ? active.id : null;
 }
 
+/** Stops the run in progress; false if there was none to stop. */
+export async function cancelQuoteRun(): Promise<boolean> {
+  const result = await window.fqf.quotes.cancel().catch(() => null);
+  return result?.ok === true && result.data.cancelled;
+}
+
 export async function runQuote(request: QuoteRunRequest): ReturnType<typeof window.fqf.quotes.run> {
   const { insurerId } = request;
   for (const listener of listeners) listener({ phase: 'start', insurerId });
+  let pdf: string | null = null;
   try {
-    return await window.fqf.quotes.run(request);
+    const result = await window.fqf.quotes.run(request);
+    if (result.ok) pdf = result.data.pdf?.name ?? null;
+    return result;
   } finally {
     const tabId = await activeTabOf(insurerId);
     showAppScreens();
-    for (const listener of listeners) listener({ phase: 'end', insurerId, tabId });
+    for (const listener of listeners) listener({ phase: 'end', insurerId, tabId, pdf });
   }
+}
+
+/** Opens a quote PDF the app saved; false if it could not. */
+export async function openQuotePdf(name: string): Promise<boolean> {
+  const result = await window.fqf.quotes.openPdf(name).catch(() => null);
+  return result?.ok === true && result.data.opened;
 }

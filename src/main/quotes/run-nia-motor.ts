@@ -7,11 +7,10 @@
 import type { PortalPage } from '../insurers/portal-host';
 import type { Vehicle } from '../../shared/contracts/vehicle';
 import { NIA_BY_HAND, NIA_FORMS, planNiaMotorQuote } from './nia-motor';
-import { exec, type QuoteRunResult } from './run-uiic-health';
+import { exec, runPause, type QuoteRunResult } from './run-uiic-health';
 
 export const FORM_PATH = '/NIABancsPortal/QuoteNonCustomer.html';
 const DASHBOARD_PATH = '/NIABancsPortal/NonCustomerDashboard.html';
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const pathOf = (url: string): string => {
   try {
@@ -197,7 +196,7 @@ export async function openNiaForm(
   // The form opens in the same page (recorded): wait for it, then for its heading (the form
   // loads its lists first).
   for (let waited = 0; waited < 30_000; waited += 500) {
-    await sleep(500);
+    await runPause(500);
     const page = pages().find((w) => pathOf(w.webContents.getURL()) === FORM_PATH);
     if (!page) {
       const popup = onPopup && !dashboard.isDestroyed() ? await exec(wc, { op: 'popup' }) : null;

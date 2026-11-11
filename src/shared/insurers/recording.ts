@@ -3,7 +3,7 @@
 //
 // A recording holds structure only: pages, fields (kind, name, label, options), buttons, the order
 // of clicks and page changes, the portal's messages, and the requests it sent (address and field
-// names). It never holds what was typed into a text, number, date, email, phone or password box:
+// names, and which of them were sent empty). It never holds what was typed into a text, number, date, email, phone or password box:
 // only that something was entered, and its length. Any text kept (labels, headings, messages, the
 // text around a premium) passes through redactText, which masks digit runs of 8 or more (phone,
 // ID and policy numbers) and email addresses; addresses pass through
@@ -85,6 +85,44 @@ export function bodyFieldNames(body: string, contentType: string): string[] | nu
             names.push(path);
             walk(v, path, depth + 1);
           }
+        }
+      };
+      walk(JSON.parse(body), '', 0);
+      return limit(names);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * The fields of a request body sent empty (""), by name only: what a portal's server may refuse
+ * ("Conversion from string "" to type Boolean is not valid.", United India, 11 November 2026).
+ * Returns null for bodies that are neither form-encoded nor JSON.
+ */
+export function bodyEmptyFieldNames(body: string, contentType: string): string[] | null {
+  const limit = (names: string[]) =>
+    [...new Set(names)].slice(0, 200).map((n) => redactText(n, 80));
+  if (/application\/x-www-form-urlencoded/i.test(contentType)) {
+    return limit([...new URLSearchParams(body)].filter(([, v]) => v === '').map(([k]) => k));
+  }
+  if (/json/i.test(contentType) || /^\s*[[{]/.test(body)) {
+    try {
+      const names: string[] = [];
+      const walk = (value: unknown, prefix: string, depth: number): void => {
+        if (depth > 6 || names.length > 400) return;
+        if (value === '') {
+          names.push(prefix);
+          return;
+        }
+        if (Array.isArray(value)) {
+          value.slice(0, 20).forEach((v, i) => walk(v, `${prefix}[${i}]`, depth + 1));
+          return;
+        }
+        if (value && typeof value === 'object') {
+          for (const [k, v] of Object.entries(value))
+            walk(v, prefix ? `${prefix}.${k}` : k, depth + 1);
         }
       };
       walk(JSON.parse(body), '', 0);

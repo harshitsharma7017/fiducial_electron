@@ -4,12 +4,12 @@
 // While a run fills the insurer's form, and whenever an insurer's tab is shown, the drawer steps
 // aside (kept, with its fields and result); after a run it offers the insurer's tab, where the
 // advisor finishes what the run left (./run.ts).
-import { ExternalLink, MousePointerClick } from 'lucide-react';
+import { ExternalLink, FileDown, MousePointerClick } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { InsurerAvatar } from '../insurers/branding';
 import { usePortalTabs } from '../insurers/PortalTabs';
 import { Modal } from '../ui/Modal';
-import { onQuoteRun, showInsurerTab } from './run';
+import { onQuoteRun, openQuotePdf, showInsurerTab } from './run';
 
 export interface QuoteOption {
   key: string;
@@ -33,13 +33,21 @@ export function QuoteWorkspace(props: {
 }): React.JSX.Element {
   const { options, selected } = props;
   const [running, setRunning] = useState(false);
-  const [ranFor, setRanFor] = useState<{ insurerId: string; tabId: string | null } | null>(null);
+  const [ranFor, setRanFor] = useState<{
+    insurerId: string;
+    tabId: string | null;
+    pdf: string | null;
+  } | null>(null);
+  const [pdfProblem, setPdfProblem] = useState(false);
   const tabs = usePortalTabs(props.open);
   useEffect(() => {
     if (!props.open) return;
     return onQuoteRun((event) => {
       setRunning(event.phase === 'start');
-      if (event.phase === 'end') setRanFor({ insurerId: event.insurerId, tabId: event.tabId });
+      if (event.phase === 'end') {
+        setRanFor({ insurerId: event.insurerId, tabId: event.tabId, pdf: event.pdf });
+        setPdfProblem(false);
+      }
     });
   }, [props.open]);
   useEffect(() => {
@@ -78,6 +86,23 @@ export function QuoteWorkspace(props: {
           <button type="button" onClick={() => void showInsurerTab(ranFor.insurerId, ranFor.tabId)}>
             <ExternalLink size={16} aria-hidden="true" />
             Go to {chosen?.insurer ?? 'the insurer'}&rsquo;s tab
+          </button>
+        </div>
+      )}
+      {ranFor?.pdf && (
+        <div className="qw-continue" role="status">
+          <span>
+            Quote saved as a PDF in Downloads: <strong>{ranFor.pdf}</strong>
+            {pdfProblem && ' (it could not be opened: find it in your Downloads folder)'}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              void openQuotePdf(ranFor.pdf ?? '').then((opened) => setPdfProblem(!opened))
+            }
+          >
+            <FileDown size={16} aria-hidden="true" />
+            Open PDF
           </button>
         </div>
       )}

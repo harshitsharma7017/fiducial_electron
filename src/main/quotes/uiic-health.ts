@@ -7,9 +7,12 @@
 //   children (if any; recording united-india-2026-11-02T12-43-19-757Z, and the advisor's account
 //   that children work like the spouse): Children → per child, a new row (Add Child if there is
 //   no empty row) → date of birth, gender, Son/Daughter, Unmarried, good health "No" → Ok → Save →
-//   Get Quote → the "User Details" pop-up (email, mobile, Check Premium).
-// The automation stops at "User Details": the advisor enters or checks the email and mobile and
-// presses Check Premium. Nothing beyond the recordings is automated, so a client outside them
+//   Get Quote → the "User Details" pop-up: the client's e-mail and mobile, Check Premium → the
+//   premium, read and returned.
+// Check Premium is pressed with the client's own e-mail and mobile (decision of 11 November 2026:
+// United India may send the quote to them). What United India shows after it was not recorded: the
+// premium is read after its caption, and a failure says what the page showed instead.
+// Nothing else beyond the recordings is automated, so a client outside them
 // (parents, individual cover, a health condition, a sum insured United India does not offer) is
 // refused with the reason, before anything is touched. Children are entered as unmarried (saved
 // clients hold no marital status for children).
@@ -31,6 +34,10 @@ const MARITAL = {
 } as const;
 
 const FORM = 'healthPolicyData.HealthPolicyFormBean';
+
+/** United India's own messages about what it lacks ("Please enter valid mobile number." …). */
+const UIIC_COMPLAINTS =
+  'please (enter|provide|select)|cannot be blank|not valid|invalid|conversion from string|ErrorList';
 /**
  * A select found by its AngularJS model, under any of the attribute spellings AngularJS accepts
  * (ng-model, data-ng-model, x-ng-model): the recorder notes the model name, not the spelling.
@@ -53,6 +60,8 @@ export interface PlanStep {
   ifMissed?: string;
   /** Keeps the value the step returns (a premium, a plan's code) under this name for the result. */
   keep?: string;
+  /** What the advisor is told if this step stops the run (instead of the general message). */
+  ifStuck?: string;
 }
 
 export type UiicHealthPlan = { ok: true; steps: PlanStep[] } | { ok: false; problems: string[] };
@@ -106,6 +115,11 @@ export function planUiicHealthQuote(
   }
   const self = selves[0];
   const spouse = spouses[0];
+  if (!client.customer.email || !client.customer.phone) {
+    problems.push(
+      "Add the client's e-mail and mobile: United India asks for them (User Details) before it shows the premium.",
+    );
+  }
   if (self) problems.push(...memberProblems(self, 'proposer (self)'));
   if (spouse) problems.push(...memberProblems(spouse, 'spouse'));
   children.forEach((child, i) => problems.push(...memberProblems(child, `child ${i + 1}`)));
@@ -143,7 +157,14 @@ export function planUiicHealthQuote(
     { label: 'Pincode', op: { op: 'type', selector: '#pincodeString', value: client.pincode } },
     {
       label: 'Pincode zone',
-      op: { op: 'waitForValue', selector: 'input[name="pincodeZone"]', timeoutMs: 20_000 },
+      op: {
+        op: 'waitForValue',
+        selector: 'input[name="pincodeZone"]',
+        timeoutMs: 20_000,
+        // United India's lookup can fail on its server: the PIN code is typed again, once.
+        retype: { selector: '#pincodeString', value: client.pincode },
+      },
+      ifStuck: `United India could not look up PIN code ${client.pincode} (its page said "Some Error occure please try again", or showed no zone), even when asked twice. Press OK on its message if one is open, check United India is still signed in, then try again.`,
     },
     {
       label: "Proposer's date of birth",
@@ -366,6 +387,47 @@ export function planUiicHealthQuote(
         },
       );
     });
+    // Every child row's Yes/No shares one name, and United India's reply to each child's date of
+    // birth comes back with the other children's answers empty (11 November 2026: the premium then
+    // fails with "Conversion from string "" to type Boolean is not valid."). So once the last date
+    // is in, each earlier child is answered again (the last one was answered after its own date).
+    // A child United India has taken in is redrawn read-only: its date in a plain box
+    // (newChild.dob, no calendar); only the child being entered has the #childDOB box.
+    const CHILD_DATE_BOXES = [
+      'input#childDOB',
+      ...['ng-model', 'data-ng-model', 'x-ng-model'].map((a) => `input[${a}="newChild.dob"]`),
+    ].join(', ');
+    children.slice(0, -1).forEach((child, i) => {
+      const who = `Child ${i + 1}`;
+      const [cy, cm, cd] = child.dateOfBirth!.split('-');
+      // Twins share a date of birth: the n-th row with that date.
+      const keyIndex = children
+        .slice(0, i)
+        .filter((c) => c.dateOfBirth === child.dateOfBirth).length;
+      steps.push(
+        {
+          label: `${who}: good health declaration (again)`,
+          op: {
+            op: 'radio',
+            name: 'ynHyperDiaChol',
+            value: 'No',
+            within: inChildren,
+            row: 'key',
+            rowKey: { within: inChildren, input: CHILD_DATE_BOXES, value: `${cd}/${cm}/${cy}` },
+            keyIndex,
+          },
+        },
+        {
+          label: `${who}: good health declaration (again)`,
+          op: {
+            op: 'clickButton',
+            text: 'Ok',
+            within: 'Good Health Declaration',
+            timeoutMs: 10_000,
+          },
+        },
+      );
+    });
     steps.push(
       {
         label: 'Save children',
@@ -380,6 +442,45 @@ export function planUiicHealthQuote(
   steps.push(
     { label: 'Get Quote', op: { op: 'clickButton', text: 'Get Quote', timeoutMs: 10_000 } },
     { label: 'Get Quote', op: { op: 'waitForDialog', text: 'User Details', timeoutMs: 20_000 } },
+    // User Details (recorded: input name="email", and the mobile's box is named "sideCar").
+    {
+      label: 'E-mail (User Details)',
+      op: {
+        op: 'setField',
+        within: 'User Details',
+        selector: 'input[name="email"]',
+        value: client.customer.email ?? '',
+        // The pop-up's form is a template United India downloads after its title shows.
+        waitMs: 15_000,
+      },
+    },
+    {
+      label: 'Mobile (User Details)',
+      op: {
+        op: 'setField',
+        within: 'User Details',
+        selector: 'input[name="sideCar"]',
+        value: client.customer.phone ?? '',
+        waitMs: 15_000,
+      },
+    },
+    {
+      label: 'Check Premium',
+      op: { op: 'clickButton', text: 'Check Premium', within: 'User Details', timeoutMs: 10_000 },
+    },
+    // The quotes United India works out (11 November 2026): its "Insurance Quotes" table, one
+    // column per plan (for example Individual Family Medicare and Arogya Sanjeevani), each with its
+    // premium excluding GST. Only that table counts, never a number already on the calculator.
+    {
+      label: 'Read the premiums',
+      op: {
+        op: 'readPlans',
+        header: 'Policy Type',
+        row: 'Premium',
+        errorPattern: UIIC_COMPLAINTS,
+        timeoutMs: 60_000,
+      },
+    },
   );
   return { ok: true, steps };
 }

@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { sanitise } from '../src/main/insurers/form-recorder';
 import {
+  bodyEmptyFieldNames,
   bodyFieldNames,
   redactChoice,
   redactText,
@@ -78,6 +79,25 @@ describe('bodyFieldNames', () => {
     ]);
     expect(JSON.stringify(names)).not.toMatch(/Ravi|1980|500000/);
     expect(bodyFieldNames('\u0000\u0001binary', '')).toBeNull();
+  });
+});
+
+describe('bodyEmptyFieldNames', () => {
+  it('names the fields sent empty, never any value', () => {
+    expect(
+      bodyEmptyFieldNames(
+        'name=Ravi&ynHealthy=&si=500000&note=',
+        'application/x-www-form-urlencoded',
+      ),
+    ).toEqual(['ynHealthy', 'note']);
+    const json = JSON.stringify({
+      bean: { name: 'Ravi', ynDailyCash: '', age: 0, ok: false, spouse: null },
+      members: [{ yn: '' }, { yn: 'No' }],
+    });
+    const names = bodyEmptyFieldNames(json, 'application/json');
+    expect(names).toEqual(['bean.ynDailyCash', 'members[0].yn']);
+    expect(JSON.stringify(names)).not.toMatch(/Ravi|No/);
+    expect(bodyEmptyFieldNames('\u0000\u0001binary', '')).toBeNull();
   });
 });
 

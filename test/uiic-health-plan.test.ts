@@ -9,7 +9,7 @@ vi.mock('electron', () => ({}));
 
 const TODAY = new Date(2026, 10, 2);
 const COUPLE: ClientInputRaw = {
-  customer: { name: 'Synthetic Couple' },
+  customer: { name: 'Synthetic Couple', phone: '9876543210', email: 'couple@example.test' },
   pincode: '560001',
   proposerMaritalStatus: 'married',
   members: [
@@ -24,7 +24,7 @@ function plan(raw: ClientInputRaw, goodHealth = true) {
 }
 
 describe('planUiicHealthQuote', () => {
-  it('plans the recorded flow for a couple, ending at the User Details pop-up', () => {
+  it('plans the recorded flow for a couple, through User Details to the premium', () => {
     const result = plan(COUPLE);
     if (!result.ok) throw new Error(result.problems.join('; '));
     const ops = result.steps.map((s) => s.op);
@@ -48,9 +48,27 @@ describe('planUiicHealthQuote', () => {
       'No',
       'No',
     ]);
-    // It ends waiting for "User Details", and never presses Check Premium.
-    expect(ops.at(-1)).toEqual({ op: 'waitForDialog', text: 'User Details', timeoutMs: 20_000 });
-    expect(JSON.stringify(ops)).not.toContain('Check Premium');
+    // Get Quote, then User Details with the client's own e-mail and mobile, Check Premium, and
+    // the premium read (decision of 11 November 2026).
+    expect(ops.slice(-5)).toEqual([
+      { op: 'waitForDialog', text: 'User Details', timeoutMs: 20_000 },
+      {
+        op: 'setField',
+        within: 'User Details',
+        selector: 'input[name="email"]',
+        value: 'couple@example.test',
+        waitMs: 15_000,
+      },
+      {
+        op: 'setField',
+        within: 'User Details',
+        selector: 'input[name="sideCar"]',
+        value: '9876543210',
+        waitMs: 15_000,
+      },
+      { op: 'clickButton', text: 'Check Premium', within: 'User Details', timeoutMs: 10_000 },
+      expect.objectContaining({ op: 'readPlans', header: 'Policy Type', row: 'Premium' }),
+    ]);
   });
 
   it('plans children after the spouse: a new row each, Son/Daughter, Unmarried, then Save', () => {
@@ -74,6 +92,78 @@ describe('planUiicHealthQuote', () => {
     expect(childOps).toContainEqual(expect.objectContaining({ op: 'select', value: 'Son' }));
     expect(childOps).toContainEqual(expect.objectContaining({ op: 'select', value: 'Daughter' }));
     expect(childOps.filter((o) => o.op === 'select' && o.value === 'Unmarried')).toHaveLength(2);
+  });
+
+  it("answers every earlier child's health again after the last date of birth (twins by place)", () => {
+    const result = plan({
+      ...COUPLE,
+      members: [
+        ...COUPLE.members,
+        { relationship: 'son', age: 12, dateOfBirth: '2014-05-20', gender: 'male' },
+        { relationship: 'daughter', age: 8, dateOfBirth: '2018-09-09', gender: 'female' },
+        { relationship: 'son', age: 8, dateOfBirth: '2018-09-09', gender: 'male' },
+      ],
+    });
+    if (!result.ok) throw new Error(result.problems.join('; '));
+    const labels = result.steps.map((s) => s.label);
+    const again = result.steps.filter((s) => s.label.endsWith('(again)'));
+    // Children 1 and 2 (the last was answered after its own date), each "No" then Ok, after the
+    // last child's answer and before Save.
+    expect(again.map((s) => s.label)).toEqual([
+      'Child 1: good health declaration (again)',
+      'Child 1: good health declaration (again)',
+      'Child 2: good health declaration (again)',
+      'Child 2: good health declaration (again)',
+    ]);
+    expect(labels.indexOf(again[0]!.label)).toBeGreaterThan(
+      labels.lastIndexOf('Child 3: good health declaration'),
+    );
+    expect(labels.lastIndexOf(again.at(-1)!.label)).toBeLessThan(labels.indexOf('Save children'));
+    expect(again.map((s) => s.op).filter((o) => o.op === 'radio')).toEqual([
+      expect.objectContaining({
+        name: 'ynHyperDiaChol',
+        value: 'No',
+        row: 'key',
+        rowKey: expect.objectContaining({ value: '20/05/2014' }) as unknown,
+        keyIndex: 0,
+      }),
+      // The twin daughter: the first row with 09/09/2018 (her twin brother is the second).
+      expect.objectContaining({
+        row: 'key',
+        rowKey: expect.objectContaining({ value: '09/09/2018' }) as unknown,
+        keyIndex: 0,
+      }),
+    ]);
+  });
+
+  it("asks United India for the PIN code's zone a second time, and says what to do if it never comes", () => {
+    const result = plan(COUPLE);
+    if (!result.ok) throw new Error(result.problems.join('; '));
+    const zone = result.steps.find((s) => s.label === 'Pincode zone')!;
+    expect(zone.op).toMatchObject({
+      op: 'waitForValue',
+      selector: 'input[name="pincodeZone"]',
+      retype: { selector: '#pincodeString', value: COUPLE.pincode },
+    });
+    expect(zone.ifStuck).toMatch(/could not look up PIN code .* signed in/);
+  });
+
+  it('answers nothing again for a single child', () => {
+    const result = plan({
+      ...COUPLE,
+      members: [
+        ...COUPLE.members,
+        { relationship: 'son', age: 12, dateOfBirth: '2014-05-20', gender: 'male' },
+      ],
+    });
+    if (!result.ok) throw new Error(result.problems.join('; '));
+    expect(result.steps.some((s) => s.label.endsWith('(again)'))).toBe(false);
+  });
+
+  it("refuses a client without an e-mail or mobile: United India's User Details asks for both", () => {
+    const noContact = plan({ ...COUPLE, customer: { name: 'Synthetic Couple' } });
+    expect(noContact.ok).toBe(false);
+    expect(!noContact.ok && noContact.problems.join(' ')).toMatch(/e-mail and mobile/);
   });
 
   it('plans a proposer alone, without the spouse steps', () => {

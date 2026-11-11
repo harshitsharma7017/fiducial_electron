@@ -3,6 +3,7 @@
 import { app } from 'electron';
 import type { ClientService } from '../clients/service';
 import type { ImportService } from '../import/service';
+import type { ClientExportService } from '../export/clients-export';
 import type { PortalHost } from '../insurers/portal-host';
 import type { InsurerService } from '../insurers/service';
 import type { QuoteService } from '../quotes/service';
@@ -14,6 +15,8 @@ export function createHandlers(deps: {
   quotes: QuoteService;
   /** Client imports from .xlsx / .csv files (absent: refused, in tests). */
   imports?: ImportService;
+  /** Every client to an Excel file (absent: refused, in tests). */
+  exports?: ClientExportService;
   /** Insurer pages as tabs of the app window (absent: no tabs, in tests). */
   portals?: PortalHost;
 }): IpcHandlers {
@@ -54,6 +57,10 @@ export function createHandlers(deps: {
       id: await deps.clients.save(id ?? null, client, aadhaar),
     }),
     'clients:delete': async ({ id }) => ({ deleted: await deps.clients.delete(id) }),
+    'clients:export': () => {
+      if (!deps.exports) throw new AppException('UNSUPPORTED_FLOW');
+      return deps.exports.exportAll();
+    },
     'vehicles:list': async () => ({ vehicles: await deps.clients.listVehicles() }),
     'vehicles:get': ({ id }) => deps.clients.getVehicle(id),
     'vehicles:save': async ({ id, saved }) => ({
@@ -95,6 +102,8 @@ export function createHandlers(deps: {
     'imports:preview': ({ kind }) => imports().preview(kind),
     'imports:commit': ({ token, includeDuplicates }) => imports().commit(token, includeDuplicates),
     'quotes:run': (request) => deps.quotes.run(request),
+    'quotes:cancel': () => ({ cancelled: deps.quotes.cancel() }),
+    'quotes:open-pdf': async ({ name }) => ({ opened: await deps.quotes.openPdf(name) }),
     'portals:tabs': async ({ since }) =>
       deps.portals ? deps.portals.waitForChange(since, 20_000) : noTabs,
     'portals:show': ({ tabId }) => {

@@ -24,11 +24,23 @@ import {
   runUiicMotorQuote,
   runUiicOmpProposal,
   runUiicTravelProposal,
+  beginRun,
+  endRun,
   exec,
   followWork,
+  QuoteRunStopped,
+  stopRun,
   type QuoteRunResult,
 } from './run-uiic-health';
 import type { UiicProposalForm } from './uiic-health-proposal';
+import type { QuotePdfs } from './quote-pdf';
+import {
+  healthFacts,
+  quoteReference,
+  travellerFacts,
+  vehicleFacts,
+  type QuoteDocument,
+} from './quote-document';
 import { runNiaHealthQuote } from './run-nia-health';
 import { runNiaMotorQuote } from './run-nia-motor';
 import { runNiaMarineQuote } from './run-nia-marine';
@@ -55,7 +67,52 @@ const PROPOSAL_FORM = {
 
 export interface QuoteService {
   run(request: QuoteRunRequest): Promise<QuoteRunResult>;
+  /** Stops the run in progress where it is; false if there is none. Presses nothing. */
+  cancel(): boolean;
+  /** Opens a quote PDF this app saved (by its name); false for any other. */
+  openPdf(name: string): Promise<boolean>;
 }
+
+/** Who and what a quote is for, in its document. */
+type QuoteFacts = Pick<QuoteDocument, 'details' | 'members'> & { clientName: string | null };
+
+/** The kind of insurance, for the document's title. */
+const KIND: Partial<Record<QuoteRunRequest['product'], string>> = {
+  health: 'Health',
+  'fm-proposal': 'Health',
+  'ihp-proposal': 'Health',
+  'as-proposal': 'Health',
+  'stu-proposal': 'Health',
+  'yhp-proposal': 'Health',
+  'niva-health': 'Health',
+  'nia-health': 'Health',
+  'hdfc-mst': 'Health',
+  'hdfc-retail': 'Health',
+  motor: 'Motor',
+  'hdfc-motor': 'Motor',
+  'travel-proposal': 'Travel',
+  'omp-proposal': 'Travel',
+  'nia-travel': 'Travel',
+  'hdfc-travel': 'Travel',
+};
+
+/** How a product is named in its PDF's file name. */
+const PRODUCT_TITLE: Partial<Record<QuoteRunRequest['product'], string>> = {
+  motor: 'motor',
+  health: 'health',
+  'fm-proposal': 'Family Medicare',
+  'ihp-proposal': 'Individual Health',
+  'as-proposal': 'Arogya Sanjeevani',
+  'stu-proposal': 'Super Top-up',
+  'yhp-proposal': 'Yuvaan Health',
+  'travel-proposal': 'Overseas Travel',
+  'omp-proposal': 'Overseas Mediclaim',
+  'hdfc-motor': 'motor',
+  'hdfc-mst': 'MST',
+  'hdfc-retail': 'health',
+  'hdfc-travel': 'travel',
+  'niva-health': 'health',
+};
 
 export function createQuoteService(deps: {
   enabled: boolean;
@@ -74,6 +131,8 @@ export function createQuoteService(deps: {
   windowsOf: (insurerId: string) => PortalPage[];
   logger: Logger;
   now?: () => Date;
+  /** Where fetched quotes are saved as PDFs; absent, none are saved. */
+  pdfs?: QuotePdfs;
 }): QuoteService {
   let running = false;
   /**
@@ -117,6 +176,78 @@ export function createQuoteService(deps: {
         }
       : null;
   };
+  /** The result of a run the advisor cancelled; any other error goes on. */
+  const whenCancelled = (err: unknown, insurerId: string): QuoteRunResult => {
+    if (!(err instanceof QuoteRunStopped)) throw err;
+    deps.logger.log('info', 'quote.run', { insurer: insurerId, quoteOutcome: 'cancelled' });
+    return {
+      outcome: 'cancelled',
+      step: null,
+      message:
+        "Cancelled. The insurer's form stays as far as it got, in its tab; nothing was submitted.",
+      problems: [],
+    };
+  };
+  /**
+   * A run that fetched a premium, saved as a PDF: the app's quote document (the client, every plan
+   * and its premium, the notes). A PDF that cannot be saved does not undo the quote: the advisor is
+   * told.
+   */
+  const withPdf = async (
+    result: QuoteRunResult,
+    request: QuoteRunRequest,
+    facts: QuoteFacts,
+  ): Promise<QuoteRunResult> => {
+    if (result.outcome !== 'ready' || !result.premium || !deps.pdfs) return result;
+    const insurer = findPortal(request.insurerId)?.displayName ?? request.insurerId;
+    const product = PRODUCT_TITLE[request.product] ?? request.product;
+    const kind = KIND[request.product];
+    const issuedAt = (deps.now ?? (() => new Date()))();
+    const plans = result.plans?.length
+      ? result.plans
+      : [{ name: result.premium.label, amount: result.premium.amount }];
+    const doc: QuoteDocument = {
+      title: kind ? `${kind} insurance quote` : 'Insurance quote',
+      insurer,
+      // "Health insurance" for a calculator; the form's own name (Family Medicare…) otherwise.
+      product:
+        kind && product.toLowerCase() === kind.toLowerCase()
+          ? `${kind} insurance`
+          : product.charAt(0).toUpperCase() + product.slice(1),
+      issuedAt,
+      reference: quoteReference(issuedAt),
+      clientName: facts.clientName ?? 'Client',
+      details: facts.details,
+      ...(facts.members ? { members: facts.members } : {}),
+      plans,
+      amountLabel: result.amountLabel ?? 'Premium',
+      notes: [
+        ...(result.amountLabel?.toLowerCase().includes('excluding gst')
+          ? ['Premiums exclude GST: the insurer adds any tax due when the policy is issued.']
+          : []),
+        ...(request.product === 'health' && request.insurerId === 'united-india'
+          ? [
+              'The quote assumes every insured person is in good health, without any pre-existing disease, as declared to the insurer.',
+              `${insurer}: persons with a pre-existing medical disease, deformity or disability are not offered cover online and should visit the insurer's nearest office.`,
+            ]
+          : []),
+        'Premiums are as the insurer showed them for the details above; they can change if any detail changes.',
+      ],
+    };
+    try {
+      const name = await deps.pdfs.save(
+        doc,
+        `${insurer} ${product} quote${facts.clientName ? ` - ${facts.clientName}` : ''}`,
+      );
+      return { ...result, pdf: { name } };
+    } catch (err) {
+      deps.logger.log('warn', 'quote.pdf-failed', {
+        insurer: request.insurerId,
+        errorName: err instanceof Error ? err.name : 'unknown',
+      });
+      return { ...result, message: `${result.message} The quote could not be saved as a PDF.` };
+    }
+  };
   const follow = (insurerId: string): void => {
     let shown: unknown = null;
     followWork((wc) => {
@@ -128,6 +259,8 @@ export function createQuoteService(deps: {
     });
   };
   return {
+    cancel: () => running && stopRun(),
+    openPdf: (name) => deps.pdfs?.open(name) ?? Promise.resolve(false),
     run: async (request) => {
       if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
       const { insurerId } = request;
@@ -196,6 +329,7 @@ export function createQuoteService(deps: {
                   shipment: request.shipment,
                 };
         running = true;
+        beginRun();
         follow(insurerId);
         try {
           const result =
@@ -213,9 +347,12 @@ export function createQuoteService(deps: {
             insurer: insurerId,
             quoteOutcome: result.outcome,
           });
-          return result;
+          return await withPdf(result, request, { clientName: null, details: [] });
+        } catch (err) {
+          return whenCancelled(err, insurerId);
         } finally {
           running = false;
+          endRun();
           followWork(null);
         }
       }
@@ -235,6 +372,7 @@ export function createQuoteService(deps: {
               }
             : { kind: 'client' as const, record: await deps.clients.get(request.clientId) };
       running = true;
+      beginRun();
       follow(insurerId);
       try {
         const today = (deps.now ?? (() => new Date()))();
@@ -342,9 +480,26 @@ export function createQuoteService(deps: {
           insurer: insurerId,
           quoteOutcome: result.outcome,
         });
-        return result;
+        return await withPdf(
+          result,
+          request,
+          subject.kind === 'traveller'
+            ? {
+                clientName: subject.record.traveller.customer.name,
+                ...travellerFacts(subject.record.traveller, today),
+              }
+            : subject.kind === 'client'
+              ? {
+                  clientName: subject.record.client.customer.name,
+                  ...healthFacts(subject.record.client, today),
+                }
+              : { clientName: null, ...vehicleFacts(subject.vehicle) },
+        );
+      } catch (err) {
+        return whenCancelled(err, insurerId);
       } finally {
         running = false;
+        endRun();
         followWork(null);
       }
     },

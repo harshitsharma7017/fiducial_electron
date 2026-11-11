@@ -19,6 +19,9 @@ const {
   keyboardTargetFor,
   runUiicHealthQuote,
   setSessionPolicy,
+  createQuotePdfs,
+  createPdfRenderer,
+  healthFacts,
 } = require(process.env.FQF_LOGIN_E2E_BUNDLE);
 const fs = require('node:fs');
 const os = require('node:os');
@@ -404,9 +407,12 @@ app.whenReady().then(async () => {
         'proposer.email',
         'relation',
         'si',
+        'ynDeclared',
       ])
     )
       problems.push(`body fields ${JSON.stringify(req.bodyFields)}`);
+    else if (JSON.stringify(req.emptyFields) !== JSON.stringify(['ynDeclared']))
+      problems.push(`empty fields ${JSON.stringify(req.emptyFields)}`);
     const fields = rec.pages[0]?.snapshot?.fields ?? [];
     const si = fields.find((f) => f.id === 'si');
     if (!si || JSON.stringify(si.options.map((o) => o.value)) !== '["500000","1000000"]')
@@ -560,7 +566,7 @@ app.whenReady().then(async () => {
       ),
     ];
     const couple = {
-      customer: { name: 'Synthetic Couple' },
+      customer: { name: 'Synthetic Couple', phone: '9876543210', email: 'couple@example.test' },
       pincode: '560001',
       proposerMaritalStatus: 'married',
       members: [
@@ -597,6 +603,7 @@ app.whenReady().then(async () => {
             spouseDob: v('#spouseDOBId'), spouseGender: v('select[ng-model="' + M + '.spouseGender"]'),
             children: [...document.querySelectorAll('#savedChildren input')].map((i) => i.value),
             userDetails: shown('userDetails'), checkPremium: window.__checkPremium === true,
+            sentTo: window.__userDetails ?? null,
           };
         })()`,
             )
@@ -623,12 +630,53 @@ app.whenReady().then(async () => {
         '09/09/2018|Female|Daughter|Unmarried',
         '31/01/2022|Male|Son|Unmarried',
       ],
-      userDetails: true,
-      checkPremium: false,
+      userDetails: false,
+      checkPremium: true,
+      sentTo: { email: 'couple@example.test', mobile: '9876543210' },
     };
     if (!same(state, expected)) problems.push(`calculator ${JSON.stringify(state)}`);
+    const plans = [
+      { name: 'Individual Family Medicare Policy', amount: '11948' },
+      { name: 'Arogya Sanjeevani Policy', amount: '14605' },
+    ];
+    if (!same(result.plans, plans)) problems.push(`plans ${JSON.stringify(result.plans)}`);
+    if (result.premium?.amount !== '11948')
+      problems.push(`premium ${JSON.stringify(result.premium)} (expected 11948)`);
+    // The quote PDF: the app's document, printed by the real renderer (no scripts, own session).
+    if (calc && !calc.isDestroyed()) {
+      const pdfDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'fqf-quote-pdf-'));
+      const pdfs = createQuotePdfs({
+        dir: () => pdfDir,
+        openPath: () => Promise.resolve(''),
+        render: createPdfRenderer(createLogger([])),
+      });
+      const at = new Date(2026, 10, 11, 12, 57);
+      const name = await pdfs.save(
+        {
+          title: 'Health insurance quote',
+          insurer: 'United India',
+          product: 'Health insurance',
+          issuedAt: at,
+          reference: 'QF-20261111-1257',
+          clientName: 'Synthetic Couple',
+          ...healthFacts(couple, at),
+          plans: result.plans ?? [],
+          amountLabel: result.amountLabel ?? 'Premium',
+          notes: ['Premiums exclude GST: the insurer adds any tax due when the policy is issued.'],
+        },
+        'United India health quote - Synthetic Couple',
+      );
+      const bytes = fs.readFileSync(nodePath.join(pdfDir, name));
+      if (bytes.subarray(0, 5).toString() !== '%PDF-' || bytes.length < 5000)
+        problems.push(
+          `pdf ${name}: ${bytes.length} bytes, starts ${JSON.stringify(bytes.subarray(0, 5).toString())}`,
+        );
+      if (process.env.FQF_KEEP_QUOTE_PDF)
+        fs.copyFileSync(nodePath.join(pdfDir, name), process.env.FQF_KEEP_QUOTE_PDF);
+      fs.rmSync(pdfDir, { recursive: true, force: true });
+    }
     console.log(
-      `${problems.length ? 'FAIL' : 'pass'}  United India health: fills the flow for a family of five (couple + 3 children) and stops at User Details${problems.length ? `\n      ${problems.join('\n      ')}` : ''}`,
+      `${problems.length ? 'FAIL' : 'pass'}  United India health: fills the flow for a family of five (couple + 3 children), the client's e-mail and mobile, Check Premium, premium read, saved as a PDF${problems.length ? `\n      ${problems.join('\n      ')}` : ''}`,
     );
     failures += problems.length ? 1 : 0;
     calc?.destroy();

@@ -127,7 +127,10 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Proposal F
   document.querySelectorAll('input[type=radio]').forEach((r) => r.addEventListener('change', () => {
     show('customerPart', chosen('proposalfilledBy') === 'customer');
     show('agentPart', chosen('proposalfilledBy') === 'agent');
-    if (chosen('proposalfilledBy') === 'agent' && chosen('chooseProposal') === 'new') setTimeout(() => show('proposal', true), 300);
+    if (chosen('proposalfilledBy') === 'agent' && chosen('chooseProposal') === 'new') {
+      setTimeout(() => show('proposal', true), 300);
+      drawDates();
+    }
   }));
 
   // Each choice loads the next list from the server: slowly, as the live site did on 6 November
@@ -226,6 +229,22 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>Proposal F
     });
     document.body.appendChild(pop);
   }));
+
+  // As live: the date boxes come from a template downloaded when the proposal opens
+  // (directive/uiicdatepickertemplate.html, slower on a fresh install), so they arrive after the
+  // form's other fields. Taken off the page until then, as on the portal.
+  const lateDates = Array.from(document.querySelectorAll('.cal')).map((button) => {
+    const table = button.closest('table');
+    const mark = document.createComment('date box');
+    table.replaceWith(mark);
+    return [mark, table];
+  });
+  let datesDrawn = false;
+  function drawDates() {
+    if (datesDrawn) return;
+    datesDrawn = true;
+    setTimeout(() => lateDates.forEach(([mark, table]) => mark.replaceWith(table)), 12000);
+  }
 </script></body></html>`;
 
 const home = `<!doctype html><html><head><meta charset="utf-8"><title>UIIC - Intermediary Portal Home</title></head><body>

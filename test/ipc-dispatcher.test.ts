@@ -66,6 +66,9 @@ const insurerStubs: Omit<IpcHandlers, 'app:get-info'> = {
   'portals:close': () => ({ closed: true }),
   'portals:set-bounds': () => ({ set: true }),
   'quotes:run': () => ({ outcome: 'refused', step: null, message: 'x', problems: [] }),
+  'quotes:cancel': () => ({ cancelled: false }),
+  'clients:export': () => ({ saved: false, file: null }),
+  'quotes:open-pdf': () => ({ opened: false }),
   'imports:template': () => ({ saved: false }),
   'imports:preview': () => {
     throw new AppException('CANCELLED');

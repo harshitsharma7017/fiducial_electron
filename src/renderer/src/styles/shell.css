@@ -339,6 +339,17 @@ html.theme-transition *::after {
   border-radius: var(--radius-pill);
 }
 
+.topbar-run {
+  display: inline-flex;
+  flex: none;
+  white-space: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-2);
+}
+
 .topbar-context .status-dot {
   width: 6px;
   height: 6px;

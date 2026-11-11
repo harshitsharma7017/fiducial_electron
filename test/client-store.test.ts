@@ -140,6 +140,8 @@ function allBytes(dir: string): Buffer {
 /** Quote runs are not exercised here (see quotes.test.ts). */
 const unusedQuotes = {
   run: () => Promise.reject(new Error('not used')),
+  cancel: () => false,
+  openPdf: () => Promise.resolve(false),
 };
 
 describe('the client store', () => {

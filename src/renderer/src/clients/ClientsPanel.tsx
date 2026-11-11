@@ -58,6 +58,7 @@ import type { HdfcMstRun } from '../../../shared/insurers/hdfc';
 import { HdfcRetailPanel } from '../insurers/HdfcPanels';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
 import { runQuote } from '../quote/run';
+import { UiicRequiredFields, useUiicRequired } from '../quote/UiicRequiredFields';
 
 const RELATIONSHIP_LABELS: Record<Relationship, string> = {
   self: 'Self',
@@ -806,10 +807,17 @@ function QuotePanel(props: { clientId: string }): React.JSX.Element {
   const [goodHealth, setGoodHealth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const required = useUiicRequired({ kind: 'client', id: props.clientId, form: 'health' });
 
   const run = async () => {
     setBusy(true);
     setResult(null);
+    const problem = await required.save();
+    if (problem) {
+      setBusy(false);
+      setResult({ error: problem });
+      return;
+    }
     const r = await runQuote({
       clientId: props.clientId,
       insurerId: 'united-india',
@@ -824,10 +832,11 @@ function QuotePanel(props: { clientId: string }): React.JSX.Element {
     <div className="quote-panel">
       <p className="insurer-note">
         <strong>United India, health (calculator).</strong> Sign in to United India and leave it on
-        its home page. The app opens the Health Policy Premium Calculator and fills it for this
-        client, then stops at &ldquo;User Details&rdquo; for you to check the email and mobile and
-        press Check Premium.
+        its home page. The app opens the Health Policy Premium Calculator, fills it for this client,
+        enters the client&rsquo;s e-mail and mobile in &ldquo;User Details&rdquo;, presses Check
+        Premium and shows the premium. United India may send the quote to that e-mail and mobile.
       </p>
+      <UiicRequiredFields required={required} />
       <label className="check">
         <input
           type="checkbox"
@@ -838,8 +847,12 @@ function QuotePanel(props: { clientId: string }): React.JSX.Element {
         (United India&rsquo;s declaration, for this quote).
       </label>
       <div className="insurer-actions">
-        <button type="button" disabled={busy} onClick={() => void run()}>
-          {busy ? 'Filling United India…' : 'Fill United India calculator'}
+        <button
+          type="button"
+          disabled={busy || required.loading || !required.complete}
+          onClick={() => void run()}
+        >
+          {busy ? 'Filling United India…' : 'Get United India premium'}
         </button>
       </div>
       {result && 'error' in result && (
@@ -883,9 +896,16 @@ function ProposalPanel(props: {
   const { form } = props;
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const required = useUiicRequired({ kind: 'client', id: props.clientId, form: 'proposal' });
   const run = async () => {
     setBusy(true);
     setResult(null);
+    const problem = await required.save();
+    if (problem) {
+      setBusy(false);
+      setResult({ error: problem });
+      return;
+    }
     const r = await runQuote({
       clientId: props.clientId,
       insurerId: 'united-india',
@@ -905,8 +925,13 @@ function ProposalPanel(props: {
         nominee relationship, then stops. It never saves or submits the proposal: you complete the
         rest, check it, and press Save As Draft yourself.
       </p>
+      <UiicRequiredFields required={required} />
       <div className="insurer-actions">
-        <button type="button" disabled={busy} onClick={() => void run()}>
+        <button
+          type="button"
+          disabled={busy || required.loading || !required.complete}
+          onClick={() => void run()}
+        >
           {busy ? 'Filling United India…' : `Fill ${form.name} proposal`}
         </button>
       </div>
