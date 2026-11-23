@@ -179,6 +179,7 @@ app.whenReady().then(async () => {
             battery: document.querySelector('[ng-model="motorPolicyData.fuelcheck"]')?.checked, claim: document.querySelector('[ng-model="motorPolicyData.claimCheck"]')?.checked, ncb: v('#selectPrevNCB'), seats: v('#seatingCapacity'),
             bus: v('#busCategory'), special: v('#mvehicleType'), issue: v('input#dateOfIssueOfPolicyString'), reg: v('input#dateOfPurchaseString'),
             zone: v('#vehicleZone'), idv: (document.querySelector('#iibAutoRiskIdv') || document.querySelector('#autoRiskIdv'))?.value, disc: v('#odDisc'),
+            err: document.querySelector('#errText')?.textContent ?? '',
           };
         })()`,
             )
@@ -208,20 +209,55 @@ app.whenReady().then(async () => {
     failures += problems.length ? 1 : 0;
   }
 
-  // United India's ERRORS pop-up stops the run, with its message.
+  // The result as shown to the screens (the hand-over's page is the app's own).
+  const shown = ({ handOver, ...view }) => JSON.stringify({ ...view, handOver: !!handOver });
+
+  // United India's ERRORS pop-up ends the filling, with its message: the form is handed over.
   {
     const { result } = await runCase({ ...CASES[0].vehicle, idvRupees: 60000000 });
     const ok =
-      result.outcome === 'failed' &&
+      result.outcome === 'handed-over' &&
       result.step === 'Click To See Premium' &&
-      result.message.includes('IDV exceeds the permitted limit');
+      result.message.includes('IDV exceeds the permitted limit') &&
+      result.handOver?.read.op === 'readTable';
     console.log(
-      `${ok ? 'pass' : 'FAIL'}  United India motor: stops with United India's ERRORS message${ok ? '' : `\n      ${JSON.stringify(result)}`}`,
+      `${ok ? 'pass' : 'FAIL'}  United India motor: United India's ERRORS message hands the form over${ok ? '' : `\n      ${shown(result)}`}`,
     );
     failures += ok ? 0 : 1;
   }
 
-  const total = CASES.length + 1;
+  // A detail the vehicle lacks (request of 20 November 2026): the rest is filled, the box is left
+  // for the advisor, and Click To See Premium is not pressed.
+  {
+    const bus = { ...CASES[2].vehicle };
+    delete bus.seatingCapacity;
+    const { result, state } = await runCase(bus);
+    const problems = [];
+    if (result.outcome !== 'handed-over') problems.push(`outcome: ${shown(result)}`);
+    if (
+      !same(result.toDo, [
+        'Seating capacity: fill it in yourself (the vehicle record does not have it).',
+      ])
+    )
+      problems.push(`to do: ${JSON.stringify(result.toDo)}`);
+    if (!same(result.finish, { button: 'Click To See Premium', guessed: false }))
+      problems.push(`finish: ${JSON.stringify(result.finish)}`);
+    for (const [k, v] of Object.entries({
+      seats: '',
+      bus: 'School Bus',
+      idv: '2400000',
+      reg: '20/10/2026',
+      err: '',
+    }))
+      if (!state || !same(state[k], v))
+        problems.push(`${k}: ${JSON.stringify(state?.[k])} (expected ${JSON.stringify(v)})`);
+    console.log(
+      `${problems.length ? 'FAIL' : 'pass'}  United India motor: a missing seating capacity is left for the advisor, the rest filled, the premium not asked${problems.length ? `\n      ${problems.join('\n      ')}` : ''}`,
+    );
+    failures += problems.length ? 1 : 0;
+  }
+
+  const total = CASES.length + 2;
   console.log(`\n${total - failures} of ${total} motor checks passed`);
   server.close();
   app.exit(failures ? 1 : 0);

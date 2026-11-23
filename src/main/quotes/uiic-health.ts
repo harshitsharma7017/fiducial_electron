@@ -16,7 +16,7 @@
 // (parents, individual cover, a health condition, a sum insured United India does not offer) is
 // refused with the reason, before anything is touched. Children are entered as unmarried (saved
 // clients hold no marital status for children).
-import { ageOn, type ClientInput, type ClientMember } from '../../shared/contracts/client';
+import { ageOn, type ClientInput } from '../../shared/contracts/client';
 import type { PageOp } from './page-ops';
 
 /** Sum insured options of the calculator, in rupees (from the recording). */
@@ -64,14 +64,15 @@ export interface PlanStep {
   ifStuck?: string;
 }
 
-export type UiicHealthPlan = { ok: true; steps: PlanStep[] } | { ok: false; problems: string[] };
+/**
+ * `left`: what the client's record lacks and the advisor fills in United India's form (request of
+ * 20 November 2026: fill what can be filled, hand the rest over; hand-over.ts).
+ */
+export type UiicHealthPlan =
+  { ok: true; steps: PlanStep[]; left: string[] } | { ok: false; problems: string[] };
 
-function memberProblems(member: ClientMember, who: string): string[] {
-  const problems: string[] = [];
-  if (!member.dateOfBirth) problems.push(`Add the ${who}'s date of birth.`);
-  if (!member.gender) problems.push(`Add the ${who}'s gender.`);
-  return problems;
-}
+const missing = (what: string): string =>
+  `${what}: fill it in yourself (the client record does not have it).`;
 
 /**
  * Checks that the client fits the recorded flow and lists every step. `goodHealth` is the
@@ -115,15 +116,22 @@ export function planUiicHealthQuote(
   }
   const self = selves[0];
   const spouse = spouses[0];
-  if (!client.customer.email || !client.customer.phone) {
-    problems.push(
-      "Add the client's e-mail and mobile: United India asks for them (User Details) before it shows the premium.",
-    );
+  const left: string[] = [];
+  if (!client.customer.email) left.push(missing('E-mail (User Details)'));
+  if (!client.customer.phone) left.push(missing('Mobile (User Details)'));
+  for (const [member, who] of [
+    [self, "Proposer's"],
+    [spouse, "Spouse's"],
+  ] as const) {
+    if (member && !member.dateOfBirth) left.push(missing(`${who} date of birth`));
+    if (member && !member.gender) left.push(missing(`${who} gender`));
   }
-  if (self) problems.push(...memberProblems(self, 'proposer (self)'));
-  if (spouse) problems.push(...memberProblems(spouse, 'spouse'));
-  children.forEach((child, i) => problems.push(...memberProblems(child, `child ${i + 1}`)));
-  if (!client.proposerMaritalStatus) problems.push("Add the proposer's marital status.");
+  children.forEach((child, i) => {
+    // A child's row is found again by its date of birth (United India redraws it).
+    if (!child.dateOfBirth) problems.push(`Add child ${i + 1}'s date of birth.`);
+    if (!child.gender) left.push(missing(`Child ${i + 1}: gender`));
+  });
+  if (!client.proposerMaritalStatus) left.push(missing("Proposer's marital status"));
   if (spouse && client.proposerMaritalStatus && client.proposerMaritalStatus !== 'married') {
     problems.push('A spouse is listed, so the proposer must be married.');
   }
@@ -482,5 +490,17 @@ export function planUiicHealthQuote(
       },
     },
   );
-  return { ok: true, steps };
+  // The steps for what the record lacks are left out: the advisor fills those boxes.
+  const drop = new Set<string>();
+  if (!self.dateOfBirth) drop.add("Proposer's date of birth").add("Proposer's age");
+  if (!self.gender) drop.add("Proposer's gender");
+  if (!client.proposerMaritalStatus) drop.add("Proposer's marital status");
+  if (spouse && !spouse.dateOfBirth) drop.add("Spouse's date of birth").add("Spouse's age");
+  if (spouse && !spouse.gender) drop.add("Spouse's gender");
+  children.forEach((child, i) => {
+    if (!child.gender) drop.add(`Child ${i + 1}: gender`);
+  });
+  if (!client.customer.email) drop.add('E-mail (User Details)');
+  if (!client.customer.phone) drop.add('Mobile (User Details)');
+  return { ok: true, steps: steps.filter((st) => !drop.has(st.label)), left };
 }

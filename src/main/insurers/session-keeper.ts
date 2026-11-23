@@ -12,6 +12,11 @@
 //   ends (sign-out, the 12 hours, or a session wiped at start-up); a file that cannot be read
 //   is deleted and ignored.
 // Cookies with an expiry date are not kept here: the saved partition already keeps those.
+// Some portals keep the sign-in in the tab's session storage instead of cookies (ICICI Lombard's
+// NYSA: its dashboard and OTP tokens; 23 November 2026, it asked for the OTP again after every
+// restart). Session storage belongs to the tab and is never written to disk by Electron, so the
+// portal page's session storage (for its own origin) is kept with the cookies, encrypted the same
+// way, and put back before the page reopens (portal-windows.ts).
 // The insurer's own server may still have ended the session (for example after inactivity):
 // the portal then shows its login page and the app fills it as usual.
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
@@ -35,10 +40,18 @@ const keptCookieSchema = z.strictObject({
 });
 type KeptCookie = z.infer<typeof keptCookieSchema>;
 
+/** A tab's session storage for one origin, as kept. */
+export const keptStorageSchema = z.strictObject({
+  origin: z.string().regex(/^https:\/\/[a-z0-9.-]+(:\d+)?$/),
+  items: z.array(z.tuple([z.string().max(256), z.string().max(65_536)])).max(200),
+});
+export type KeptStorage = z.infer<typeof keptStorageSchema>;
+
 const fileSchema = z.strictObject({
   version: z.literal(1),
   lastUrl: z.string().max(8192).nullable(),
   cookies: z.array(keptCookieSchema).max(500),
+  storage: keptStorageSchema.nullable().optional(),
 });
 
 /** The part of an Electron session's cookie jar this uses. */
@@ -48,10 +61,24 @@ export interface CookieJar {
 }
 
 export interface SessionKeeper {
-  /** Saves the insurer's session cookies and the page its window is on. */
-  save(id: string, jar: CookieJar, lastUrl: string | null): Promise<void>;
-  /** Puts the saved session cookies back; returns the saved page, or null if nothing was kept. */
-  restore(id: string, jar: CookieJar): Promise<{ lastUrl: string | null } | null>;
+  /**
+   * Saves the insurer's session cookies, the page its window is on and that page's session
+   * storage (null: none to keep).
+   */
+  save(
+    id: string,
+    jar: CookieJar,
+    lastUrl: string | null,
+    storage?: KeptStorage | null,
+  ): Promise<void>;
+  /**
+   * Puts the saved session cookies back; returns the saved page and session storage (to put back
+   * before the page reopens), or null if nothing was kept.
+   */
+  restore(
+    id: string,
+    jar: CookieJar,
+  ): Promise<{ lastUrl: string | null; storage: KeptStorage | null } | null>;
   /** Deletes what was kept for the insurer. */
   forget(id: string): void;
 }
@@ -100,13 +127,19 @@ export function createSessionKeeper(dir: string, backend: SecretBackend): Sessio
   const forgotten = new Set<string>();
 
   const keeper: SessionKeeper = {
-    save: (id, jar, lastUrl) => {
+    save: (id, jar, lastUrl, storage = null) => {
       forgotten.delete(id);
       const run = (queue.get(id) ?? Promise.resolve()).then(async () => {
         if (forgotten.has(id)) return;
         if (!(await backend.isAsyncEncryptionAvailable())) return; // never written in the clear
         const cookies = sessionCookies(await jar.get({}));
-        const text = JSON.stringify({ version: 1, lastUrl, cookies });
+        const kept = storage ? keptStorageSchema.safeParse(storage) : null;
+        const text = JSON.stringify({
+          version: 1,
+          lastUrl,
+          cookies,
+          storage: kept?.success ? kept.data : null,
+        });
         const sealed = await backend.encryptStringAsync(text);
         if (forgotten.has(id)) return; // signed out while this was being sealed
         mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -131,7 +164,7 @@ export function createSessionKeeper(dir: string, backend: SecretBackend): Sessio
         for (const cookie of parsed.data.cookies) {
           await jar.set(toSetDetails(cookie)).catch(() => undefined);
         }
-        return { lastUrl: parsed.data.lastUrl };
+        return { lastUrl: parsed.data.lastUrl, storage: parsed.data.storage ?? null };
       } catch {
         keeper.forget(id);
         return null;

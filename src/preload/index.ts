@@ -2,6 +2,7 @@
 // never raw ipcRenderer access (SEC-03). Bundled into one CommonJS file for the sandbox.
 import { contextBridge, ipcRenderer } from 'electron';
 import { exposePortalDemo } from '../demo/portal-automation/preload/expose';
+import type { IciciApiStatus } from '../shared/insurers/icici-api';
 import type { FqfApi } from '../shared/ipc/api';
 import { IPC_CHANNELS } from '../shared/ipc/channels';
 import type {
@@ -50,12 +51,26 @@ const api: FqfApi = {
         AppResult<{ recording: boolean; file: string | null }>
       >,
   },
+  iciciApi: {
+    status: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.iciciApiStatus, {}) as Promise<AppResult<IciciApiStatus>>,
+    save: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.iciciApiSave, request) as Promise<AppResult<IciciApiStatus>>,
+    test: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.iciciApiTest, {}) as Promise<
+        AppResult<{ ok: boolean; message: string }>
+      >,
+  },
   quotes: {
     run: (request) =>
       ipcRenderer.invoke(IPC_CHANNELS.quotesRun, request) as Promise<AppResult<QuoteRunResultView>>,
     cancel: () =>
       ipcRenderer.invoke(IPC_CHANNELS.quotesCancel, {}) as Promise<
         AppResult<{ cancelled: boolean }>
+      >,
+    finish: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.quotesFinish, request) as Promise<
+        AppResult<QuoteRunResultView>
       >,
     openPdf: (name) =>
       ipcRenderer.invoke(IPC_CHANNELS.quotesOpenPdf, { name }) as Promise<

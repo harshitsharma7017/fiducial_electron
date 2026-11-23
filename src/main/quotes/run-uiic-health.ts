@@ -16,6 +16,7 @@ import type { PortalPage } from '../insurers/portal-host';
 import type { ClientInput } from '../../shared/contracts/client';
 import type { Vehicle } from '../../shared/contracts/vehicle';
 import { quotePageAgent, type PageOp, type PageOpResult } from './page-ops';
+import { FillProgress, handedOver, type HandOver } from './hand-over';
 import { planUiicHealthQuote, type PlanStep } from './uiic-health';
 import {
   planUiicHealthProposal,
@@ -33,7 +34,8 @@ const WORLD_ID = 1803;
 const HOME_PATH = '/GCWebPortal/login/HomeAction.do';
 
 export interface QuoteRunResult {
-  outcome: 'ready' | 'refused' | 'failed' | 'cancelled';
+  /** 'handed-over': the run filled what it could; the advisor finishes the form (hand-over.ts). */
+  outcome: 'ready' | 'refused' | 'failed' | 'cancelled' | 'handed-over';
   /** The step that stopped the run, if any. */
   step: string | null;
   message: string;
@@ -45,10 +47,19 @@ export interface QuoteRunResult {
   plans?: { name: string; amount: string }[];
   /** What the plans' amounts are ("Premium (excluding GST)"). */
   amountLabel?: string;
+  /** How the insurer made the premium up (an API's answer: IDV, OD, TP, GST…), as shown. */
+  breakdown?: { label: string; value: string }[];
   /** What the advisor still fills by hand (e-proposals), and the insurer's messages about it. */
   toDo?: string[];
   /** The quote saved as a PDF (the insurer's page, with the premium): the file's name. */
   pdf?: { name: string };
+  /**
+   * A form the advisor finishes: the button they press for the premium (as the form names it),
+   * and whether the app reads the premium by the form's own recorded caption or by a guess.
+   */
+  finish?: { button: string | null; guessed: boolean };
+  /** For the quote service only (never sent to the screens): how it finishes the form. */
+  handOver?: HandOver;
 }
 
 /** Told of each page a run's step works in (the quote service brings it to the front). */
@@ -154,36 +165,57 @@ const refused = (message: string, problems: string[] = []): QuoteRunResult => ({
   problems,
 });
 
-/** Opens a calculator from the United India home page and runs the steps in it. */
+/** United India's ERRORS pop-up's message, without its title and Close button. */
+const errorsText = (text: string): string =>
+  text
+    .replace(/^\s*ERRORS\s*/i, '')
+    .replace(/\s*Close\s*$/, '')
+    .trim();
+
+/** What a failed step of a United India form means, in the advisor's words. */
+function explainUiic(step: PlanStep, detail: string | undefined): string {
+  if (/^only-\d+$/.test(detail ?? '')) {
+    return `United India offers ${detail!.slice(5)} choices here for this trip: pick one yourself.`;
+  }
+  if (detail?.startsWith('option-missing')) {
+    const offered = /\(offered: (.*)\)$/.exec(detail)?.[1];
+    return `United India's list did not offer this choice${offered ? ` (it showed: ${offered})` : ''}. If it showed only "Select", United India had not loaded the list yet.`;
+  }
+  if (detail?.startsWith('page-says: ')) return `United India says: ${detail.slice(11)}`;
+  return step.ifStuck ?? `the form did not take this step (${detail ?? 'unknown'}).`;
+}
+
+/**
+ * Opens a calculator (or e-proposal) from the United India home page and runs the steps in it.
+ * A box it cannot fill is left for the advisor and the run goes on; a step that moves the form
+ * along and fails, or United India's ERRORS pop-up, ends the filling: the form is handed over
+ * (hand-over.ts). Otherwise `compose` makes the result from the last step's reading.
+ */
 async function runInCalculator(deps: {
   windows: () => PortalPage[];
   tile: string;
   /** The calculator's page: its path, or a pattern for a page whose path was not recorded. */
   calculatorPath: string | RegExp;
   steps: PlanStep[];
-}): Promise<{
-  result: QuoteRunResult | null;
-  last: PageOpResult | null;
-  notes: string[];
-  /** The values kept by steps marked `keep`. */
-  kept: Record<string, string>;
-}> {
+  /** What the plan already knows it cannot fill (the client's record lacks it). */
+  left?: string[];
+  /** What the advisor always does by hand on this form. */
+  toDo?: string[];
+  /**
+   * The result once every step ran: from the last step's reading, the values kept by steps
+   * marked `keep`, and United India's messages the run closed and went on. Also used once the
+   * advisor has finished a handed-over form: `last` is then the premium reading.
+   */
+  compose: (
+    last: PageOpResult | null,
+    kept: Record<string, string>,
+    notes: string[],
+  ) => QuoteRunResult;
+}): Promise<QuoteRunResult> {
   const main = deps.windows()[0];
-  if (!main || main.isDestroyed()) {
-    return {
-      result: refused('Open United India and sign in first.'),
-      last: null,
-      notes: [],
-      kept: {},
-    };
-  }
+  if (!main || main.isDestroyed()) return refused('Open United India and sign in first.');
   if (pathOf(main.webContents.getURL()) !== HOME_PATH) {
-    return {
-      result: refused("Go to United India's home page (after signing in), then try again."),
-      last: null,
-      notes: [],
-      kept: {},
-    };
+    return refused("Go to United India's home page (after signing in), then try again.");
   }
   const failed = (step: string, message: string): QuoteRunResult => ({
     outcome: 'failed',
@@ -195,15 +227,7 @@ async function runInCalculator(deps: {
   const before = new Set(deps.windows().map((w) => w.webContents.id));
   const opened = await exec(main.webContents, { op: 'clickLink', text: deps.tile });
   if (!opened.ok) {
-    return {
-      result: failed(
-        'Open the calculator',
-        `The "${deps.tile}" tile was not found on the home page.`,
-      ),
-      last: null,
-      notes: [],
-      kept: {},
-    };
+    return failed('Open the calculator', `The "${deps.tile}" tile was not found on the home page.`);
   }
   const wanted = deps.calculatorPath;
   const isCalculator = (path: string): boolean =>
@@ -220,85 +244,70 @@ async function runInCalculator(deps: {
     const elsewhere = newPages()
       .map((w) => pathOf(w.webContents.getURL()))
       .find((path) => path && path !== 'blank');
-    return {
-      result: failed(
-        'Open the calculator',
-        elsewhere
-          ? `The calculator did not open: the tile opened ${elsewhere}, which the app does not know.`
-          : 'The calculator did not open.',
-      ),
-      last: null,
-      notes: [],
-      kept: {},
-    };
+    return failed(
+      'Open the calculator',
+      elsewhere
+        ? `The calculator did not open: the tile opened ${elsewhere}, which the app does not know.`
+        : 'The calculator did not open.',
+    );
   }
+  const page = calculator;
 
   let last: PageOpResult | null = null;
   /** United India's messages the run closed and went on (closeErrors steps). */
   const notes: string[] = [];
   const kept: Record<string, string> = {};
-  for (const step of deps.steps) {
-    const result = await exec(calculator.webContents, step.op);
-    let errors = await exec(calculator.webContents, { op: 'errors' });
+  const progress = new FillProgress(deps.steps, deps.left);
+  const handOver = (stopped?: { label: string; why: string }): QuoteRunResult => {
+    page.focus();
+    return handedOver({
+      insurer: 'United India',
+      page,
+      progress,
+      stopped,
+      toDo: [...(deps.toDo ?? []), ...notes],
+      compose: (read) =>
+        deps.compose(read, read.value ? { ...kept, premium: read.value } : kept, [
+          ...new Set(notes),
+        ]),
+    });
+  };
+  for (const [index, step] of deps.steps.entries()) {
+    if (progress.stopBefore(index)) return handOver();
+    const result = await exec(page.webContents, step.op);
+    let errors = await exec(page.webContents, { op: 'errors' });
     if (errors.errors && step.closeErrors) {
-      notes.push(
-        `United India says: ${errors.errors.replace(/^\s*ERRORS\s*/i, '').replace(/\s*Close\s*$/, '')}`,
-      );
-      await exec(calculator.webContents, {
+      notes.push(`United India says: ${errorsText(errors.errors)}`);
+      await exec(page.webContents, {
         op: 'clickButton',
         text: 'Close',
         within: 'ERRORS',
         timeoutMs: 3000,
       });
       // The pop-up fades out: wait until it is gone before looking again.
-      await exec(calculator.webContents, {
-        op: 'waitForDialogGone',
-        text: 'ERRORS',
-        timeoutMs: 3000,
-      });
-      errors = await exec(calculator.webContents, { op: 'errors' });
+      await exec(page.webContents, { op: 'waitForDialogGone', text: 'ERRORS', timeoutMs: 3000 });
+      errors = await exec(page.webContents, { op: 'errors' });
     }
     if (errors.errors) {
-      calculator.focus();
-      return {
-        result: failed(step.label, `United India says: ${errors.errors}`),
-        last,
-        notes,
-        kept,
-      };
+      return handOver({
+        label: step.label,
+        why: `United India says: ${errorsText(errors.errors)}`,
+      });
     }
     if (!result.ok && step.optional) {
       if (step.ifMissed) notes.push(step.ifMissed);
       continue;
     }
+    if (!result.ok && progress.skip(step, index, result)) continue;
     last = result;
     if (last.ok && step.keep && last.value) kept[step.keep] = last.value;
-    if (!last.ok) {
-      calculator.focus();
-      return {
-        result: failed(
-          step.label,
-          /^only-\d+$/.test(last.detail ?? '')
-            ? `United India offers ${last.detail!.slice(5)} choices here for this trip: pick a lower one, or choose it by hand.`
-            : last.detail?.startsWith('option-missing')
-              ? `United India's list at "${step.label}" did not offer this choice${
-                  /\(offered: (.*)\)$/.exec(last.detail)?.[1]
-                    ? ` (it showed: ${/\(offered: (.*)\)$/.exec(last.detail)![1]})`
-                    : ''
-                }. If it showed only "Select", United India had not loaded the list yet: try again, or choose it by hand and finish this quote.`
-              : step.ifStuck
-                ? `Stopped at "${step.label}": ${step.ifStuck}`
-                : `Stopped at "${step.label}" (${last.detail ?? 'unknown'}). The calculator may have changed; finish this quote by hand.`,
-        ),
-        last,
-        notes,
-        kept,
-      };
-    }
+    if (!last.ok) return handOver({ label: step.label, why: explainUiic(step, last.detail) });
   }
-  calculator.focus();
+  // Every step ran, but some boxes were left (a form without a premium step of its own).
+  if (progress.left.length > 0) return handOver();
+  page.focus();
   // The same message may come from more than one step (each section opened lists it again).
-  return { result: null, last, notes: [...new Set(notes)], kept };
+  return deps.compose(last, kept, [...new Set(notes)]);
 }
 
 export async function runUiicHealthQuote(deps: {
@@ -310,24 +319,26 @@ export async function runUiicHealthQuote(deps: {
 }): Promise<QuoteRunResult> {
   const plan = planUiicHealthQuote(deps.client, { goodHealth: deps.goodHealth, today: deps.today });
   if (!plan.ok) return refused('This client cannot be quoted automatically yet.', plan.problems);
-  const { result, last } = await runInCalculator({
+  return runInCalculator({
     windows: deps.windows,
     tile: 'Health Policy Premium Calculator',
     calculatorPath: '/CustomerAppLive/data/HealthPolicyNewQuote.html',
     steps: plan.steps,
+    left: plan.left,
+    compose: (last) => {
+      const plans = last?.plans ?? [];
+      const first = plans[0] ?? { name: 'Premium', amount: '' };
+      return {
+        outcome: 'ready',
+        step: null,
+        message: `United India health premiums (excluding GST): ${plans.map((p) => `${p.name} ₹${p.amount}`).join('; ')}.`,
+        problems: [],
+        premium: { label: first.name, amount: first.amount },
+        plans,
+        amountLabel: 'Premium (excluding GST)',
+      };
+    },
   });
-  if (result) return result;
-  const plans = last?.plans ?? [];
-  const first = plans[0] ?? { name: 'Premium', amount: '' };
-  return {
-    outcome: 'ready',
-    step: null,
-    message: `United India health premiums (excluding GST): ${plans.map((p) => `${p.name} ₹${p.amount}`).join('; ')}.`,
-    problems: [],
-    premium: { label: first.name, amount: first.amount },
-    plans,
-    amountLabel: 'Premium (excluding GST)',
-  };
 }
 
 export async function runUiicMotorQuote(deps: {
@@ -337,22 +348,24 @@ export async function runUiicMotorQuote(deps: {
 }): Promise<QuoteRunResult> {
   const plan = planUiicMotorQuote(deps.vehicle, { today: deps.today });
   if (!plan.ok) return refused('This vehicle cannot be quoted automatically yet.', plan.problems);
-  const { result, last } = await runInCalculator({
+  return runInCalculator({
     windows: deps.windows,
     tile: 'Motor Premium Calculator',
     calculatorPath: '/CustomerPortalWeb/PremiumCalculator/data/MotorQuote.html',
     steps: plan.steps,
+    left: plan.left,
+    compose: (last) => {
+      const amount = last?.value ?? '';
+      const label = last?.label ?? 'Premium';
+      return {
+        outcome: 'ready',
+        step: null,
+        message: `United India motor premium (including GST): ${amount}. ${label}. United India calls this a provisional quote premium; the agent's discount may change it.`,
+        problems: [],
+        premium: { label, amount },
+      };
+    },
   });
-  if (result) return result;
-  const amount = last?.value ?? '';
-  const label = last?.label ?? 'Premium';
-  return {
-    outcome: 'ready',
-    step: null,
-    message: `United India motor premium (including GST): ${amount}. ${label}. United India calls this a provisional quote premium; the agent's discount may change it.`,
-    problems: [],
-    premium: { label, amount },
-  };
 }
 
 export async function runUiicHealthProposal(deps: {
@@ -365,20 +378,30 @@ export async function runUiicHealthProposal(deps: {
   const form = UIIC_PROPOSAL_FORMS[deps.form];
   const plan = planUiicHealthProposal(deps.client, { form: deps.form, aadhaar: deps.aadhaar });
   if (!plan.ok) return refused('This client cannot be filled in automatically yet.', plan.problems);
-  const { result, notes } = await runInCalculator({
+  return runInCalculator({
     windows: deps.windows,
     tile: form.tile,
     calculatorPath: form.path,
     steps: plan.steps,
+    toDo: plan.byHand,
+    compose: (last, _kept, notes) =>
+      // Read after the advisor finished the form: the premium they had United India work out.
+      last?.ok && last.value
+        ? {
+            outcome: 'ready',
+            step: null,
+            message: `${form.name} proposal: United India's premium ₹${last.value}. Check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`,
+            problems: [],
+            premium: { label: `${form.name} proposal premium`, amount: last.value },
+          }
+        : {
+            outcome: 'ready',
+            step: null,
+            message: `${form.name} proposal: the proposer details and nominee relationship are filled. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`,
+            problems: [],
+            toDo: [...plan.byHand, ...notes],
+          },
   });
-  if (result) return result;
-  return {
-    outcome: 'ready',
-    step: null,
-    message: `${form.name} proposal: the proposer details and nominee relationship are filled. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`,
-    problems: [],
-    toDo: [...plan.byHand, ...notes],
-  };
 }
 
 export async function runUiicTravelProposal(deps: {
@@ -399,26 +422,28 @@ export async function runUiicTravelProposal(deps: {
     today: deps.today,
   });
   if (!plan.ok) return refused('This trip cannot be filled in automatically.', plan.problems);
-  const { result, last, notes } = await runInCalculator({
+  return runInCalculator({
     windows: deps.windows,
     tile: 'Overseas Travel Insurance E-Proposal Form',
     calculatorPath: '/CustomerAppLive/data/ProposalOTIhome.html',
     steps: plan.steps,
+    toDo: plan.byHand,
+    compose: (last, _kept, notes) => {
+      // The premium box may hold a placeholder (0) until View Premium works it out.
+      const amount = last?.value && Number(last.value.replace(/,/g, '')) > 0 ? last.value : null;
+      const label = 'Total Premium (including GST)';
+      return {
+        outcome: 'ready',
+        step: null,
+        message: amount
+          ? `Overseas Travel proposal filled. United India's total premium (including GST): ${amount}. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`
+          : 'Overseas Travel proposal filled; United India did not show the premium yet (see its messages below). Fill in what is listed below, press View Premium, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.',
+        problems: [],
+        ...(amount ? { premium: { label, amount } } : {}),
+        toDo: [...plan.byHand, ...notes],
+      };
+    },
   });
-  if (result) return result;
-  // The premium box may hold a placeholder (0) until View Premium works it out.
-  const amount = last?.value && Number(last.value.replace(/,/g, '')) > 0 ? last.value : null;
-  const label = 'Total Premium (including GST)';
-  return {
-    outcome: 'ready',
-    step: null,
-    message: amount
-      ? `Overseas Travel proposal filled. United India's total premium (including GST): ${amount}. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`
-      : 'Overseas Travel proposal filled; United India did not show the premium yet (see its messages below). Fill in what is listed below, press View Premium, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.',
-    problems: [],
-    ...(amount ? { premium: { label, amount } } : {}),
-    toDo: [...plan.byHand, ...notes],
-  };
 }
 
 export async function runUiicOmpProposal(deps: {
@@ -440,23 +465,26 @@ export async function runUiicOmpProposal(deps: {
     today: deps.today,
   });
   if (!plan.ok) return refused('This trip cannot be filled in automatically.', plan.problems);
-  const { result, notes, kept } = await runInCalculator({
+  return runInCalculator({
     windows: deps.windows,
     tile: form.tile,
     calculatorPath: form.path,
     steps: plan.steps,
+    toDo: plan.byHand,
+    compose: (_last, kept, notes) => {
+      const amount =
+        kept.premium && Number(kept.premium.replace(/,/g, '')) > 0 ? kept.premium : null;
+      const chosen = kept.plan ? `plan ${kept.plan}` : 'the plan';
+      return {
+        outcome: 'ready',
+        step: null,
+        message: amount
+          ? `${form.name} proposal filled with ${chosen}. United India's total premium: ${amount}. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`
+          : `${form.name} proposal filled with ${chosen}; United India did not show the premium (see its messages below). Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`,
+        problems: [],
+        ...(amount ? { premium: { label: `Total premium, ${chosen}`, amount } } : {}),
+        toDo: [...plan.byHand, ...notes],
+      };
+    },
   });
-  if (result) return result;
-  const amount = kept.premium && Number(kept.premium.replace(/,/g, '')) > 0 ? kept.premium : null;
-  const chosen = kept.plan ? `plan ${kept.plan}` : 'the plan';
-  return {
-    outcome: 'ready',
-    step: null,
-    message: amount
-      ? `${form.name} proposal filled with ${chosen}. United India's total premium: ${amount}. Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`
-      : `${form.name} proposal filled with ${chosen}; United India did not show the premium (see its messages below). Fill in what is listed below, check every section, then press Save As Draft yourself. The app never saves or submits a proposal.`,
-    problems: [],
-    ...(amount ? { premium: { label: `Total premium, ${chosen}`, amount } } : {}),
-    toDo: [...plan.byHand, ...notes],
-  };
 }

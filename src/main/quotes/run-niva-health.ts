@@ -16,6 +16,7 @@ import {
   type NivaHealthStep,
 } from './niva-health';
 import { exec, type QuoteRunResult } from './run-uiic-health';
+import { FillProgress, handedOver } from './hand-over';
 
 /** What a step's failure means, in the advisor's words. */
 function explain(step: NivaHealthStep, run: NivaRun, detail: string | undefined): string {
@@ -118,20 +119,49 @@ export async function runNivaHealthQuote(deps: {
     ...plan.byHand,
     ...(failed ? ['Fill the rest, press Calculate Premium yourself and check the premium.'] : []),
   ];
-  for (const step of plan.steps) {
+  /** The result once Niva Bupa shows the premium (`kept.premium`). */
+  const compose = (got: Record<string, string>): QuoteRunResult => {
+    // "1 Year ₹15,073": the policy period and its premium, as Niva Bupa shows them.
+    const shown = /^(.*?)\s*(₹\s?[\d,]+(?:\.\d+)?)\s*$/.exec(got.premium ?? '');
+    const premium = shown
+      ? {
+          label: `${got.plan ?? name}, ${nivaRupees(deps.run.sumInsured)}, ${shown[1]}`,
+          amount: shown[2]!,
+        }
+      : undefined;
+    return {
+      outcome: 'ready',
+      step: null,
+      message: premium
+        ? `Niva Bupa worked the premium out: ${premium.amount} for ${premium.label}. The app did not press Continue (the summary asking the customer's details).`
+        : `Niva Bupa: everything is filled and Calculate Premium was pressed, but the premium could not be read. Check it on Niva Bupa's page.`,
+      problems: [],
+      ...(premium ? { premium } : {}),
+      toDo: toDo(false),
+    };
+  };
+  // A box Niva Bupa does not take is left for the advisor, and the run goes on; anything else
+  // that fails hands the form over (hand-over.ts).
+  const progress = new FillProgress(plan.steps);
+  const handOver = (stopped?: { label: string; why: string }): QuoteRunResult => {
+    page.focus();
+    return handedOver({
+      insurer: 'Niva Bupa',
+      page,
+      progress,
+      stopped,
+      toDo: toDo(false),
+      compose: (read) => compose({ ...kept, premium: read.value ?? '' }),
+    });
+  };
+  for (const [index, step] of plan.steps.entries()) {
+    if (progress.stopBefore(index)) return handOver();
     const result = await exec(wc, step.op);
     if (result.ok && step.keep && result.value) kept[step.keep] = result.value;
     if (step.popupAfter) {
       const popup = await exec(wc, { op: 'popup' });
       if (popup.errors) {
-        page.focus();
-        return {
-          outcome: 'failed',
-          step: step.label,
-          message: `Niva Bupa says: ${popup.errors}`,
-          problems: [],
-          toDo: toDo(true),
-        };
+        return handOver({ label: step.label, why: `Niva Bupa says: ${popup.errors}` });
       }
     }
     if (!result.ok) {
@@ -141,33 +171,10 @@ export async function runNivaHealthQuote(deps: {
         if (step.ifMissed && !missed.includes(step.ifMissed)) missed.push(step.ifMissed);
         continue;
       }
-      page.focus();
-      return {
-        outcome: 'failed',
-        step: step.label,
-        message: explain(step, deps.run, result.detail),
-        problems: [],
-        toDo: toDo(true),
-      };
+      if (progress.skip(step, index, result)) continue;
+      return handOver({ label: step.label, why: explain(step, deps.run, result.detail) });
     }
   }
   page.focus();
-  // "1 Year ₹15,073": the policy period and its premium, as Niva Bupa shows them.
-  const shown = /^(.*?)\s*(₹\s?[\d,]+(?:\.\d+)?)\s*$/.exec(kept.premium ?? '');
-  const premium = shown
-    ? {
-        label: `${kept.plan ?? name}, ${nivaRupees(deps.run.sumInsured)}, ${shown[1]}`,
-        amount: shown[2]!,
-      }
-    : undefined;
-  return {
-    outcome: 'ready',
-    step: null,
-    message: premium
-      ? `Niva Bupa worked the premium out: ${premium.amount} for ${premium.label}. The app did not press Continue (the summary asking the customer's details).`
-      : `Niva Bupa: everything is filled and Calculate Premium was pressed, but the premium could not be read. Check it on Niva Bupa's page.`,
-    problems: [],
-    ...(premium ? { premium } : {}),
-    toDo: toDo(false),
-  };
+  return compose(kept);
 }

@@ -1,0 +1,308 @@
+// Runs ICICI Lombard's NYSA motor quote in ICICI's own page, as the advisor recorded it
+// (icici-lombard-2026-11-20T07-23-41-540Z; src/shared/insurers/icici.ts):
+//   NYSA dashboard → Motor tile (ICICI's server hands out the address: /NysaMotor/quote) →
+//   Vehicle Details: Rollover, the ownership change question, Registration Number →
+//   Fetch Vehicle Data (ICICI looks the vehicle up in Vahan itself; a two-wheeler's number shows
+//   "…belongs to Two Wheeler. Switching to the Two Wheeler buying flow", answered OK) →
+//   /NysaMotor/premium: "Total Premium ₹2,533" and the IDV slider (its box and Update).
+// Only renewals of registered vehicles (Rollover) are automated: ICICI's New Business flow was not
+// recorded. It never presses Buy Now (it saves the quote, GenericSaveQuote), Share Quote, or
+// anything on the proposal.
+import type { PortalPage } from '../insurers/portal-host';
+import type { Vehicle } from '../../shared/contracts/vehicle';
+import type { IciciMotorRun } from '../../shared/insurers/icici';
+import { exec, runPause, type QuoteRunResult } from './run-uiic-health';
+import { FillProgress, handedOver } from './hand-over';
+import type { PageOp } from './page-ops';
+
+export const ICICI_QUOTE_PATH = '/NysaMotor/quote';
+export const ICICI_PREMIUM_PATH = '/NysaMotor/premium';
+const MOTOR_PREFIX = '/NysaMotor/';
+
+const REGISTRATION = 'input[formcontrolname="vehicleRegistrationNo"]';
+/** NYSA's IDV box and its Update button (lib-idv-slider). */
+const IDV_BOX = 'lib-idv-slider input[type="text"]';
+const IDV_UPDATE = 'lib-idv-slider button';
+/** ICICI's own message when the number is a two-wheeler's (or a car's) on the other flow. */
+const SWITCHING = /switching to the .*flow/i;
+
+const pathOf = (url: string): string => {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return '';
+  }
+};
+const rupees = (n: number): string => n.toLocaleString('en-IN');
+
+/** Why this vehicle and run cannot be filled in (nothing is touched). */
+export function iciciMotorProblems(vehicle: Vehicle, run: IciciMotorRun): string[] {
+  const problems: string[] = [];
+  if (vehicle.condition === 'new') {
+    problems.push(
+      'ICICI Lombard is automated for renewals of registered vehicles only (Rollover): its New Business form was not recorded. Quote a new vehicle on NYSA by hand.',
+    );
+  }
+  if (!run.registrationNumber) problems.push('Add the registration number.');
+  return problems;
+}
+
+export async function runIciciMotorQuote(deps: {
+  /** ICICI Lombard's pages (tabs): its portal first. */
+  windows: () => PortalPage[];
+  vehicle: Vehicle;
+  run: IciciMotorRun;
+}): Promise<QuoteRunResult> {
+  const { vehicle, run } = deps;
+  const problems = iciciMotorProblems(vehicle, run);
+  if (problems.length > 0) {
+    return {
+      outcome: 'refused',
+      step: null,
+      message: 'This vehicle cannot be quoted on ICICI Lombard automatically.',
+      problems,
+    };
+  }
+  const failed = (step: string, message: string, page?: PortalPage): QuoteRunResult => {
+    page?.focus();
+    return { outcome: 'failed', step, message, problems: [] };
+  };
+  const pages = () => deps.windows().filter((w) => !w.isDestroyed());
+  const path = (p: PortalPage) => pathOf(p.webContents.getURL());
+  /** Waits (bounded) until a page of ICICI's shows an address that `wanted` accepts. */
+  const waitForPath = async (wanted: (path: string) => boolean, ms: number) => {
+    for (let waited = 0; waited <= ms; waited += 500) {
+      const page = pages().find((p) => wanted(path(p)));
+      if (page) return page;
+      await runPause(500);
+    }
+    return undefined;
+  };
+
+  // 1. The quote form: already open, on another NYSA Motor screen (its Quote tab), or from the
+  // dashboard's Motor tile.
+  let page = pages().find((p) => path(p) === ICICI_QUOTE_PATH);
+  if (!page) {
+    const motor = pages().find((p) => path(p).startsWith(MOTOR_PREFIX));
+    if (motor) {
+      const tab = await exec(motor.webContents, {
+        op: 'clickSelector',
+        selector: 'app-menu-tabs button',
+        text: 'Quote',
+        timeoutMs: 5000,
+      });
+      // The tab may load a new page as it is pressed (the step then cannot answer): that is fine.
+      if (!tab.ok && !tab.detail?.startsWith('page-changed')) {
+        return failed(
+          'Open the quote form',
+          `NYSA's Quote tab was not found (${tab.detail}). Open Motor → Quote by hand, then press again.`,
+          motor,
+        );
+      }
+    } else {
+      const dashboard = pages()[0];
+      if (!dashboard) {
+        return failed('Open the quote form', 'Open ICICI Lombard and sign in, then try again.');
+      }
+      const tile = await exec(dashboard.webContents, {
+        op: 'clickText',
+        text: 'Motor',
+        timeoutMs: 10_000,
+      });
+      if (!tile.ok && !tile.detail?.startsWith('page-changed')) {
+        return failed(
+          'Open the quote form',
+          `The Motor tile was not found on NYSA's dashboard (${tile.detail}). Open Motor by hand, then press again.`,
+          dashboard,
+        );
+      }
+    }
+    page = await waitForPath((p) => p === ICICI_QUOTE_PATH, 30_000);
+    if (!page) {
+      return failed(
+        'Open the quote form',
+        "ICICI did not open NYSA Motor's quote form. Open Motor by hand (its Quote tab), then press again.",
+        pages()[0],
+      );
+    }
+  }
+  const wc = page.webContents;
+  const onPage = page;
+  // Once the form is open, a step that fails hands it over: the advisor finishes it in NYSA and
+  // gets the premium, and the app reads it and saves the PDF (hand-over.ts).
+  const TOTAL = { op: 'readAmount', label: 'Total Premium', timeoutMs: 60_000 } as const;
+  const progress = new FillProgress([{ label: 'Read the premium', op: TOTAL }]);
+  const handOver = (label: string, why: string): QuoteRunResult => {
+    onPage.focus();
+    return handedOver({
+      insurer: 'ICICI Lombard',
+      page: onPage,
+      progress,
+      stopped: { label, why },
+      compose: (read) => ({
+        outcome: 'ready',
+        step: null,
+        message: `ICICI Lombard: the Total Premium shown is ₹${read.value ?? ''}.`,
+        problems: [],
+        premium: {
+          label: `ICICI Lombard motor, ${run.registrationNumber}`,
+          amount: (read.value ?? '').replace(/[^\d.]/g, ''),
+        },
+        amountLabel: 'Total premium',
+      }),
+    });
+  };
+  const step = async (label: string, op: PageOp): Promise<QuoteRunResult | null> => {
+    const result = await exec(wc, op);
+    if (result.ok) return null;
+    return handOver(label, `NYSA did not take this step (${result.detail ?? 'unknown'}).`);
+  };
+
+  // A message left open from before (ICICI's pop-ups block the form).
+  const before = await exec(wc, { op: 'popup' });
+  if (before.errors) {
+    page.focus();
+    return {
+      outcome: 'refused',
+      step: null,
+      message: `Close ICICI's message first, then try again. It says: ${before.errors}`,
+      problems: [],
+    };
+  }
+
+  // 2. Vehicle Details.
+  const stop = await step('Vehicle details form', {
+    op: 'waitFor',
+    selector: REGISTRATION,
+    timeoutMs: 20_000,
+  });
+  if (stop) return stop;
+  // A number fetched before is locked behind its Edit button.
+  await exec(wc, { op: 'clickSelector', selector: 'button[aria-label="Edit"]', timeoutMs: 500 });
+  const policyType = 'input[name="policyType"][value^="Roll"]';
+  for (const [label, op] of [
+    [
+      'Policy type: Rollover',
+      { op: 'clickSelector', selector: `label:has(> ${policyType})`, timeoutMs: 10_000 },
+    ],
+    [
+      'Policy type: Rollover',
+      { op: 'waitFor', selector: `${policyType}:checked`, timeoutMs: 3000 },
+    ],
+  ] as const) {
+    const s = await step(label, op);
+    if (s) return s;
+  }
+  // Asked on the car flow only (the two-wheeler flow has no such question).
+  const owner = `input[name="ownershipChange"][value="${run.ownershipChanged ? 'yes' : 'no'}"]`;
+  if ((await exec(wc, { op: 'waitFor', selector: owner, timeoutMs: 1500 })).ok) {
+    for (const op of [
+      { op: 'clickSelector', selector: `label:has(> ${owner})`, timeoutMs: 3000 },
+      { op: 'waitFor', selector: `${owner}:checked`, timeoutMs: 3000 },
+    ] as const) {
+      const s = await step('Ownership changed', op);
+      if (s) return s;
+    }
+  }
+  for (const [label, op] of [
+    [
+      'Registration number',
+      { op: 'setField', selector: REGISTRATION, value: run.registrationNumber },
+    ],
+    [
+      'Fetch Vehicle Data',
+      {
+        op: 'clickSelector',
+        selector: 'button[type="submit"]',
+        text: 'Fetch Vehicle Data',
+        timeoutMs: 5000,
+      },
+    ],
+  ] as const) {
+    const s = await step(label, op);
+    if (s) return s;
+  }
+
+  // 3. ICICI looks the vehicle up and opens the premium page; it may first say the number belongs
+  // to the other flow (answered OK, as recorded) or that something is wrong (the run stops).
+  let premiumShown = false;
+  for (let waited = 0; waited < 90_000 && !premiumShown; waited += 1000) {
+    if (path(page) === ICICI_PREMIUM_PATH) {
+      premiumShown = true;
+      break;
+    }
+    const popup = await exec(wc, { op: 'popup' });
+    if (popup.errors) {
+      if (!SWITCHING.test(popup.errors)) {
+        return handOver('Fetch Vehicle Data', `ICICI says: ${popup.errors.replace(/\s*OK$/, '')}`);
+      }
+      const ok = await exec(wc, {
+        op: 'clickSelector',
+        selector: '.swal2-confirm, [role="dialog"] button',
+        text: 'OK',
+        timeoutMs: 3000,
+      });
+      if (!ok.ok) {
+        return handOver('Fetch Vehicle Data', `ICICI says: ${popup.errors} Press OK there.`);
+      }
+    }
+    await runPause(1000);
+  }
+  if (!premiumShown) {
+    return handOver(
+      'Fetch Vehicle Data',
+      'ICICI did not show the premium page within 90 seconds (check for a message under the registration number).',
+    );
+  }
+
+  // 4. The premium, at ICICI's IDV or the vehicle's.
+  const total = TOTAL;
+  const first = await exec(wc, total);
+  if (!first.ok || !first.value) {
+    return handOver(
+      'Read the premium',
+      `ICICI did not show the Total Premium (${first.detail ?? 'unknown'}).`,
+    );
+  }
+  let amount = first.value;
+  let note = '';
+  if (run.idv === 'vehicle') {
+    const want = String(vehicle.idvRupees);
+    const set = await exec(wc, { op: 'setField', selector: IDV_BOX, value: want });
+    const update = set.ok
+      ? await exec(wc, {
+          op: 'clickSelector',
+          selector: IDV_UPDATE,
+          text: 'Update',
+          timeoutMs: 5000,
+        })
+      : set;
+    if (!update.ok) {
+      note = ` The vehicle's IDV (₹${rupees(vehicle.idvRupees)}) could not be set on NYSA (${update.detail ?? 'unknown'}), so this premium is at ICICI's own IDV.`;
+    } else {
+      const again = await exec(wc, { ...total, fresh: true });
+      if (!again.ok || !again.value) {
+        return handOver(
+          'Read the premium',
+          `ICICI did not show a new Total Premium after the IDV was updated (${again.detail ?? 'unknown'}).`,
+        );
+      }
+      amount = again.value;
+    }
+  }
+  const idv = await exec(wc, { op: 'readValue', selector: IDV_BOX, timeoutMs: 3000 });
+  const idvShown = idv.ok && idv.value ? idv.value.replace(/[^\d]/g, '') : '';
+  if (run.idv === 'vehicle' && !note && idvShown && idvShown !== String(vehicle.idvRupees)) {
+    note = ` ICICI kept the IDV at ₹${rupees(Number(idvShown))} (the vehicle's ₹${rupees(vehicle.idvRupees)} is outside what it allows).`;
+  }
+  page.focus();
+  const label = `ICICI Lombard motor, ${run.registrationNumber}${idvShown ? `, IDV ₹${rupees(Number(idvShown))}` : ''}`;
+  return {
+    outcome: 'ready',
+    step: null,
+    message: `ICICI Lombard worked the premium out: ₹${amount} (Total Premium).${note} The app did not press Buy Now.`,
+    problems: [],
+    premium: { label, amount: amount.replace(/[^\d.]/g, '') },
+    amountLabel: 'Total premium',
+  };
+}

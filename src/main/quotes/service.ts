@@ -18,7 +18,10 @@ import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
 import type { QuoteRunRequest } from '../../shared/ipc/contract';
 import { findPortal, mayFillLogin } from '../../shared/insurers/portals';
+import { GUESSED_READING, type HandOver } from './hand-over';
+import type { PageOp, PageOpResult } from './page-ops';
 import {
+  lastWorkedPage,
   runUiicHealthProposal,
   runUiicHealthQuote,
   runUiicMotorQuote,
@@ -43,6 +46,10 @@ import {
 } from './quote-document';
 import { runNiaHealthQuote } from './run-nia-health';
 import { runNiaMotorQuote } from './run-nia-motor';
+import { runIciciMotorQuote } from './run-icici-motor';
+import { IciciApiError, type IciciApiClient } from '../icici-api/client';
+import { runIciciHealthPremium } from '../icici-api/health';
+import { runIciciMotorPremium } from '../icici-api/motor';
 import { runNiaMarineQuote } from './run-nia-marine';
 import { runNiaPaQuote } from './run-nia-pa';
 import { runNiaFireQuote } from './run-nia-fire';
@@ -67,14 +74,49 @@ const PROPOSAL_FORM = {
 
 export interface QuoteService {
   run(request: QuoteRunRequest): Promise<QuoteRunResult>;
-  /** Stops the run in progress where it is; false if there is none. Presses nothing. */
+  /**
+   * Stops the run in progress where it is, or the wait for a handed-over form's premium; false if
+   * there is neither. Presses nothing.
+   */
   cancel(): boolean;
+  /**
+   * Finishes the form the last run left for the advisor (request of 20 November 2026): once the
+   * advisor has filled the rest and pressed the insurer's premium button, reads the premium from
+   * the insurer's page (waiting up to `waitMs`), or takes the `amount` the advisor typed, and
+   * saves the quote as a PDF. Presses nothing.
+   */
+  finish(request: { waitMs: number; amount?: string }): Promise<QuoteRunResult>;
   /** Opens a quote PDF this app saved (by its name); false for any other. */
   openPdf(name: string): Promise<boolean>;
 }
 
 /** Who and what a quote is for, in its document. */
 type QuoteFacts = Pick<QuoteDocument, 'details' | 'members'> & { clientName: string | null };
+
+/** A form the last run left for the advisor to finish, and how the app finishes it. */
+interface Pending {
+  insurerId: string;
+  request: QuoteRunRequest;
+  facts: QuoteFacts;
+  /** How to read the premium, and the result it makes; null: the advisor types it. */
+  handOver: HandOver | null;
+  finish: NonNullable<QuoteRunResult['finish']>;
+  /** What the reading found on the form when it was handed over (not the premium asked for). */
+  baseline: string | null;
+  /** Set by cancel: the wait stops (the advisor can still type the premium). */
+  stopWatching: boolean;
+  /** The finished result, once one wait or the typed amount finished it. */
+  done: QuoteRunResult | null;
+}
+
+/** A premium reading, short, as a poll: never "only after this step" (fresh). */
+function pollOp(read: PageOp): PageOp {
+  if (read.op === 'readAmount') return { ...read, fresh: false, timeoutMs: 2500 };
+  return 'timeoutMs' in read ? { ...read, timeoutMs: Math.min(read.timeoutMs, 2500) } : read;
+}
+const readingKey = (r: PageOpResult): string =>
+  r.plans?.length ? JSON.stringify(r.plans) : (r.value ?? '');
+const pauseMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** The kind of insurance, for the document's title. */
 const KIND: Partial<Record<QuoteRunRequest['product'], string>> = {
@@ -90,6 +132,9 @@ const KIND: Partial<Record<QuoteRunRequest['product'], string>> = {
   'hdfc-retail': 'Health',
   motor: 'Motor',
   'hdfc-motor': 'Motor',
+  'icici-motor': 'Motor',
+  'icici-api-motor': 'Motor',
+  'icici-api-health': 'Health',
   'travel-proposal': 'Travel',
   'omp-proposal': 'Travel',
   'nia-travel': 'Travel',
@@ -108,6 +153,8 @@ const PRODUCT_TITLE: Partial<Record<QuoteRunRequest['product'], string>> = {
   'travel-proposal': 'Overseas Travel',
   'omp-proposal': 'Overseas Mediclaim',
   'hdfc-motor': 'motor',
+  'icici-motor': 'motor',
+  'icici-api-motor': 'motor',
   'hdfc-mst': 'MST',
   'hdfc-retail': 'health',
   'hdfc-travel': 'travel',
@@ -133,8 +180,14 @@ export function createQuoteService(deps: {
   now?: () => Date;
   /** Where fetched quotes are saved as PDFs; absent, none are saved. */
   pdfs?: QuotePdfs;
+  /**
+   * ICICI Lombard's partner API, in the environment chosen in Settings: its client, with the IMID
+   * code for health premiums; null when it is not set up.
+   */
+  iciciApi?: () => Promise<{ client: IciciApiClient; imidCode?: string } | null>;
 }): QuoteService {
   let running = false;
+  let pending: Pending | null = null;
   /**
    * While a run works, the tab it fills is brought to the front (once per change of tab), so the
    * advisor watches the insurer's form, including a pop-up such as United India's calculator.
@@ -217,7 +270,10 @@ export function createQuoteService(deps: {
       issuedAt,
       reference: quoteReference(issuedAt),
       clientName: facts.clientName ?? 'Client',
-      details: facts.details,
+      details: [
+        ...facts.details,
+        ...(result.breakdown ?? []).map((b): [string, string] => [b.label, b.value]),
+      ],
       ...(facts.members ? { members: facts.members } : {}),
       plans,
       amountLabel: result.amountLabel ?? 'Premium',
@@ -248,6 +304,182 @@ export function createQuoteService(deps: {
       return { ...result, message: `${result.message} The quote could not be saved as a PDF.` };
     }
   };
+  /**
+   * A run's result for the screens: a handed-over form (or one filled without a premium) is kept
+   * to be finished later; a premium is saved as a PDF.
+   */
+  const conclude = async (
+    result: QuoteRunResult,
+    request: QuoteRunRequest,
+    facts: QuoteFacts,
+  ): Promise<QuoteRunResult> => {
+    const { handOver, ...view } = result;
+    pending = null;
+    const insurerId = request.insurerId;
+    // A form filled (or partly) without a premium: the page the run ended in, read by the usual
+    // captions once the advisor has the premium.
+    const fallback = (): HandOver | null => {
+      const wc = lastWorkedPage();
+      const page = wc ? deps.windowsOf(insurerId).find((p) => p.webContents === wc) : undefined;
+      if (!page) return null;
+      const insurer = findPortal(insurerId)?.displayName ?? insurerId;
+      return {
+        page,
+        read: GUESSED_READING,
+        known: false,
+        compose: (read) => ({
+          outcome: 'ready',
+          step: null,
+          message: `${insurer}: the premium shown is ₹${read.value ?? ''}.`,
+          problems: [],
+          premium: {
+            label: `${insurer} premium`,
+            amount: (read.value ?? '').replace(/[^\d.]/g, ''),
+          },
+        }),
+      };
+    };
+    const finishable =
+      view.outcome === 'handed-over' ||
+      (!view.premium && (view.outcome === 'ready' || view.outcome === 'failed'));
+    if (!finishable) return withPdf(view, request, facts);
+    const how = handOver ?? fallback();
+    const finish = view.finish ?? { button: null, guessed: true };
+    let baseline: string | null = null;
+    if (how) {
+      const r = how.page.isDestroyed()
+        ? null
+        : await exec(how.page.webContents, pollOp(how.read)).catch(() => null);
+      baseline = r?.ok ? readingKey(r) : null;
+    }
+    pending = {
+      insurerId,
+      request,
+      facts,
+      handOver: how,
+      finish,
+      baseline,
+      stopWatching: false,
+      done: null,
+    };
+    return { ...view, finish };
+  };
+  /** The premium on the handed-over form, once the insurer shows one it did not show before. */
+  const readPremium = async (p: Pending): Promise<PageOpResult | null> => {
+    const how = p.handOver;
+    if (!how) return null;
+    const op = pollOp(how.read);
+    const own = how.page.isDestroyed() ? null : how.page;
+    // The form's own page first; if it was closed, any of the insurer's pages (a new tab).
+    const pages = own ? [own] : deps.windowsOf(p.insurerId).filter((w) => !w.isDestroyed());
+    for (const page of pages) {
+      const r = await exec(page.webContents, op).catch(() => null);
+      if (!r?.ok || !readingKey(r)) continue;
+      if (page === own && readingKey(r) === p.baseline) continue;
+      return r;
+    }
+    return null;
+  };
+  const finished = async (p: Pending, result: QuoteRunResult): Promise<QuoteRunResult> => {
+    deps.logger.log('info', 'quote.finished', {
+      insurer: p.insurerId,
+      quoteOutcome: result.outcome,
+    });
+    const saved = await withPdf(result, p.request, p.facts);
+    p.done = saved;
+    if (pending === p) pending = null;
+    return saved;
+  };
+  /** ICICI Lombard by its partner API: no portal, no form; a premium or ICICI's reason. */
+  const runByIciciApi = async (
+    request: Extract<QuoteRunRequest, { product: 'icici-api-motor' | 'icici-api-health' }>,
+  ): Promise<QuoteRunResult> => {
+    if (running) {
+      return {
+        outcome: 'refused',
+        step: null,
+        message: 'A quote is already being worked out.',
+        problems: [],
+      };
+    }
+    const api = deps.iciciApi ? await deps.iciciApi() : null;
+    if (!api) {
+      return {
+        outcome: 'refused',
+        step: null,
+        message:
+          "ICICI Lombard's API is not set up: on the Insurer portals screen, press Partner API on ICICI Lombard, choose UAT or Production and save its partner login.",
+        problems: [],
+      };
+    }
+    const today = (deps.now ?? (() => new Date()))();
+    // Read before anything is sent: an unknown vehicle or client is refused at once.
+    const subject =
+      request.product === 'icici-api-motor'
+        ? {
+            kind: 'vehicle' as const,
+            vehicle: (await deps.clients.getVehicle(request.vehicleId)).saved.vehicle,
+          }
+        : { kind: 'client' as const, record: await deps.clients.get(request.clientId) };
+    running = true;
+    try {
+      const result =
+        subject.kind === 'vehicle' && request.product === 'icici-api-motor'
+          ? await runIciciMotorPremium({
+              api: api.client,
+              vehicle: subject.vehicle,
+              run: request.run,
+            })
+          : subject.kind === 'client' && request.product === 'icici-api-health'
+            ? await runIciciHealthPremium({
+                api: api.client,
+                client: subject.record.client,
+                run: request.run,
+                today,
+                ...(api.imidCode ? { imidCode: api.imidCode } : {}),
+              })
+            : (() => {
+                throw new AppException('VALIDATION_FAILED');
+              })();
+      deps.logger.log(result.outcome === 'failed' ? 'warn' : 'info', 'quote.run', {
+        insurer: request.insurerId,
+        quoteOutcome: result.outcome,
+      });
+      const facts: QuoteFacts =
+        subject.kind === 'vehicle'
+          ? {
+              clientName: null,
+              details: [
+                ...(request.product === 'icici-api-motor' && request.run.registrationNumber
+                  ? ([['Registration number', request.run.registrationNumber]] as [
+                      string,
+                      string,
+                    ][])
+                  : []),
+                // ICICI's own IDV is in the breakdown.
+                ...vehicleFacts(subject.vehicle).details.filter(
+                  ([k]) => k !== 'Insured declared value',
+                ),
+              ],
+            }
+          : {
+              clientName: subject.record.client.customer.name,
+              ...healthFacts(subject.record.client, today),
+            };
+      return await withPdf(result, request, facts);
+    } catch (err) {
+      if (err instanceof IciciApiError) {
+        deps.logger.log('warn', 'quote.run', {
+          insurer: request.insurerId,
+          quoteOutcome: 'failed',
+        });
+        return { outcome: 'failed', step: 'ICICI Lombard API', message: err.message, problems: [] };
+      }
+      throw err;
+    } finally {
+      running = false;
+    }
+  };
   const follow = (insurerId: string): void => {
     let shown: unknown = null;
     followWork((wc) => {
@@ -259,11 +491,70 @@ export function createQuoteService(deps: {
     });
   };
   return {
-    cancel: () => running && stopRun(),
+    cancel: () => {
+      if (running) return stopRun();
+      if (!pending || pending.stopWatching) return false;
+      pending.stopWatching = true;
+      return true;
+    },
+    finish: async ({ waitMs, amount }) => {
+      const p = pending;
+      if (!p) {
+        return {
+          outcome: 'refused',
+          step: null,
+          message: 'No form is waiting to be finished: run a quote first.',
+          problems: [],
+        };
+      }
+      if (amount) {
+        const insurer = findPortal(p.insurerId)?.displayName ?? p.insurerId;
+        return finished(p, {
+          outcome: 'ready',
+          step: null,
+          message: `Premium as you read it on ${insurer}'s page: ₹${amount}.`,
+          problems: [],
+          premium: { label: `${insurer} premium`, amount },
+          amountLabel: 'Premium (as read by the advisor)',
+        });
+      }
+      p.stopWatching = false;
+      const until = Date.now() + waitMs;
+      for (;;) {
+        if (p.done) return p.done;
+        if (pending !== p) {
+          return {
+            outcome: 'cancelled',
+            step: null,
+            message: 'Stopped waiting: another quote was started.',
+            problems: [],
+          };
+        }
+        const read = await readPremium(p);
+        if (p.done) return p.done;
+        if (read && p.handOver) return finished(p, p.handOver.compose(read));
+        if (p.stopWatching || Date.now() >= until) break;
+        await pauseMs(2000);
+      }
+      return {
+        outcome: 'handed-over',
+        step: null,
+        message: p.stopWatching
+          ? 'Stopped watching for the premium. Type it in to save the PDF, or watch again.'
+          : 'The premium has not shown yet. Finish the form, or type the premium in to save the PDF.',
+        problems: [],
+        finish: p.finish,
+      };
+    },
     openPdf: (name) => deps.pdfs?.open(name) ?? Promise.resolve(false),
     run: async (request) => {
       if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
       const { insurerId } = request;
+      // A new run replaces any form left to finish.
+      pending = null;
+      if (request.product === 'icici-api-motor' || request.product === 'icici-api-health') {
+        return runByIciciApi(request);
+      }
       const newIndiaMotor = insurerId === 'new-india' && request.product === 'motor';
       const newIndiaOnly =
         request.product === 'nia-health' ||
@@ -280,9 +571,11 @@ export function createQuoteService(deps: {
           ? insurerId !== 'hdfc-ergo'
           : request.product === 'niva-health'
             ? insurerId !== 'niva-bupa'
-            : newIndiaOnly
-              ? insurerId !== 'new-india'
-              : insurerId !== 'united-india' && !newIndiaMotor;
+            : request.product === 'icici-motor'
+              ? insurerId !== 'icici-lombard'
+              : newIndiaOnly
+                ? insurerId !== 'new-india'
+                : insurerId !== 'united-india' && !newIndiaMotor;
       if (wrongInsurer) {
         return {
           outcome: 'refused',
@@ -347,7 +640,7 @@ export function createQuoteService(deps: {
             insurer: insurerId,
             quoteOutcome: result.outcome,
           });
-          return await withPdf(result, request, { clientName: null, details: [] });
+          return await conclude(result, request, { clientName: null, details: [] });
         } catch (err) {
           return whenCancelled(err, insurerId);
         } finally {
@@ -357,7 +650,9 @@ export function createQuoteService(deps: {
         }
       }
       const subject =
-        request.product === 'motor' || request.product === 'hdfc-motor'
+        request.product === 'motor' ||
+        request.product === 'hdfc-motor' ||
+        request.product === 'icici-motor'
           ? {
               kind: 'vehicle' as const,
               vehicle: (await deps.clients.getVehicle(request.vehicleId)).saved.vehicle,
@@ -382,9 +677,11 @@ export function createQuoteService(deps: {
           result =
             request.product === 'hdfc-motor'
               ? await runHdfcMotorQuote({ windows, vehicle: subject.vehicle, run: request.run })
-              : newIndiaMotor
-                ? await runNiaMotorQuote({ windows, vehicle: subject.vehicle, today })
-                : await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
+              : request.product === 'icici-motor'
+                ? await runIciciMotorQuote({ windows, vehicle: subject.vehicle, run: request.run })
+                : newIndiaMotor
+                  ? await runNiaMotorQuote({ windows, vehicle: subject.vehicle, today })
+                  : await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
         } else if (subject.kind === 'traveller') {
           const travel = {
             windows,
@@ -457,6 +754,7 @@ export function createQuoteService(deps: {
           request.product !== 'health' &&
           request.product !== 'motor' &&
           request.product !== 'hdfc-motor' &&
+          request.product !== 'icici-motor' &&
           request.product !== 'travel-proposal' &&
           request.product !== 'omp-proposal' &&
           request.product !== 'nia-travel' &&
@@ -480,7 +778,7 @@ export function createQuoteService(deps: {
           insurer: insurerId,
           quoteOutcome: result.outcome,
         });
-        return await withPdf(
+        return await conclude(
           result,
           request,
           subject.kind === 'traveller'
@@ -493,7 +791,19 @@ export function createQuoteService(deps: {
                   clientName: subject.record.client.customer.name,
                   ...healthFacts(subject.record.client, today),
                 }
-              : { clientName: null, ...vehicleFacts(subject.vehicle) },
+              : request.product === 'icici-motor'
+                ? {
+                    clientName: null,
+                    // ICICI works its own IDV out (shown with the premium), so the vehicle's is
+                    // not repeated; the registration number it was quoted for is.
+                    details: [
+                      ['Registration number', request.run.registrationNumber],
+                      ...vehicleFacts(subject.vehicle).details.filter(
+                        ([k]) => k !== 'Insured declared value',
+                      ),
+                    ],
+                  }
+                : { clientName: null, ...vehicleFacts(subject.vehicle) },
         );
       } catch (err) {
         return whenCancelled(err, insurerId);

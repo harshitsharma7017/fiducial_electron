@@ -1701,6 +1701,45 @@ label.check input {
   gap: var(--space-2);
 }
 
+/* A form the run left for the advisor: watching for its premium, or typing it (QuoteFinish). */
+.qw-finish {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--primary, var(--border-strong));
+  border-radius: var(--radius-lg, 10px);
+}
+
+.qw-finish p {
+  margin: 0;
+}
+
+.qw-finish button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.qw-finish-amount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.qw-finish-amount label {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.qw-finish-amount input {
+  max-width: 12rem;
+}
+
 .qw-empty {
   display: flex;
   align-items: center;
@@ -1952,4 +1991,29 @@ label.check input {
     opacity: 0;
     transform: translateY(8px);
   }
+}
+
+/* ICICI Lombard API premiums (IciciApiPanels): how ICICI made the premium up, and add-ons. */
+.breakdown {
+  margin: var(--space-2) 0 0;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.breakdown th,
+.breakdown td {
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.breakdown th {
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.addon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--space-2);
 }

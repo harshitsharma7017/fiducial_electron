@@ -21,7 +21,9 @@
 //   (Bajaj's Keycloak and United India do), are not written to disk by Electron: the session
 //   keeper (session-keeper.ts) keeps them, encrypted with the OS key, while the session runs, and
 //   puts them back at start-up, so a restart does not sign the advisor out (and OTP portals do
-//   not need the client's OTP again). The portal then reopens on the page it was on.
+//   not need the client's OTP again). The portal then reopens on the page it was on. Portals that
+//   keep the sign-in in the tab's session storage (ICICI Lombard's NYSA) have that kept too, and
+//   put back in the tab before the page reopens.
 // - Each session ends SESSION_HOURS after it started (session-clock.ts), or when the advisor signs
 //   out: its tabs are closed, the partition's cookies, storage and caches are wiped and the
 //   kept session cookies deleted, so the next open starts at the login page. Sessions with no
@@ -33,7 +35,7 @@
 //   fills it again.
 // Sign-in details are read from the vault just before a fill and are never logged or sent to
 // the renderer.
-import { session, type Session } from 'electron';
+import { session, type Session, type WebContents } from 'electron';
 import type { FillOutcome } from '../../shared/insurers/fill-outcomes';
 import {
   FILL_SHORTCUT_KEY,
@@ -45,7 +47,7 @@ import {
 } from '../../shared/insurers/portals';
 import type { Logger } from '../logging/logger';
 import type { PortalHost, PortalPage } from './portal-host';
-import type { SessionKeeper } from './session-keeper';
+import { keptStorageSchema, type KeptStorage, type SessionKeeper } from './session-keeper';
 import { hardenSession, setNavigationRule, setSessionPolicy } from '../security/navigation-policy';
 import { originOf, schemeOf } from '../security/origins';
 import { LOCKED_DOWN } from '../security/web-preferences';
@@ -66,6 +68,51 @@ const FORM_WAIT_MS = 15_000;
 const EXPIRY_CHECK_MS = 60_000;
 /** How soon after a cookie or page change the session is kept (changes come in bursts). */
 const SAVE_DELAY_MS = 1500;
+/**
+ * Session storage changes without any event the app sees (a portal renewing its token): a running
+ * session is saved again this often too.
+ */
+const STORAGE_SAVE_MS = 60_000;
+/** The isolated world session storage is read and put back in, apart from the portal's scripts. */
+const STORAGE_WORLD = 1806;
+
+/** In the page: its session storage, for its own origin. Serialised with toString. */
+function takeSessionStorage(): { origin: string; items: [string, string][] } | null {
+  try {
+    const items: [string, string][] = [];
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const key = sessionStorage.key(i);
+      if (key !== null) items.push([key, sessionStorage.getItem(key) ?? '']);
+    }
+    return items.length > 0 ? { origin: location.origin, items } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** In the page: puts kept session storage back. Serialised with toString. */
+function putSessionStorage(items: [string, string][]): void {
+  for (const [key, value] of items) {
+    try {
+      sessionStorage.setItem(key, value);
+    } catch {
+      // Over the browser's quota: what fits is put back.
+    }
+  }
+}
+
+async function readSessionStorage(wc: WebContents): Promise<KeptStorage | null> {
+  if (wc.isDestroyed()) return null;
+  try {
+    const taken = (await wc.executeJavaScriptInIsolatedWorld(STORAGE_WORLD, [
+      { code: `(${takeSessionStorage.toString()})()` },
+    ])) as unknown;
+    const parsed = keptStorageSchema.safeParse(taken);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
 
 export type SessionEnd = 'expired' | 'signed-out';
 
@@ -125,6 +172,10 @@ export function createPortalWindows(deps: {
   const pendingSave = new Map<string, NodeJS.Timeout>();
   /** Where each window reopens after a restart (the page it was on), until it is opened. */
   const reopenAt = new Map<string, string>();
+  /** The session storage each window had (NYSA's sign-in), put back before it reopens. */
+  const reopenStorage = new Map<string, KeptStorage>();
+  /** Insurers whose window is putting its session storage back: nothing is saved meanwhile. */
+  const restoring = new Set<string>();
   const watched = new WeakSet<Session>();
   // Keeping sessions alive while the advisor is away (session-alive.ts).
   const alive = createSessionAlive({
@@ -141,19 +192,33 @@ export function createPortalWindows(deps: {
     ...(deps.onSessionsRunning ? { onRunning: deps.onSessionsRunning } : {}),
   });
   alive.start();
+  const storageTimer = setInterval(() => {
+    for (const p of INSURER_PORTALS) {
+      if (deps.clock.startedAt(p.id) !== null && host.portalOf(p.id)) scheduleSave(p.id);
+    }
+  }, STORAGE_SAVE_MS);
+  storageTimer.unref?.();
   const scheduleSave = (id: string): void => {
     const keeper = deps.keeper;
     if (!keeper || deps.clock.startedAt(id) === null) return;
     clearTimeout(pendingSave.get(id));
     const timer = setTimeout(() => {
       pendingSave.delete(id);
-      if (deps.clock.startedAt(id) === null) return;
+      if (deps.clock.startedAt(id) === null || restoring.has(id)) return;
       const portal = findPortal(id);
       const page = host.portalOf(id);
       const url = page && !page.isDestroyed() ? page.webContents.getURL() : null;
-      const lastUrl =
-        url && portal && mayNavigate(portal, url, true) ? url : (reopenAt.get(id) ?? null);
-      void keeper.save(id, session.fromPartition(partitionFor(id)).cookies, lastUrl);
+      const onPortal = !!url && !!portal && mayNavigate(portal, url, true);
+      const lastUrl = onPortal ? url : (reopenAt.get(id) ?? null);
+      void (async () => {
+        // The page's session storage, while the page is the portal's (else what was kept).
+        const storage =
+          onPortal && page
+            ? await readSessionStorage(page.webContents)
+            : (reopenStorage.get(id) ?? null);
+        if (restoring.has(id)) return;
+        await keeper.save(id, session.fromPartition(partitionFor(id)).cookies, lastUrl, storage);
+      })();
     }, SAVE_DELAY_MS);
     timer.unref?.();
     pendingSave.set(id, timer);
@@ -239,6 +304,9 @@ export function createPortalWindows(deps: {
         const kept = await deps.keeper.restore(portal.id, sessionOf(portal.id).cookies);
         if (kept?.lastUrl && mayNavigate(portal, kept.lastUrl, true)) {
           reopenAt.set(portal.id, kept.lastUrl);
+          if (kept.storage && new URL(kept.lastUrl).origin === kept.storage.origin) {
+            reopenStorage.set(portal.id, kept.storage);
+          }
         }
         if (kept) deps.logger.info('insurer.session-restored', { insurer: portal.id });
       }
@@ -322,6 +390,30 @@ export function createPortalWindows(deps: {
     // After a restart, the page it was on (if the portal still allows it); else the start page.
     const resumeAt = reopenAt.get(portal.id);
     reopenAt.delete(portal.id);
+    const storage = reopenStorage.get(portal.id);
+    reopenStorage.delete(portal.id);
+    if (resumeAt && storage && mayNavigate(portal, `${storage.origin}/`, true)) {
+      // Session storage belongs to a page of its origin in this tab: a small file of the portal's
+      // own origin is opened first, the kept storage put back there, then the page it was on is
+      // opened in the same tab, which finds its sign-in (NYSA's tokens) as it left it.
+      restoring.add(portal.id);
+      void (async () => {
+        try {
+          await contents.loadURL(`${storage.origin}/favicon.ico`).catch(() => undefined);
+          if (!contents.isDestroyed() && contents.getURL().startsWith(`${storage.origin}/`)) {
+            await contents
+              .executeJavaScriptInIsolatedWorld(STORAGE_WORLD, [
+                { code: `(${putSessionStorage.toString()})(${JSON.stringify(storage.items)})` },
+              ])
+              .catch(() => undefined);
+          }
+        } finally {
+          restoring.delete(portal.id);
+        }
+        if (!contents.isDestroyed()) await contents.loadURL(resumeAt).catch(() => undefined);
+      })();
+      return page;
+    }
     void contents.loadURL(resumeAt ?? portal.startUrl).catch(() => undefined);
     return page;
   }

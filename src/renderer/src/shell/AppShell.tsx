@@ -24,6 +24,7 @@ import { ThemeSwitcher } from '../theme/ThemeSwitcher';
 import { Toaster } from '../ui/toast';
 import { PortalArea, PortalTabStrip, showAppScreens, usePortalTabs } from '../insurers/PortalTabs';
 import { QuoteRunCancel } from '../quote/QuoteRunCancel';
+import { QuoteFinishStatus } from '../quote/QuoteFinish';
 
 export type ViewId =
   | 'overview'
@@ -203,6 +204,7 @@ export function AppShell(props: {
           )}
           <span className="topbar-spacer" />
           <QuoteRunCancel />
+          <QuoteFinishStatus />
           {signedIn > 0 && (
             <span className="topbar-context" title="Insurer portals open as tabs">
               <span className="status-dot" aria-hidden="true" />

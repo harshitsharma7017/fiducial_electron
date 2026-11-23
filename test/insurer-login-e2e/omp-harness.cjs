@@ -172,11 +172,12 @@ const CASES = [
     ],
   },
   {
-    name: 'a plan place United India does not offer (5th of 3): stops at the plan, nothing saved',
+    // Request of 20 November 2026: the plan is left for the advisor and the rest is filled.
+    name: 'a plan place United India does not offer (5th of 3): left for the advisor, the rest filled, nothing saved',
     trip: { ...TRIP, plan: 5 },
-    outcome: 'failed',
-    step: 'Plan',
-    message: 'United India offers 3 choices here for this trip',
+    outcome: 'handed-over',
+    message: 'The app filled what it could.',
+    toDo: ['Plan: fill it in yourself (the form offers only 3 choices here).'],
     expect: { plan: '', saved: false },
   },
 ];

@@ -1,5 +1,6 @@
 // The renderer-facing API exposed by the preload as `window.fqf`. Type-only imports keep zod
 // out of the preload bundle. API_SHAPE lists the exact exposed surface, checked by the smoke test.
+import type { IciciApiLogin, IciciApiMode, IciciApiStatus } from '../insurers/icici-api';
 import type {
   AppInfo,
   ClientListResponse,
@@ -44,12 +45,28 @@ export interface FqfApi {
       action: 'start' | 'stop',
     ): Promise<AppResult<{ recording: boolean; file: string | null }>>;
   };
+  /** ICICI Lombard's partner API: the environment and partner logins (never read back). */
+  iciciApi: {
+    status(): Promise<AppResult<IciciApiStatus>>;
+    save(request: {
+      mode: IciciApiMode | null;
+      loginFor?: IciciApiMode;
+      login?: IciciApiLogin;
+      forget?: IciciApiMode;
+    }): Promise<AppResult<IciciApiStatus>>;
+    test(): Promise<AppResult<{ ok: boolean; message: string }>>;
+  };
   quotes: {
     /** Fills the insurer's quote form for a saved client (United India health so far). */
     /** Motor: for a saved vehicle; health: for a client; travel: for a travel client. */
     run(request: QuoteRunRequest): Promise<AppResult<QuoteRunResultView>>;
-    /** Stops the run in progress where it is. */
+    /** Stops the run in progress where it is (or the wait for a handed-over form's premium). */
     cancel(): Promise<AppResult<{ cancelled: boolean }>>;
+    /**
+     * Finishes the form the last run handed over, once the advisor has the premium: read from the
+     * insurer's page (waiting up to `waitMs`), or as typed (`amount`); saves the PDF.
+     */
+    finish(request: { waitMs: number; amount?: string }): Promise<AppResult<QuoteRunResultView>>;
     /** Opens a quote PDF the app saved (by its file name). */
     openPdf(name: string): Promise<AppResult<{ opened: boolean }>>;
   };
@@ -123,7 +140,8 @@ export interface FqfApi {
 export const API_SHAPE = {
   app: ['getInfo'],
   insurers: ['list', 'saveLogin', 'forgetLogin', 'openPortal', 'signOut', 'record'],
-  quotes: ['run', 'cancel', 'openPdf'],
+  quotes: ['run', 'cancel', 'finish', 'openPdf'],
+  iciciApi: ['status', 'save', 'test'],
   clients: ['list', 'get', 'save', 'delete', 'exportAll'],
   portals: ['tabs', 'show', 'close', 'setBounds'],
   travellers: ['list', 'get', 'save', 'delete'],

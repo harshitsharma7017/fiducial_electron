@@ -681,7 +681,8 @@ app.whenReady().then(async () => {
     failures += problems.length ? 1 : 0;
     calc?.destroy();
 
-    // United India's own ERRORS pop-up stops the run, with its message.
+    // United India's own ERRORS pop-up ends the filling, with its message: the form is handed
+    // over (the advisor fixes it and presses Check Premium; the app then reads the premium).
     const low = {
       ...couple,
       members: couple.members.slice(0, 2), // the couple is enough to reach Get Quote
@@ -690,14 +691,19 @@ app.whenReady().then(async () => {
     const refused = await runUiicHealthQuote({ windows, client: low, goodHealth: true, today });
     const errProblems = [];
     if (
-      refused.outcome !== 'failed' ||
+      refused.outcome !== 'handed-over' ||
       refused.step !== 'Get Quote' ||
-      !refused.message.includes('Minimum sum insured for floater cover is 100000')
+      !refused.message.includes(
+        'United India says: Minimum sum insured for floater cover is 100000. Finish the form',
+      ) ||
+      refused.handOver?.read.op !== 'readPlans' ||
+      refused.finish?.button !== 'Check Premium'
     ) {
-      errProblems.push(JSON.stringify(refused));
+      const { handOver, ...view } = refused;
+      errProblems.push(JSON.stringify({ ...view, handOver: !!handOver }));
     }
     console.log(
-      `${errProblems.length ? 'FAIL' : 'pass'}  United India health: stops with United India's ERRORS message${errProblems.length ? `\n      ${errProblems.join('\n      ')}` : ''}`,
+      `${errProblems.length ? 'FAIL' : 'pass'}  United India health: United India's ERRORS message hands the form over${errProblems.length ? `\n      ${errProblems.join('\n      ')}` : ''}`,
     );
     failures += errProblems.length ? 1 : 0;
     for (const w of windows()) w.destroy();

@@ -76,6 +76,7 @@ const unusedQuotes = {
   run: () => Promise.reject(new Error('not used')),
   cancel: () => false,
   openPdf: () => Promise.resolve(false),
+  finish: () => Promise.reject(new Error('not used')),
 };
 
 describe('insurer credentials (encrypted vault)', () => {

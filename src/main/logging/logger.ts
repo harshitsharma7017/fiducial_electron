@@ -52,6 +52,8 @@ export const LOG_EVENTS = [
   'storage.write-failed',
   'quote.run',
   'quote.pdf-failed',
+  'quote.finished',
+  'icici-api.signed-in',
   'import.previewed',
   'import.saved',
   'clients.exported',
@@ -101,7 +103,7 @@ const FIELD_SCHEMAS = {
   /** Why the client database could not be used (never any client data). */
   storeProblem: z.enum(STORE_PROBLEMS),
   /** How a quote run ended (never client data). */
-  quoteOutcome: z.enum(['ready', 'refused', 'failed', 'cancelled']),
+  quoteOutcome: z.enum(['ready', 'refused', 'failed', 'cancelled', 'handed-over']),
   /** Which client import (never anything about the file or its rows). */
   importKind: z.enum(IMPORT_KINDS),
   /** How many rows an import read or saved. */

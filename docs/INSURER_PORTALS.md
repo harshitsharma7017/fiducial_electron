@@ -643,6 +643,155 @@ Travel forms (`npm run test:nia -- pie`). Checked for:
 
 **Not yet run on the live portal.**
 
+## When a form cannot be filled completely (every insurer)
+
+Added on 20 November 2026, on request. The run fills whatever it can and hands the rest to the
+advisor; once the advisor has the premium, the app saves the PDF. See `src/main/quotes/hand-over.ts`
+and `finish` in `src/main/quotes/service.ts`.
+
+**While filling:**
+- **A box the run cannot fill is skipped.** This covers a dropdown without the saved value, a date
+  the calendar refuses, a radio or a box not found. It is listed for the advisor, and the run goes
+  on with the next box.
+- **Missing values are left, not refused.** If the client or vehicle record lacks a value, that box
+  is left for the advisor instead of the run being refused. This covers United India health (e-mail,
+  mobile, the proposer's and spouse's date of birth and gender, marital status, a child's gender)
+  and United India motor (CC/HP, seats, weight, bus type, special type, previous NCB). What doesn't
+  fit the recorded flow is still refused: parents, individual cover, a sum insured United India
+  doesn't offer.
+- **The filling ends early** at a step that moves the form along (opening a section, a pop-up's Ok)
+  or at an insurer's error pop-up. The form is then handed over, with the insurer's message.
+
+**At the premium:**
+- **The app never presses the premium button once anything is left.** That button is Calculate
+  Premium, Check Premium, Click To See Premium or View Premium. The run's result is "handed over".
+  It lists what to fill and names the button the advisor presses.
+- **The app then watches the form for 30 minutes.** The drawer and the top bar show "Watching for
+  the premium". Once the insurer shows a premium that wasn't there when the form was handed over,
+  the app reads it and saves the PDF.
+- **How the premium is read:** with the form's own recorded reading where there is one (United
+  India's quotes table, PIE's Total Payable Premium, Niva Bupa's period and premium, ICICI's Total
+  Premium). Otherwise it looks for a common caption (Total Payable Premium, Total Premium, Net
+  Premium…), never a bare "Premium". This applies to New India's forms, the health e-proposals, and
+  failures before a premium step.
+- **The advisor can also type the premium** shown on the insurer's page, and the PDF says it was
+  read by the advisor.
+- **Stopping and restarting:** "Stop watching" keeps the typed-premium option. A new run discards
+  the form left to finish.
+
+## ICICI Lombard: partner API premiums (UAT and production)
+
+Added on 21 November 2026. The source documents are ICICI's partner API kits:
+- "Authentication Access Token & Encryption Key";
+- "Generic 4W" and the two-wheeler kit;
+- "Elevate Fresh API Kit V3", with its masters.
+
+The code is in `src/main/icici-api/` and `src/shared/insurers/icici-api.ts`.
+
+**What it is:** premiums asked from ICICI's servers directly. No portal is opened and nothing is
+filled. Only the premium endpoints are called, never proposal, payment, KYC or policy.
+
+**Environments:** chosen on Insurer portals → ICICI Lombard → **Partner API**.
+- UAT: `https://ilesbapigee.insurancearticlez.com`
+- Production: `https://janus.icicilombard.com`
+
+**Logins:** one partner login per environment, kept in the encrypted vault.
+- The password is entered **already encrypted**, as ICICI gave it: the kits ask for it encrypted
+  with ICICI's AES key, without saying how.
+- An optional IMID code is sent with health premiums.
+- **Check sign-in** tests the login. Logins are never shown again.
+
+**Sign-in:** `auth-api/access/token` returns a JWT. It is kept until a minute before it expires,
+and requested again once if ICICI answers 401.
+
+**Motor (car and two-wheeler):** `generic/motor-fw|motor-tw/generic/premium`.
+- **Product codes, from the kits' product masters:**
+
+  | Cover | Car | Two-wheeler |
+  |---|---|---|
+  | Rollover package, 1, 2 or 3 years | 21, 36, 53 | 13, 14, 15 |
+  | New | 20 | 10 |
+  | Used | 29 | 26 |
+  | Own damage | 22 | 16 |
+  | Third party | 25 | 24 |
+
+- **Make, model and RTO codes** are typed in the panel for now. ICICI's motor masters were not
+  in the kit.
+- **IDV:** ICICI's minimum, maximum or average, or the vehicle's own.
+- **Previous policy:** NCB and claim from the vehicle; expiry date and type from the run.
+- **Add-ons:** from each kit's list.
+- **Dates** are sent as midnight in India, in UTC, as in ICICI's samples.
+
+**Health:** `health-fresh/elevate/generic/premium`.
+- **Elevate** is product 18, for ₹5, 10 or 25 lakh.
+- **Activate Booster**, the super top-up, is product 19. It is sent with its deductible
+  (VoluntaryDeductible, ₹3 to 20 lakh) and IsCombo false.
+- **Members:** relationship from the kit's master, date of birth as dd-MMM-yyyy, Adult or Kid,
+  Male or Female.
+- **Names:** ICICI asks each member's name, but the app keeps only the client's. Other members are
+  named by relationship, which does not change the premium.
+- **Pre-existing disease:** the advisor answers it once for all members.
+
+**Result:** the final premium, including GST. ICICI's breakdown goes on the screen and in the PDF:
+- **Motor:** IDV and its range, OD, TP, NCB, add-ons and GST.
+- **Health:** zone, premium before tax, tax and add-ons.
+- **UAT premiums** are marked as test premiums in the PDF.
+
+**Not done yet:**
+- Travel (no ICICI travel kit was provided).
+- ICICI's motor masters (codes are typed for now).
+- Production from advisors' computers. ICICI allow-lists fixed IP addresses only, so production
+  needs a fixed-IP server or each office's IP allow-listed.
+
+**Verified:** with a fake ICICI server (`test/icici-api.test.ts`):
+- the sign-in and token reuse;
+- errors in plain words;
+- every request built;
+- the settings kept in the vault;
+- car and Elevate premiums through the quote service, with their PDFs;
+- that nothing sent or received is logged.
+
+**Not yet run against ICICI's UAT.**
+
+## ICICI Lombard: NYSA motor quote, renewals (premium worked out, never bought)
+
+Built from the recording `icici-lombard-2026-11-20T07-23-41-540Z` (a two-wheeler renewal through to
+the premium).
+
+**The flow:**
+1. On NYSA's dashboard, the **Motor** tile asks ICICI's server for the product's address
+   (ProductRedirect) and goes there: `/NysaMotor/quote`.
+2. **Vehicle Details:** the app picks **Rollover**, answers the **ownership change** question (car
+   flow only), types the **registration number** and presses **Fetch Vehicle Data**.
+3. ICICI looks the vehicle up in **Vahan itself**, so make, model, fuel, registration date and RTO
+   are not typed. A two-wheeler's number on the car flow shows "Entered vehicle registration
+   belongs to Two Wheeler. Switching to the Two Wheeler buying flow". The app presses **OK**, as
+   recorded.
+4. **Premium page:** the app reads the **Total Premium** at ICICI's own IDV. If the advisor chose
+   the vehicle's saved IDV, it types it in the IDV box, presses **Update** and reads the new
+   premium. ICICI keeps the IDV within its own limits, and the advisor is told when it does.
+
+**Asked in the panel each run (not saved):** the registration number, whether the ownership
+changed, and which IDV to use.
+
+**Not automated:** new vehicles (ICICI's New Business form was not recorded), and Used.
+
+**Never pressed:** **Buy Now** (it saves the quote: GenericSaveQuote), **Share Quote**, discounts,
+or anything on the proposal (KYC).
+
+**Other products:** Health, Corporate and Home/Travel/Cyber leave nysa.icicilombard.com for other
+icicilombard.com addresses. They were blocked until 20 November 2026, when the portal was allowed
+the whole icicilombard.com domain. They are not automated.
+
+**Verified:** against a local copy of NYSA (`npm run test:nia -- icici`). Checked for:
+- a car from the dashboard;
+- a two-wheeler's number switching flow;
+- the vehicle's IDV, inside and above ICICI's limit;
+- a number Vahan does not know;
+- a new vehicle refused.
+
+**Not yet run on the live portal.**
+
 ## What it does
 
 The advisor saves each insurer's user ID and password once. When they open that insurer's portal

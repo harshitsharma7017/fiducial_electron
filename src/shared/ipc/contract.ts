@@ -31,6 +31,14 @@ import { niaShipmentSchema } from '../insurers/nia-marine';
 import { niaPaRunSchema } from '../insurers/nia-pa';
 import { niaFireRunSchema } from '../insurers/nia-fire';
 import { nivaRunSchema } from '../insurers/niva-health';
+import { iciciMotorRunSchema } from '../insurers/icici';
+import {
+  ICICI_API_MODES,
+  iciciApiHealthRunSchema,
+  iciciApiLoginSchema,
+  iciciApiMotorRunSchema,
+  iciciApiStatusSchema,
+} from '../insurers/icici-api';
 import {
   hdfcMotorRunSchema,
   hdfcMstRunSchema,
@@ -223,7 +231,8 @@ export type SavePropertyRequest = z.input<typeof savePropertyRequestSchema>;
 
 export const quoteRunResultSchema = z
   .object({
-    outcome: z.enum(['ready', 'refused', 'failed', 'cancelled']),
+    /** 'handed-over': the run filled what it could; the advisor finishes the form. */
+    outcome: z.enum(['ready', 'refused', 'failed', 'cancelled', 'handed-over']),
     step: z.string().max(120).nullable(),
     message: z.string().max(1200),
     problems: z.array(z.string().max(400)).max(20),
@@ -240,9 +249,24 @@ export const quoteRunResultSchema = z
       .max(20)
       .optional(),
     amountLabel: z.string().max(80).optional(),
+    /** How the insurer made the premium up (ICICI's API: IDV, OD, TP, GST…). */
+    breakdown: z
+      .array(z.object({ label: z.string().max(80), value: z.string().max(120) }).strict())
+      .max(40)
+      .optional(),
     /** The quote saved as a PDF in the Downloads folder: the file's name. */
     pdf: z
       .object({ name: z.string().max(200) })
+      .strict()
+      .optional(),
+    /**
+     * A form the advisor finishes (handed over, or filled but never worked out by the app): the
+     * insurer's button they press for the premium, and whether the app reads the premium by a
+     * guess (common captions) rather than the form's own. The app then saves the PDF
+     * (quotes:finish).
+     */
+    finish: z
+      .object({ button: z.string().max(80).nullable(), guessed: z.boolean() })
       .strict()
       .optional(),
   })
@@ -341,6 +365,34 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       vehicleId: entityIdSchema,
       insurerId: insurerIdSchema,
       run: hdfcMotorRunSchema,
+    })
+    .strict(),
+  // ICICI Lombard's NYSA motor quote, for a saved vehicle: its registration number (ICICI reads
+  // the vehicle from Vahan) and the choices for this run.
+  z
+    .object({
+      product: z.literal('icici-motor'),
+      vehicleId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      run: iciciMotorRunSchema,
+    })
+    .strict(),
+  // ICICI Lombard by its partner API (no portal): a saved vehicle's motor premium.
+  z
+    .object({
+      product: z.literal('icici-api-motor'),
+      vehicleId: entityIdSchema,
+      insurerId: z.literal('icici-lombard'),
+      run: iciciApiMotorRunSchema,
+    })
+    .strict(),
+  // ICICI Lombard by its partner API: Elevate or Activate Booster for a health client.
+  z
+    .object({
+      product: z.literal('icici-api-health'),
+      clientId: entityIdSchema,
+      insurerId: z.literal('icici-lombard'),
+      run: iciciApiHealthRunSchema,
     })
     .strict(),
   // HDFC ERGO's PIE retail health forms (Energy, Optima Secure, Optima Restore), for a health client.
@@ -525,6 +577,49 @@ export const ipcContract = {
     /** A quote PDF the app saved, by its file name (never a path). */
     request: z.object({ name: z.string().min(1).max(200) }).strict(),
     response: z.object({ opened: z.boolean() }).strict(),
+  },
+  [IPC_CHANNELS.quotesFinish]: {
+    /**
+     * Finishes the form the last run handed over: waits up to `waitMs` for the insurer to show the
+     * premium (0: reads it now), or, with `amount`, takes the premium the advisor read off the
+     * insurer's page. Then saves the quote as a PDF.
+     */
+    request: z
+      .object({
+        waitMs: z.int().min(0).max(1_800_000),
+        amount: z
+          .string()
+          .trim()
+          .transform((v) => v.replace(/[,\s₹]/g, ''))
+          .pipe(z.string().regex(/^\d{1,9}(\.\d{1,2})?$/, 'an amount in rupees'))
+          .optional(),
+      })
+      .strict(),
+    response: quoteRunResultSchema,
+  },
+  [IPC_CHANNELS.iciciApiStatus]: {
+    request: z.object({}).strict(),
+    response: iciciApiStatusSchema,
+  },
+  [IPC_CHANNELS.iciciApiSave]: {
+    /**
+     * Chooses the environment premiums come from (null: not used) and, with `login`, saves the
+     * partner login for `loginFor`. The login is never sent back.
+     */
+    request: z
+      .object({
+        mode: z.enum(ICICI_API_MODES).nullable(),
+        loginFor: z.enum(ICICI_API_MODES).optional(),
+        login: iciciApiLoginSchema.optional(),
+        forget: z.enum(ICICI_API_MODES).optional(),
+      })
+      .strict(),
+    response: iciciApiStatusSchema,
+  },
+  [IPC_CHANNELS.iciciApiTest]: {
+    /** Signs in to the chosen environment: whether the login works, in the advisor's words. */
+    request: z.object({}).strict(),
+    response: z.object({ ok: z.boolean(), message: z.string().max(600) }).strict(),
   },
   [IPC_CHANNELS.quotesCancel]: {
     request: z.object({}).strict(),

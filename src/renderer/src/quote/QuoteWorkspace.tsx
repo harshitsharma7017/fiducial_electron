@@ -10,6 +10,7 @@ import { InsurerAvatar } from '../insurers/branding';
 import { usePortalTabs } from '../insurers/PortalTabs';
 import { Modal } from '../ui/Modal';
 import { onQuoteRun, openQuotePdf, showInsurerTab } from './run';
+import { QuoteFinishCard } from './QuoteFinish';
 
 export interface QuoteOption {
   key: string;
@@ -89,6 +90,8 @@ export function QuoteWorkspace(props: {
           </button>
         </div>
       )}
+      {/* Only in the drawer the run started from: the form it left is this client's. */}
+      {ranFor && <QuoteFinishCard insurer={chosen?.insurer ?? 'the insurer'} />}
       {ranFor?.pdf && (
         <div className="qw-continue" role="status">
           <span>

@@ -7,6 +7,7 @@ import type { ClientExportService } from '../export/clients-export';
 import type { PortalHost } from '../insurers/portal-host';
 import type { InsurerService } from '../insurers/service';
 import type { QuoteService } from '../quotes/service';
+import type { IciciApiService } from '../icici-api/service';
 import { AppException, type IpcHandlers } from './dispatcher';
 
 export function createHandlers(deps: {
@@ -19,7 +20,13 @@ export function createHandlers(deps: {
   exports?: ClientExportService;
   /** Insurer pages as tabs of the app window (absent: no tabs, in tests). */
   portals?: PortalHost;
+  /** ICICI Lombard's partner API settings (absent: refused, in tests). */
+  iciciApi?: IciciApiService;
 }): IpcHandlers {
+  const iciciApi = (): IciciApiService => {
+    if (!deps.iciciApi) throw new AppException('UNSUPPORTED_FLOW');
+    return deps.iciciApi;
+  };
   const noTabs = { version: 1, tabs: [], active: null };
   const imports = (): ImportService => {
     if (!deps.imports) throw new AppException('UNSUPPORTED_FLOW');
@@ -103,6 +110,10 @@ export function createHandlers(deps: {
     'imports:commit': ({ token, includeDuplicates }) => imports().commit(token, includeDuplicates),
     'quotes:run': (request) => deps.quotes.run(request),
     'quotes:cancel': () => ({ cancelled: deps.quotes.cancel() }),
+    'quotes:finish': (request) => deps.quotes.finish(request),
+    'icici-api:status': () => iciciApi().status(),
+    'icici-api:save': (request) => iciciApi().save(request),
+    'icici-api:test': () => iciciApi().test(),
     'quotes:open-pdf': async ({ name }) => ({ opened: await deps.quotes.openPdf(name) }),
     'portals:tabs': async ({ since }) =>
       deps.portals ? deps.portals.waitForChange(since, 20_000) : noTabs,

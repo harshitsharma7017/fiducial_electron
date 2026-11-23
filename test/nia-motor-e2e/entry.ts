@@ -3,6 +3,7 @@
 import { formRecorderAgent } from '../../src/main/insurers/form-recorder-agent';
 import { keepAliveAgent } from '../../src/main/insurers/session-alive';
 import { createLogger } from '../../src/main/logging/logger';
+import { runIciciMotorQuote } from '../../src/main/quotes/run-icici-motor';
 import { runNiaFireQuote } from '../../src/main/quotes/run-nia-fire';
 import { runNiaHealthQuote } from '../../src/main/quotes/run-nia-health';
 import { runNiaMarineQuote } from '../../src/main/quotes/run-nia-marine';
@@ -31,6 +32,7 @@ export {
   runHdfcMstQuote,
   runHdfcRetailQuote,
   runHdfcTravelQuote,
+  runIciciMotorQuote,
   runNiaFireQuote,
   runNiaHealthQuote,
   runNiaMarineQuote,

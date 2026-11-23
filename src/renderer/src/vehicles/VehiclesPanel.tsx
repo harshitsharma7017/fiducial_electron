@@ -18,6 +18,7 @@ import {
   hdfcProductFor,
   type HdfcMotorRun,
 } from '../../../shared/insurers/hdfc';
+import type { IciciMotorRun } from '../../../shared/insurers/icici';
 import { showAppScreens } from '../insurers/PortalTabs';
 import {
   EMPTY_VEHICLE,
@@ -28,6 +29,7 @@ import {
   type VehicleDraft,
 } from './VehicleFields';
 import { runQuote } from '../quote/run';
+import { IciciApiMotorSection, useIciciApiReady } from '../quote/IciciApiPanels';
 
 interface Draft {
   id: string | null;
@@ -264,6 +266,8 @@ function MotorQuotePanel(props: { vehicle: VehicleSummary }): React.JSX.Element 
   const { vehicle } = props;
   const [busy, setBusy] = useState<'united-india' | 'new-india' | null>(null);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  // ICICI's Partner API section only once the API is set up; NYSA (normal sign-in) otherwise.
+  const iciciApi = useIciciApiReady();
   const run = async (insurerId: 'united-india' | 'new-india') => {
     setBusy(insurerId);
     setResult(null);
@@ -307,6 +311,8 @@ function MotorQuotePanel(props: { vehicle: VehicleSummary }): React.JSX.Element 
         </>
       )}
       <HdfcMotorSection vehicle={vehicle} />
+      {iciciApi && <IciciApiMotorSection vehicle={vehicle} />}
+      <IciciMotorSection vehicle={vehicle} />
       {result && 'error' in result && (
         <p className="error" role="alert">
           {result.error}
@@ -517,6 +523,112 @@ function HdfcMotorSection(props: { vehicle: VehicleSummary }): React.JSX.Element
             <ul>
               {result.toDo.map((t) => (
                 <li key={t}>{t}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * ICICI Lombard: NYSA's motor quote for a registered vehicle (renewal), by its registration number:
+ * ICICI reads the vehicle from Vahan itself (src/main/quotes/run-icici-motor.ts).
+ */
+function IciciMotorSection(props: { vehicle: VehicleSummary }): React.JSX.Element {
+  const { vehicle } = props;
+  const [registrationNumber, setRegistrationNumber] = useState('');
+  const [ownershipChanged, setOwnershipChanged] = useState(false);
+  const [idv, setIdv] = useState<IciciMotorRun['idv']>('insurer');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  if (vehicle.condition === 'new') {
+    return (
+      <p className="insurer-note">
+        <strong>ICICI Lombard, motor.</strong> Automated for renewals of registered vehicles only:
+        quote a new vehicle on NYSA by hand.
+      </p>
+    );
+  }
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    const r = await runQuote({
+      product: 'icici-motor',
+      vehicleId: vehicle.id,
+      insurerId: 'icici-lombard',
+      run: { registrationNumber, ownershipChanged, idv },
+    }).catch(() => null);
+    setBusy(false);
+    setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
+    if (r?.ok && r.data.premium) showAppScreens();
+  };
+  return (
+    <>
+      <p className="insurer-note">
+        <strong>ICICI Lombard, motor (NYSA, Rollover).</strong> Sign in to ICICI Lombard and leave
+        it on its dashboard. The app opens Motor, enters the registration number, presses Fetch
+        Vehicle Data (ICICI reads the vehicle from Vahan) and reads the Total Premium. It never
+        presses Buy Now.
+      </p>
+      <div className="form-grid">
+        <label>
+          Registration number{' '}
+          <input
+            value={registrationNumber}
+            onChange={(e) => setRegistrationNumber(e.target.value)}
+            placeholder="MH01AB1234"
+          />
+        </label>
+        <label>
+          Ownership changed in the last year{' '}
+          <select
+            value={ownershipChanged ? 'yes' : 'no'}
+            onChange={(e) => setOwnershipChanged(e.target.value === 'yes')}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </label>
+        <label>
+          IDV{' '}
+          <select value={idv} onChange={(e) => setIdv(e.target.value as IciciMotorRun['idv'])}>
+            <option value="insurer">ICICI&rsquo;s own IDV</option>
+            <option value="vehicle">The vehicle&rsquo;s saved IDV</option>
+          </select>
+        </label>
+      </div>
+      <div className="insurer-actions">
+        <button
+          type="button"
+          disabled={busy || registrationNumber.trim() === ''}
+          onClick={() => void run()}
+        >
+          {busy ? 'Working on NYSA…' : 'Get ICICI Lombard premium'}
+        </button>
+      </div>
+      {result && 'error' in result && (
+        <p className="error" role="alert">
+          {result.error}
+        </p>
+      )}
+      {result && 'outcome' in result && (
+        <div role="status">
+          {result.premium && (
+            <p className="premium">
+              Total premium: <strong>₹{result.premium.amount}</strong> &mdash;{' '}
+              {result.premium.label}
+            </p>
+          )}
+          <p className={result.outcome === 'ready' ? undefined : 'error'}>
+            {result.step ? `${result.step}: ` : ''}
+            {result.message}
+          </p>
+          {result.problems.length > 0 && (
+            <ul>
+              {result.problems.map((p) => (
+                <li key={p}>{p}</li>
               ))}
             </ul>
           )}

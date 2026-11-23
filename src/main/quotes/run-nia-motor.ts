@@ -8,6 +8,7 @@ import type { PortalPage } from '../insurers/portal-host';
 import type { Vehicle } from '../../shared/contracts/vehicle';
 import { NIA_BY_HAND, NIA_FORMS, planNiaMotorQuote } from './nia-motor';
 import { exec, runPause, type QuoteRunResult } from './run-uiic-health';
+import { FillProgress, handedOver } from './hand-over';
 
 export const FORM_PATH = '/NIABancsPortal/QuoteNonCustomer.html';
 const DASHBOARD_PATH = '/NIABancsPortal/NonCustomerDashboard.html';
@@ -83,37 +84,44 @@ export async function runNiaMotorQuote(deps: {
     };
   }
 
-  for (const step of plan.steps) {
+  // A box New India does not take is left for the advisor, and the run goes on; a step that moves
+  // the form along, or a New India pop-up, ends the filling. The form is then handed over: the
+  // advisor presses Calculate Premium, and the app reads the premium (hand-over.ts).
+  const progress = new FillProgress(plan.steps);
+  const onPage = page;
+  const handOver = (stopped?: { label: string; why: string }): QuoteRunResult => {
+    onPage.focus();
+    return handedOver({
+      insurer: 'New India',
+      page: onPage,
+      progress,
+      stopped,
+      toDo: NIA_BY_HAND,
+      done: `New India ${form.name} form: the vehicle details are filled.`,
+      button: 'Calculate Premium',
+      compose: (read) => ({
+        outcome: 'ready',
+        step: null,
+        message: `New India ${form.name}: the premium shown is ₹${read.value ?? ''}.`,
+        problems: [],
+        premium: {
+          label: `New India ${form.name}`,
+          amount: (read.value ?? '').replace(/[^\d.]/g, ''),
+        },
+      }),
+    });
+  };
+  for (const [index, step] of plan.steps.entries()) {
     const result = await exec(wc, step.op);
     const popup = await exec(wc, { op: 'popup' });
-    if (popup.errors) {
-      page.focus();
-      return {
-        outcome: 'failed',
-        step: step.label,
-        message: `New India says: ${popup.errors}`,
-        problems: [],
-      };
-    }
+    if (popup.errors)
+      return handOver({ label: step.label, why: `New India says: ${popup.errors}` });
     if (!result.ok) {
-      page.focus();
-      return {
-        outcome: 'failed',
-        step: step.label,
-        message: explain(step.label, result.detail),
-        problems: [],
-        toDo: NIA_BY_HAND,
-      };
+      if (progress.skip(step, index, result)) continue;
+      return handOver({ label: step.label, why: explain(step.label, result.detail) });
     }
   }
-  page.focus();
-  return {
-    outcome: 'ready',
-    step: null,
-    message: `New India ${form.name} form: the vehicle details are filled. Do what is listed below; the app does not press Calculate Premium.`,
-    problems: [],
-    toDo: NIA_BY_HAND,
-  };
+  return handOver();
 }
 
 /** A quote form to open from New India's dashboard. */

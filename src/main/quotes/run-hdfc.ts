@@ -24,6 +24,7 @@ import { planHdfcMstQuote } from './hdfc-mst';
 import { planHdfcRetailQuote } from './hdfc-retail';
 import { planHdfcTravelQuote } from './hdfc-travel';
 import { exec, type QuoteRunResult } from './run-uiic-health';
+import { FillProgress, handedOver } from './hand-over';
 
 export const PIE_ORIGIN = 'https://pie.hdfcergo.com';
 
@@ -127,47 +128,51 @@ async function runPlan(
       problems: [],
     };
   }
-  for (const step of plan.steps) {
+  /** The result once PIE shows the premium (`kept.premium`). */
+  const compose = (premium: Record<string, string>): QuoteRunResult => {
+    const amount = (premium.premium ?? '').replace(/[^\d.,]/g, '');
+    return {
+      outcome: 'ready',
+      step: null,
+      message: `PIE worked the premium out: ₹${amount} (Total Payable Premium) for ${label(premium)}. The app did not press Generate Quote.`,
+      problems: [],
+      premium: { label: label(premium), amount },
+      toDo: toDo(false),
+    };
+  };
+  // A box PIE does not take is left for the advisor, and the run goes on; anything else that
+  // fails hands the form over (hand-over.ts).
+  const progress = new FillProgress(plan.steps);
+  const handOver = (stopped?: { label: string; why: string }): QuoteRunResult => {
+    page.focus();
+    return handedOver({
+      insurer: 'HDFC ERGO',
+      page,
+      progress,
+      stopped,
+      toDo: toDo(false),
+      compose: (read) => compose({ ...kept, premium: read.value ?? '' }),
+    });
+  };
+  for (const [index, step] of plan.steps.entries()) {
+    if (progress.stopBefore(index)) return handOver();
     const result = await exec(wc, step.op);
     if (result.ok && step.keep && result.value) kept[step.keep] = result.value;
     if (step.popupAfter) {
       const popup = await exec(wc, { op: 'popup' });
-      if (popup.errors) {
-        page.focus();
-        return {
-          outcome: 'failed',
-          step: step.label,
-          message: `PIE says: ${popup.errors}`,
-          problems: [],
-          toDo: toDo(true),
-        };
-      }
+      if (popup.errors) return handOver({ label: step.label, why: `PIE says: ${popup.errors}` });
     }
     if (!result.ok) {
       if (step.optional) {
         if (step.ifMissed && !missed.includes(step.ifMissed)) missed.push(step.ifMissed);
         continue;
       }
-      page.focus();
-      return {
-        outcome: 'failed',
-        step: step.label,
-        message: explain(step, result.detail),
-        problems: [],
-        toDo: toDo(true),
-      };
+      if (progress.skip(step, index, result)) continue;
+      return handOver({ label: step.label, why: explain(step, result.detail) });
     }
   }
   page.focus();
-  const amount = (kept.premium ?? '').replace(/[^\d.,]/g, '');
-  return {
-    outcome: 'ready',
-    step: null,
-    message: `PIE worked the premium out: ₹${amount} (Total Payable Premium) for ${label(kept)}. The app did not press Generate Quote.`,
-    problems: [],
-    premium: { label: label(kept), amount },
-    toDo: toDo(false),
-  };
+  return compose(kept);
 }
 
 export async function runHdfcMotorQuote(deps: {

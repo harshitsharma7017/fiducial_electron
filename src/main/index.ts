@@ -15,6 +15,8 @@ import {
 import { createAadhaarVault, createPassportVault } from './clients/aadhaar-vault';
 import { createClientService } from './clients/service';
 import { createInsurerCredentials } from './insurers/credentials';
+import { createIciciApiService } from './icici-api/service';
+import { createIciciApiSettings } from './icici-api/settings';
 import { createFormRecorder } from './insurers/form-recorder';
 import { createPortalHost } from './insurers/portal-host';
 import { createPortalWindows } from './insurers/portal-windows';
@@ -180,9 +182,15 @@ function start(): void {
       logger,
     });
     app.on('will-quit', () => clients.close());
+    const iciciApi = createIciciApiService({
+      enabled: automation,
+      settings: createIciciApiSettings(openVault),
+      logger,
+    });
     const quotes = createQuoteService({
       enabled: automation,
       clients,
+      iciciApi: () => iciciApi.connect(),
       windowsOf: (id) => portalWindows.pagesOf(id),
       logger,
       pdfs: createQuotePdfs({
@@ -195,7 +203,15 @@ function start(): void {
     const exports = createClientExportService({ clients, window: () => appWindow, logger });
     registerIpc(
       createDispatcher(
-        createHandlers({ insurers, clients, quotes, imports, exports, portals: portalHost }),
+        createHandlers({
+          insurers,
+          clients,
+          quotes,
+          imports,
+          exports,
+          portals: portalHost,
+          iciciApi,
+        }),
         {
           isTrustedSender: senderPolicy.isTrusted,
           logger,

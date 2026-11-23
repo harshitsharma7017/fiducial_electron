@@ -141,19 +141,31 @@ describe('planUiicMotorQuote', () => {
     [
       'no cubic capacity',
       { vehicleClass: 'private-car', cubicCapacityCc: undefined },
-      'cubic capacity',
+      'Cubic capacity',
     ],
-    ['no horse power', { vehicleClass: 'special', specialType: 'Cranes' }, 'horse power'],
-    ['no special type', { vehicleClass: 'special', horsePower: 10 }, 'special vehicle'],
-    ['no seats', { vehicleClass: 'taxi-upto-6' }, 'seating capacity'],
-    ['too many seats', { vehicleClass: 'taxi-upto-6', seatingCapacity: 9 }, '1 to 6'],
-    ['no weight', { vehicleClass: 'goods-public' }, 'gross vehicle weight'],
-    ['no bus type', { vehicleClass: 'bus-above-6', seatingCapacity: 30 }, 'type of bus'],
+    ['no horse power', { vehicleClass: 'special', specialType: 'Cranes' }, 'Horse power'],
+    ['no special type', { vehicleClass: 'special', horsePower: 10 }, 'Special vehicle type'],
+    ['no seats', { vehicleClass: 'taxi-upto-6' }, 'Seating capacity'],
+    ['no weight', { vehicleClass: 'goods-public' }, 'Gross vehicle weight'],
+    ['no bus type', { vehicleClass: 'bus-above-6', seatingCapacity: 30 }, 'Type of bus'],
     [
       'no NCB for a pre-owned vehicle',
       { vehicleClass: 'private-car', condition: 'pre-owned' },
-      'no-claim bonus',
+      'Previous NCB',
     ],
+  ] as const)('leaves %s for the advisor, and fills the rest', (_label, change, box) => {
+    const result = plan(change);
+    if (!result.ok) throw new Error(result.problems.join('; '));
+    expect(result.left).toEqual([
+      `${box}: fill it in yourself (the vehicle record does not have it).`,
+    ]);
+    expect(result.steps.map((s) => s.label)).not.toContain(box);
+    // The rest is still filled, through to the premium.
+    expect(result.steps.map((s) => s.label)).toContain('IDV');
+  });
+
+  it.each([
+    ['too many seats', { vehicleClass: 'taxi-upto-6', seatingCapacity: 9 }, '1 to 6'],
     [
       'a future registration date',
       { vehicleClass: 'private-car', registrationDate: '2026-12-01' },

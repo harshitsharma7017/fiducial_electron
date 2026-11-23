@@ -210,6 +210,10 @@ const PORTALS: readonly InsurerPortal[] = [
     startUrl: 'https://nysa.icicilombard.com/#/login',
     loginOrigin: 'https://nysa.icicilombard.com',
     allowedOrigins: ['https://nysa.icicilombard.com'],
+    // NYSA's dashboard tiles ask its server where to go (ProductRedirect) and are sent there:
+    // Motor stays on nysa.icicilombard.com, but Health, Corporate and Home/Travel/Cyber go to other
+    // icicilombard.com addresses, which were blocked (20 November 2026: only Motor opened).
+    allowedDomains: ['icicilombard.com'],
     subframeOrigins: [],
     loginMethod: 'password',
     automation: 'autofill',

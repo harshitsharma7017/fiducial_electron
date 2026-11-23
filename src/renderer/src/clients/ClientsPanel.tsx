@@ -13,6 +13,7 @@ import { plural } from '../ui/format';
 import type { MenuEntry } from '../ui/Menu';
 import { RecordPage, type RecordItem } from '../ui/RecordPage';
 import { toast } from '../ui/toast';
+import { IciciApiHealthPanel, useIciciApiReady } from '../quote/IciciApiPanels';
 import { QuoteWorkspace, type QuoteOption } from '../quote/QuoteWorkspace';
 import {
   ageOn,
@@ -155,6 +156,7 @@ export function ClientsPanel(): React.JSX.Element | null {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   /** The quote workspace: for which client, and which product is chosen (null: none yet). */
   const [quote, setQuote] = useState<{ id: string; product: string | null } | null>(null);
+  const iciciApi = useIciciApiReady();
 
   const refresh = useCallback(async () => {
     const result = await window.fqf.clients.list().catch(() => null);
@@ -215,7 +217,7 @@ export function ClientsPanel(): React.JSX.Element | null {
   const toDelete = confirmDelete ? clients?.find((c) => c.id === confirmDelete) : undefined;
   const items: RecordItem[] | null =
     clients?.map((c) => {
-      const options = healthQuoteOptions(c);
+      const options = healthQuoteOptions(c, iciciApi);
       const menu: MenuEntry[] = [
         { heading: 'Quote with' },
         ...options.map((o) => ({
@@ -330,7 +332,7 @@ export function ClientsPanel(): React.JSX.Element | null {
       <QuoteWorkspace
         open={quote !== null && quoteClient !== null}
         subject={quoteClient?.name ?? ''}
-        options={quoteClient ? healthQuoteOptions(quoteClient) : []}
+        options={quoteClient ? healthQuoteOptions(quoteClient, iciciApi) : []}
         selected={quote?.product ?? null}
         onSelect={(product) => quote && setQuote({ id: quote.id, product })}
         onClose={() => setQuote(null)}
@@ -343,6 +345,7 @@ export function ClientsPanel(): React.JSX.Element | null {
             {quote.product === 'niva-health' && <NivaHealthPanel clientId={quote.id} />}
             {quote.product === 'hdfc-mst' && <HdfcMstPanel clientId={quote.id} />}
             {quote.product === 'hdfc-retail' && <HdfcRetailPanel clientId={quote.id} />}
+            {quote.product === 'icici-api-health' && <IciciApiHealthPanel clientId={quote.id} />}
             {PROPOSAL_FORMS.map(
               (f) =>
                 quote.product === f.product && (
@@ -369,7 +372,7 @@ export function ClientsPanel(): React.JSX.Element | null {
  * client list always applied (members for every form; quote details for United India's
  * calculator).
  */
-function healthQuoteOptions(c: ClientSummary): QuoteOption[] {
+function healthQuoteOptions(c: ClientSummary, iciciApi: boolean): QuoteOption[] {
   const noMembers = c.memberCount > 0 ? {} : { unavailable: 'Add members to this client first.' };
   return [
     {
@@ -408,6 +411,18 @@ function healthQuoteOptions(c: ClientSummary): QuoteOption[] {
       label: 'Health premium',
       description: 'Calculates and reads the premium',
     },
+    // ICICI health is by its Partner API only: listed once the API is set up.
+    ...(iciciApi
+      ? [
+          {
+            key: 'icici-api-health',
+            insurer: 'ICICI Lombard',
+            label: 'Elevate, Activate Booster (super top-up) premium',
+            description: 'Asks ICICI’s partner API for the premium',
+            ...noMembers,
+          },
+        ]
+      : []),
     {
       key: 'hdfc-mst',
       insurer: 'HDFC ERGO',

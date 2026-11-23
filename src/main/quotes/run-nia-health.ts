@@ -13,6 +13,7 @@ import type { NiaHealthPolicy } from '../../shared/insurers/nia-health';
 import { niaHealthForm, planNiaHealthQuote, type NiaHealthStep } from './nia-health';
 import { FORM_PATH, openNiaForm, pathOf, type NiaFormToOpen } from './run-nia-motor';
 import { exec, runPause, type QuoteRunResult } from './run-uiic-health';
+import { FillProgress, handedOver } from './hand-over';
 
 /** The question New India asks on the dashboard before it opens some forms (text it starts with). */
 const ASKED_ON_OPEN = [
@@ -46,8 +47,9 @@ function popupMessage(text: string): string {
 }
 
 /**
- * Opens the form (unless it is open), then performs the steps, stopping at the first that fails
- * (an optional one is listed for the advisor instead) or at any New India pop-up.
+ * Opens the form (unless it is open), then performs the steps: a box New India does not take is
+ * left for the advisor; a step that moves the form along, or any New India pop-up, ends the
+ * filling. The form is then handed over (hand-over.ts): the advisor presses its premium button.
  */
 export async function fillNiaForm(deps: {
   windows: () => PortalPage[];
@@ -135,42 +137,53 @@ export async function fillNiaForm(deps: {
 
   const missed: string[] = [];
   const kept: Record<string, string> = {};
-  const last = `Press ${deps.premiumButton ?? 'Save & Calculate Premium'} yourself, and check the premium New India shows.`;
-  const toDo = () => [...missed, ...deps.byHand, last];
-  for (const step of deps.steps) {
+  const button = deps.premiumButton ?? 'Save & Calculate Premium';
+  const toDo = () => [...missed, ...deps.byHand];
+  // New India's forms are filled, never worked out by the app: the advisor presses its premium
+  // button, and the app reads the premium by its usual captions (hand-over.ts). A box New India
+  // does not take is left for the advisor, and the run goes on.
+  const progress = new FillProgress(deps.steps);
+  const onPage = page;
+  const handOver = (stopped?: { label: string; why: string }): QuoteRunResult => {
+    onPage.focus();
+    const done = typeof deps.ready === 'string' ? deps.ready : deps.ready(kept);
+    return handedOver({
+      insurer: 'New India',
+      page: onPage,
+      progress,
+      stopped,
+      toDo: toDo(),
+      done,
+      button,
+      compose: (read) => ({
+        outcome: 'ready',
+        step: null,
+        message: `New India ${form.name}: the premium shown is ₹${read.value ?? ''}.`,
+        problems: [],
+        premium: {
+          label: `New India ${form.name}`,
+          amount: (read.value ?? '').replace(/[^\d.]/g, ''),
+        },
+      }),
+    });
+  };
+  for (const [index, step] of deps.steps.entries()) {
     const result = await exec(wc, step.op);
     if (result.ok && step.keep && result.value) kept[step.keep] = result.value;
     if (!step.dialogOk) {
       const popup = await exec(wc, { op: 'popup' });
-      if (popup.errors) {
-        page.focus();
-        return {
-          outcome: 'failed',
-          step: step.label,
-          message: popupMessage(popup.errors),
-          problems: [],
-          toDo: toDo(),
-        };
-      }
+      if (popup.errors) return handOver({ label: step.label, why: popupMessage(popup.errors) });
     }
     if (!result.ok) {
       if (step.optional) {
         if (step.ifMissed && !missed.includes(step.ifMissed)) missed.push(step.ifMissed);
         continue;
       }
-      page.focus();
-      return {
-        outcome: 'failed',
-        step: step.label,
-        message: explain(step.label, result.detail),
-        problems: [],
-        toDo: toDo(),
-      };
+      if (progress.skip(step, index, result)) continue;
+      return handOver({ label: step.label, why: explain(step.label, result.detail) });
     }
   }
-  page.focus();
-  const message = typeof deps.ready === 'string' ? deps.ready : deps.ready(kept);
-  return { outcome: 'ready', step: null, message, problems: [], toDo: toDo() };
+  return handOver();
 }
 
 export async function runNiaHealthQuote(deps: {

@@ -160,10 +160,46 @@ describe('planUiicHealthQuote', () => {
     expect(result.steps.some((s) => s.label.endsWith('(again)'))).toBe(false);
   });
 
-  it("refuses a client without an e-mail or mobile: United India's User Details asks for both", () => {
+  it('leaves a missing e-mail and mobile for the advisor (User Details), and fills the rest', () => {
     const noContact = plan({ ...COUPLE, customer: { name: 'Synthetic Couple' } });
-    expect(noContact.ok).toBe(false);
-    expect(!noContact.ok && noContact.problems.join(' ')).toMatch(/e-mail and mobile/);
+    if (!noContact.ok) throw new Error(noContact.problems.join('; '));
+    expect(noContact.left).toEqual([
+      'E-mail (User Details): fill it in yourself (the client record does not have it).',
+      'Mobile (User Details): fill it in yourself (the client record does not have it).',
+    ]);
+    const labels = noContact.steps.map((s) => s.label);
+    expect(labels).not.toContain('E-mail (User Details)');
+    expect(labels).not.toContain('Mobile (User Details)');
+    expect(labels).toContain('Get Quote');
+  });
+
+  it.each([
+    [
+      'a missing date of birth',
+      { members: [{ relationship: 'self', age: 41, gender: 'male' }] },
+      ["Proposer's date of birth"],
+      ["Proposer's date of birth", "Proposer's age"],
+    ],
+    [
+      'a missing gender',
+      { members: [{ relationship: 'self', age: 41, dateOfBirth: '1985-03-14' }] },
+      ["Proposer's gender"],
+      ["Proposer's gender"],
+    ],
+    [
+      'no marital status',
+      { proposerMaritalStatus: undefined },
+      ["Proposer's marital status"],
+      ["Proposer's marital status"],
+    ],
+  ])('leaves %s for the advisor, and fills the rest', (_label, change, left, dropped) => {
+    const result = plan({ ...COUPLE, ...change } as ClientInputRaw);
+    if (!result.ok) throw new Error(result.problems.join('; '));
+    expect(result.left).toEqual(
+      left.map((l) => `${l}: fill it in yourself (the client record does not have it).`),
+    );
+    for (const label of dropped) expect(result.steps.map((s) => s.label)).not.toContain(label);
+    expect(result.steps.map((s) => s.label)).toContain('Check Premium');
   });
 
   it('plans a proposer alone, without the spouse steps', () => {
@@ -206,17 +242,6 @@ describe('planUiicHealthQuote', () => {
       'does not offer',
     ],
     ['no quote details', { preferences: undefined }, 'quote details'],
-    [
-      'a missing date of birth',
-      { members: [{ relationship: 'self', age: 41, gender: 'male' }] },
-      'date of birth',
-    ],
-    [
-      'a missing gender',
-      { members: [{ relationship: 'self', age: 41, dateOfBirth: '1985-03-14' }] },
-      'gender',
-    ],
-    ['no marital status', { proposerMaritalStatus: undefined }, 'marital status'],
     [
       'a spouse with an unmarried proposer',
       { proposerMaritalStatus: 'unmarried' },

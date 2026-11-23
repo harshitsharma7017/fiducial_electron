@@ -83,7 +83,15 @@ export function capacityBand(bands: CcBands, vehicle: Vehicle): string | null {
 const isoToday = (today: Date): string =>
   `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-export type UiicMotorPlan = { ok: true; steps: PlanStep[] } | { ok: false; problems: string[] };
+/**
+ * `left`: what the vehicle's record lacks and the advisor fills in United India's form (request of
+ * 20 November 2026: fill what can be filled, hand the rest over; hand-over.ts).
+ */
+export type UiicMotorPlan =
+  { ok: true; steps: PlanStep[]; left: string[] } | { ok: false; problems: string[] };
+
+const missing = (what: string): string =>
+  `${what}: fill it in yourself (the vehicle record does not have it).`;
 
 export function planUiicMotorQuote(v: Vehicle, options: { today: Date }): UiicMotorPlan {
   const need = CLASS_FIELDS[v.vehicleClass];
@@ -91,24 +99,24 @@ export function planUiicMotorQuote(v: Vehicle, options: { today: Date }): UiicMo
   if (v.registrationDate > isoToday(options.today)) {
     problems.push('The registration date is in the future.');
   }
+  const left: string[] = [];
   if (need.cc && capacityBand(need.cc, v) === null) {
-    problems.push(need.cc === 'hp' ? 'Add the horse power (HP).' : 'Add the cubic capacity (CC).');
+    left.push(missing(need.cc === 'hp' ? 'Horse power' : 'Cubic capacity'));
   }
   if (need.seats) {
     const seats = v.seatingCapacity;
-    if (seats === undefined) problems.push('Add the seating capacity.');
+    if (seats === undefined) left.push(missing('Seating capacity'));
     else if (seats < need.seats.min || seats > need.seats.max) {
       problems.push(
         `For this vehicle class the seating capacity must be ${need.seats.min} to ${need.seats.max}.`,
       );
     }
   }
-  if (need.weight && v.grossWeightKg === undefined)
-    problems.push('Add the gross vehicle weight (kg).');
-  if (need.bus && !v.busType) problems.push('Add the type of bus (school or other).');
-  if (need.special && !v.specialType) problems.push('Add the type of special vehicle.');
+  if (need.weight && v.grossWeightKg === undefined) left.push(missing('Gross vehicle weight'));
+  if (need.bus && !v.busType) left.push(missing('Type of bus'));
+  if (need.special && !v.specialType) left.push(missing('Special vehicle type'));
   if (v.condition === 'pre-owned' && v.previousNcbPercent === undefined) {
-    problems.push('Add the previous no-claim bonus (NCB).');
+    left.push(missing('Previous NCB'));
   }
   if (problems.length > 0) return { ok: false, problems };
 
@@ -157,31 +165,31 @@ export function planUiicMotorQuote(v: Vehicle, options: { today: Date }): UiicMo
       checked: v.batteryOperated ?? false,
     });
   }
-  if (need.special)
+  if (need.special && v.specialType)
     add('Special vehicle type', {
       op: 'setField',
       selector: '#mvehicleType',
-      value: v.specialType!,
+      value: v.specialType,
     });
-  if (need.seats)
+  if (need.seats && v.seatingCapacity !== undefined)
     add('Seating capacity', {
       op: 'setField',
       selector: '#seatingCapacity',
       value: String(v.seatingCapacity),
     });
-  if (need.bus)
+  if (need.bus && v.busType)
     add('Type of bus', {
       op: 'setField',
       selector: '#busCategory',
       value: v.busType === 'school' ? 'School Bus' : 'Others',
     });
-  if (need.weight)
+  if (need.weight && v.grossWeightKg !== undefined)
     add('Gross vehicle weight', {
       op: 'setField',
       selector: '#grossWeight',
       value: String(v.grossWeightKg),
     });
-  if (need.cc) {
+  if (need.cc && capacityBand(need.cc, v) !== null) {
     add(need.cc === 'hp' ? 'Horse power' : 'Cubic capacity', {
       op: 'setField',
       selector: '#cubicCapacity',
@@ -194,11 +202,13 @@ export function planUiicMotorQuote(v: Vehicle, options: { today: Date }): UiicMo
       selector: byFullModel('input', 'motorPolicyData.claimCheck'),
       checked: v.claimLastYear ?? false,
     });
-    add('Previous NCB', {
-      op: 'setField',
-      selector: '#selectPrevNCB',
-      value: String(v.previousNcbPercent),
-    });
+    if (v.previousNcbPercent !== undefined) {
+      add('Previous NCB', {
+        op: 'setField',
+        selector: '#selectPrevNCB',
+        value: String(v.previousNcbPercent),
+      });
+    }
   }
   // The date boxes are gijgo date pickers: the box, with the calendar icon as an add-on next to it
   // (found from the box). "input#" in case the id is also on a wrapper, as on the health page.
@@ -242,5 +252,5 @@ export function planUiicMotorQuote(v: Vehicle, options: { today: Date }): UiicMo
     column: 'Premium',
     timeoutMs: 30_000,
   });
-  return { ok: true, steps };
+  return { ok: true, steps, left };
 }

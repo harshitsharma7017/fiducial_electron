@@ -76,7 +76,10 @@ describe('the insurer session keeper', () => {
     await keeper.save('united-india', jar([SIGN_IN, LASTING]), HOME);
 
     const restored = jar();
-    expect(await keeper.restore('united-india', restored)).toEqual({ lastUrl: HOME });
+    expect(await keeper.restore('united-india', restored)).toEqual({
+      lastUrl: HOME,
+      storage: null,
+    });
     expect(restored.set_).toEqual([
       {
         url: 'https://portal.example.test/GCWebPortal',
@@ -98,6 +101,36 @@ describe('the insurer session keeper', () => {
     const stored = readFileSync(join(dir, 'united-india.session'), 'utf8');
     expect(stored).not.toContain('synthetic-session-value');
     expect(stored).not.toContain('HomeAction');
+  });
+
+  it("keeps the page's session storage (a sign-in kept there, like NYSA's), encrypted", async () => {
+    const dir = freshDir();
+    const NYSA = 'https://nysa.example.test/#/dashboard';
+    const storage = {
+      origin: 'https://nysa.example.test',
+      items: [
+        ['dashboardToken', 'synthetic-dashboard-token'],
+        ['otpVerified', 'true'],
+      ] as [string, string][],
+    };
+    await createSessionKeeper(dir, fakeBackend()).save('icici-lombard', jar([]), NYSA, storage);
+    expect(readFileSync(join(dir, 'icici-lombard.session'), 'utf8')).not.toContain(
+      'synthetic-dashboard-token',
+    );
+    expect(await createSessionKeeper(dir, fakeBackend()).restore('icici-lombard', jar())).toEqual({
+      lastUrl: NYSA,
+      storage,
+    });
+  });
+
+  it('keeps no session storage of a page that is not https', async () => {
+    const dir = freshDir();
+    const keeper = createSessionKeeper(dir, fakeBackend());
+    await keeper.save('icici-lombard', jar([]), HOME, {
+      origin: 'http://nysa.example.test',
+      items: [['dashboardToken', 'x']],
+    });
+    expect(await keeper.restore('icici-lombard', jar())).toEqual({ lastUrl: HOME, storage: null });
   });
 
   it('writes nothing when the OS key is unavailable', async () => {

@@ -5,6 +5,7 @@
 // This screen can save and forget sign-in details but never reads them back. A typed password
 // is held only while the form is open and is cleared after saving or cancelling.
 import {
+  PlugZap,
   Building2,
   Circle,
   ExternalLink,
@@ -24,6 +25,7 @@ import { SESSION_HOURS } from '../../../shared/insurers/session';
 import type { InsurerPortalList, InsurerPortalView } from '../../../shared/ipc/contract';
 import { Modal } from '../ui/Modal';
 import { endTime, InsurerAvatar, portalStatus, StatusBadge } from './branding';
+import { IciciApiSettings } from './IciciApiSettings';
 
 const FILL_MESSAGES: Record<FillOutcome, { text: string; problem: boolean }> = {
   filled: {
@@ -86,6 +88,7 @@ export function InsurerPortals(): React.JSX.Element | null {
   const [message, setMessage] = useState<{ text: string; problem: boolean } | null>(null);
   const [forgetting, setForgetting] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [apiOpen, setApiOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -267,6 +270,12 @@ export function InsurerPortals(): React.JSX.Element | null {
                     {portal.loginSaved ? 'Change sign-in' : 'Save sign-in'}
                   </button>
                 )}
+                {portal.id === 'icici-lombard' && (
+                  <button type="button" className="btn-sm" onClick={() => setApiOpen(true)}>
+                    <PlugZap size={14} aria-hidden="true" />
+                    Partner API
+                  </button>
+                )}
                 {portalMenu(portal).length > 0 && (
                   <ActionMenu
                     label={`More for ${portal.displayName}`}
@@ -296,6 +305,9 @@ export function InsurerPortals(): React.JSX.Element | null {
           );
         })}
       </ul>
+      <Modal open={apiOpen} title="ICICI Lombard partner API" onClose={() => setApiOpen(false)}>
+        {apiOpen && <IciciApiSettings onDone={() => setApiOpen(false)} />}
+      </Modal>
       <ConfirmDialog
         open={forgetPortal !== undefined}
         title="Forget this sign-in?"

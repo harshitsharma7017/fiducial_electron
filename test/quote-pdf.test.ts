@@ -245,11 +245,11 @@ describe('the quote service', () => {
     expect(doc.notes.join(' ')).toMatch(/exclude GST/);
   }, 20_000);
 
-  it('saves nothing when no premium was fetched', async () => {
+  it('saves nothing when no premium was fetched (the form is handed over instead)', async () => {
     const { windowsOf } = pages(null);
     const save = vi.fn(() => Promise.resolve('x.pdf'));
     const result = await service(windowsOf, save).run(request);
-    expect(result.outcome).toBe('failed');
+    expect(result.outcome).toBe('handed-over');
     expect(result.pdf).toBeUndefined();
     expect(save).not.toHaveBeenCalled();
   }, 20_000);
