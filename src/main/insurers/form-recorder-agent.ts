@@ -19,6 +19,16 @@ export interface RecordedElement {
   placeholder: string | null;
   label: string | null;
   path: string;
+  /**
+   * How a box suggesting as you type is built (25 November 2026: which of Niva Bupa's boxes opens
+   * which list): its classes, role, autocomplete marking, the list it names, and whether that list
+   * is open.
+   */
+  classes?: string | null;
+  role?: string | null;
+  ariaAutocomplete?: string | null;
+  ariaOwns?: string | null;
+  ariaExpanded?: string | null;
 }
 
 export interface RecordedField extends RecordedElement {
@@ -197,6 +207,11 @@ export function formRecorderAgent(): RecorderDrain {
     placeholder: clip(el.getAttribute('placeholder'), 120),
     label: labelOf(el),
     path: cssPath(el),
+    classes: clip(typeof el.className === 'string' ? el.className : null, 160),
+    role: el.getAttribute('role'),
+    ariaAutocomplete: el.getAttribute('aria-autocomplete'),
+    ariaOwns: el.getAttribute('aria-owns') ?? el.getAttribute('aria-controls'),
+    ariaExpanded: el.getAttribute('aria-expanded'),
   });
   const isTextLike = (el: Element): boolean =>
     el.tagName === 'TEXTAREA' ||

@@ -977,3 +977,52 @@ Known open points:
 - **OTP (Star Health, Tata AIG):** a later phase. Who receives the OTP, and how, is still to be
   confirmed.
 - **Quotes:** filling quote forms and reading premiums need each insurer's form walkthrough.
+
+## Bajaj Allianz: Personal Accident (partner portal), new business (premium worked out, never saved)
+
+Built from the recording of 25 November 2026 (`bajaj-allianz-2026-11-25T06-17-21-912Z`). The form
+is `partner.bajajgeneral.com/health/IssuePolicy/PersonalAccident`; the app opens it by its address in
+a tab signed in to the partner portal. For a health client's proposer ("Self"). The quote screen
+asks only the plan; the rest is the client's Additional details, Bajaj Allianz tab (tenure, family
+income, gross monthly income, occupation from Bajaj's list, and the covers' sums insured).
+
+- **The app fills:** Policy Plan (by Bajaj's code: Global Personal Guard 8428 was recorded; the other
+  five share the form, and what they ask besides is left to the advisor), Policy Tenure (a
+  vue-select: 1Y, 2Y, 3Y with its discount; the choice is checked where vue-select shows it),
+  Pincode (Bajaj fills the city and GST state), Family Income, First Name (and the rest of the name
+  as Last Name if the form has one), Gender, Date of Birth (typed dd/mm/yyyy), Gross Monthly Income,
+  Occupation (by Bajaj's code), and the death, permanent partial and permanent total disability sums
+  insured given (at least one, as Bajaj asks).
+- **Then:** it presses **Calculate Premium** (Bajaj's quick quote: nothing is saved or sent) and reads
+  the premium by the captions premiums commonly have. **The recording did not reach a premium**
+  (Bajaj answered "Timeout occurred in getting response", then "Please select atleast one cover
+  between Death/Permanent Partial Disability/Permanent Total Disability"), so where Bajaj shows it
+  is not known yet: if no premium is read, the run says what the page shows about premiums.
+- **Bajaj's messages** (a toast ending "Reference code : '…'") stop the run with Bajaj's words.
+- **A box Bajaj does not take** (a date of birth that takes no typing, for example) is left for the
+  advisor, and Calculate Premium is then left to them too; the app saves the PDF when the premium
+  shows.
+
+**Verified:** against a local copy of the form drawn from the recording (`npm run test:nia --
+bajaj`): the details filled, the premium read (where the copy shows it, assumed), Bajaj's timeout
+message reported, a date of birth box that takes no typing left, and no signed-in tab refused.
+Unit tests: `test/bajaj-pa-plan.test.ts`.
+
+**Not yet run on the live portal.**
+
+## Every quote starts and ends at the insurer's home page
+
+Requests of 25 November 2026: a quote continued from where an earlier one left off caused trouble.
+Each portal has its signed-in home page (`homeUrl` in `src/shared/insurers/portals.ts`: United
+India's HomeAction.do, New India's NonCustomerDashboard.html, HDFC ERGO's 1up dashBoardScreen, ICICI
+Lombard's NYSA dashboard, Niva Bupa's UNO landing page, Bajaj Allianz's partner portal), and the
+quote service (`src/main/quotes/service.ts`, `resetPortal`) sends the insurer's tab there:
+
+- **before every quote** (and waits for the home page to load), so it always starts from there;
+- **after every quote**, whatever its outcome (completed, failed, refused, cancelled);
+- when a **handed-over** form is finished (its premium read or typed in, and saved), or the wait for
+  it is cancelled.
+
+A form handed over to the advisor stays as it is until they finish it. A quote asked for while
+another runs is refused as busy, and the running one's tab is not touched. The ICICI partner API has
+no tab. The advisor stays signed in; a tab that cannot be sent home is left as it is.

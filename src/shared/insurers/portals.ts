@@ -98,6 +98,12 @@ export const insurerPortalSchema = z
     displayName: z.string().min(1).max(80),
     /** The address the portal opens at (may redirect, within allowedOrigins). */
     startUrl: httpsUrl,
+    /**
+     * The portal's own home page once signed in, where quotes start: the tab is sent back there
+     * when a quote is cancelled or completed (request of 25 November 2026), so the next one never
+     * starts from a form left half-way.
+     */
+    homeUrl: httpsUrl.optional(),
     /** The only origin the login form may be filled on. */
     loginOrigin: httpsOrigin,
     /** Origins the portal window may navigate to. */
@@ -134,6 +140,10 @@ export const insurerPortalSchema = z
     "allowedDomains must be the login origin's own domain",
   )
   .refine((p) => p.allowedOrigins.includes(new URL(p.startUrl).origin), 'startUrl must be allowed')
+  .refine(
+    (p) => p.homeUrl === undefined || p.allowedOrigins.includes(new URL(p.homeUrl).origin),
+    'homeUrl must be allowed',
+  )
   .refine((p) => (p.automation === 'autofill') === (p.form !== undefined), 'autofill needs a form')
   .refine(
     (p) => (p.automation === 'shortcut') === (p.shortcutPages !== undefined),
@@ -152,6 +162,7 @@ const PORTALS: readonly InsurerPortal[] = [
     id: 'united-india',
     displayName: 'United India',
     startUrl: 'https://www.uiic.in/GCWebPortal/login/LoginAction.do?p=login',
+    homeUrl: 'https://www.uiic.in/GCWebPortal/login/HomeAction.do',
     loginOrigin: 'https://www.uiic.in',
     allowedOrigins: ['https://www.uiic.in'],
     subframeOrigins: [],
@@ -171,6 +182,7 @@ const PORTALS: readonly InsurerPortal[] = [
     id: 'new-india',
     displayName: 'New India Assurance',
     startUrl: 'https://web.newindia.co.in/NIABancsPortal/IntermediaryLogin.html',
+    homeUrl: 'https://web.newindia.co.in/NIABancsPortal/NonCustomerDashboard.html',
     loginOrigin: 'https://web.newindia.co.in',
     allowedOrigins: ['https://web.newindia.co.in'],
     subframeOrigins: ['https://www.google.com'],
@@ -189,6 +201,7 @@ const PORTALS: readonly InsurerPortal[] = [
     id: 'hdfc-ergo',
     displayName: 'HDFC ERGO',
     startUrl: 'https://1up.hdfcergo.com/',
+    homeUrl: 'https://1up.hdfcergo.com/dashBoardScreen',
     loginOrigin: 'https://1up.hdfcergo.com',
     allowedOrigins: ['https://1up.hdfcergo.com'],
     subframeOrigins: [],
@@ -208,6 +221,7 @@ const PORTALS: readonly InsurerPortal[] = [
     id: 'icici-lombard',
     displayName: 'ICICI Lombard',
     startUrl: 'https://nysa.icicilombard.com/#/login',
+    homeUrl: 'https://nysa.icicilombard.com/#/dashboard',
     loginOrigin: 'https://nysa.icicilombard.com',
     allowedOrigins: ['https://nysa.icicilombard.com'],
     // NYSA's dashboard tiles ask its server where to go (ProductRedirect) and are sent there:
@@ -231,6 +245,7 @@ const PORTALS: readonly InsurerPortal[] = [
     id: 'niva-bupa',
     displayName: 'Niva Bupa',
     startUrl: 'https://uno.nivabupa.com/uno/#/login',
+    homeUrl: 'https://uno.nivabupa.com/uno/#/landing-page',
     loginOrigin: 'https://uno.nivabupa.com',
     allowedOrigins: ['https://uno.nivabupa.com'],
     subframeOrigins: [],
@@ -249,6 +264,7 @@ const PORTALS: readonly InsurerPortal[] = [
     id: 'bajaj-allianz',
     displayName: 'Bajaj Allianz',
     startUrl: 'https://partner.bajajgeneral.com/',
+    homeUrl: 'https://partner.bajajgeneral.com/',
     loginOrigin: 'https://auth.prod.bajajgeneral.com',
     // partner.bajajallianz.com is the same partner site under Bajaj's former name (24 November
     // 2026: it serves the same page, signing in on auth.prod.bajajgeneral.com); Bajaj sends the tab

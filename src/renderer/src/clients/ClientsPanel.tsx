@@ -60,6 +60,7 @@ import {
   type NivaHealthPlan,
 } from '../../../shared/insurers/niva-health';
 import { HdfcRetailPanel } from '../insurers/HdfcPanels';
+import { BajajPaPanel } from '../insurers/BajajPanels';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
 import { runQuote } from '../quote/run';
 import { UiicMissingNote, useUiicRequired } from '../quote/UiicRequiredFields';
@@ -419,6 +420,7 @@ export function ClientsPanel(): React.JSX.Element | null {
             {quote.product === 'nia-pa' && <NiaPaPanel clientId={quote.id} />}
             {quote.product === 'niva-health' && <NivaHealthPanel clientId={quote.id} />}
             {quote.product === 'hdfc-mst' && <HdfcMstPanel clientId={quote.id} />}
+            {quote.product === 'bajaj-pa' && <BajajPaPanel clientId={quote.id} />}
             {quote.product === 'hdfc-retail' && <HdfcRetailPanel clientId={quote.id} />}
             {quote.product === 'icici-api-health' && <IciciApiHealthPanel clientId={quote.id} />}
             {PROPOSAL_FORMS.map(
@@ -498,6 +500,13 @@ function healthQuoteOptions(c: ClientSummary, iciciApi: boolean): QuoteOption[] 
           },
         ]
       : []),
+    {
+      key: 'bajaj-pa',
+      insurer: 'Bajaj Allianz',
+      label: 'Personal Accident premium',
+      description: 'Fills the partner portal and reads the premium',
+      ...noMembers,
+    },
     {
       key: 'hdfc-mst',
       insurer: 'HDFC ERGO',

@@ -107,7 +107,7 @@ function explain(step: NivaHealthStep, run: NivaRun, detail: string | undefined)
 const unexplained = (label: string, detail: string | undefined): string =>
   `Stopped at "${label}" (${detail ?? 'unknown'}). The calculator may have changed; fill the rest by hand.`;
 
-export async function runNivaHealthQuote(deps: {
+export interface NivaRunDeps {
   /** Niva Bupa's pages (tabs): its portal first. */
   windows: () => PortalPage[];
   client: ClientInput;
@@ -115,7 +115,41 @@ export async function runNivaHealthQuote(deps: {
   today: Date;
   /** In tests: how far to fill (NIVA_FILL_UNTIL). */
   fillUntil?: NivaFillStage;
-}): Promise<QuoteRunResult> {
+  /**
+   * Saves the run's trace for support (25 November 2026: why the plan dropdown fails live): each
+   * step's result and, around the plan, how the page's boxes and lists are built. Returns the
+   * file's name, or null.
+   */
+  diagnose?: (name: string, data: unknown) => string | null;
+}
+
+/** One entry of a run's trace: a step's result, or a look at the page. */
+type TraceEntry =
+  | { step: number; label: string; op: string; ok: boolean; detail?: string; ms: number }
+  | { look: string; page: unknown };
+
+export async function runNivaHealthQuote(deps: NivaRunDeps): Promise<QuoteRunResult> {
+  const trace: TraceEntry[] = [];
+  const started = Date.now();
+  const result = await runNiva(deps, trace);
+  const file = deps.diagnose?.('niva-bupa', {
+    at: new Date(started).toISOString(),
+    seconds: Math.round((Date.now() - started) / 1000),
+    plan: deps.run.plan,
+    outcome: result.outcome,
+    step: result.step,
+    message: result.message,
+    trace,
+  });
+  return file && result.outcome !== 'ready'
+    ? {
+        ...result,
+        toDo: [...(result.toDo ?? []), `For support: the run's trace is saved as ${file}.`],
+      }
+    : result;
+}
+
+async function runNiva(deps: NivaRunDeps, trace: TraceEntry[]): Promise<QuoteRunResult> {
   const name = NIVA_HEALTH_PLAN_NAMES[deps.run.plan];
   const plan = planNivaHealthQuote(deps.client, deps.run, { today: deps.today });
   if (!plan.ok) {
@@ -149,7 +183,10 @@ export async function runNivaHealthQuote(deps: {
   // opens a fresh one, so the plan dropdown loads anew (24 November 2026). Nothing is saved by
   // leaving it.
   if (inCalculator(page)) {
+    // Home, and the page loaded again: UNO (Ionic) keeps a calculator left half-way, its overlays
+    // and the run's marks otherwise.
     await wc.executeJavaScript(`location.hash = '${NIVA_HOME_ROUTE}'`).catch(() => undefined);
+    wc.reload();
     const deadline = Date.now() + 10_000;
     while (routeOf(page) !== NIVA_HOME_ROUTE && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -212,7 +249,8 @@ export async function runNivaHealthQuote(deps: {
     const shown = /^(.*?)\s*(₹\s?[\d,]+(?:\.\d+)?)\s*$/.exec(got.premium ?? '');
     const premium = shown
       ? {
-          label: `${got.plan ?? name}, ${nivaRupees(deps.run.sumInsured)}, ${shown[1]}`,
+          // The sum insured the page shows (chosen there), else the client's.
+          label: `${got.plan ?? name}, ${got.sumInsured ?? nivaRupees(deps.run.sumInsured)}, ${shown[1]}`,
           amount: shown[2]!,
         }
       : undefined;
@@ -249,8 +287,24 @@ export async function runNivaHealthQuote(deps: {
       ...(progress.button()
         ? {}
         : { button: 'Continue, then choose the sum insured (the premium shows by the period)' }),
-      compose: (read) => compose({ ...kept, premium: read.value ?? '' }),
+      compose: (read) =>
+        compose({
+          ...kept,
+          premium: read.value ?? '',
+          ...(read.label ? { sumInsured: read.label } : {}),
+        }),
     });
+  };
+  /** A look at how the page is built, for the trace (never a box's value). */
+  const look = async (when: string): Promise<void> => {
+    const seen = await exec(wc, { op: 'inspect' }).catch(() => null);
+    let page: unknown = seen?.detail ?? 'not read';
+    try {
+      if (seen?.ok && seen.value) page = JSON.parse(seen.value) as unknown;
+    } catch {
+      // Kept as read.
+    }
+    trace.push({ look: when, page });
   };
   // Where the run stops (NIVA_FILL_UNTIL): right after "I Know My Plan" is pressed (the step that
   // presses it, not the one that sets back a tab left in "Plan Recommendation"), or once the plan
@@ -282,10 +336,17 @@ export async function runNivaHealthQuote(deps: {
               ? `The app opened the premium calculator, pressed "I Know My Plan" and picked the plan${picked}. Fill the rest from the client's details (see below).`
               : 'The app opened the premium calculator and pressed "I Know My Plan". Pick the plan and fill the rest from the client\'s details (see below).',
         button: 'Continue, then choose the sum insured (the premium shows by the period)',
-        compose: (read) => compose({ ...kept, premium: read.value ?? '' }),
+        compose: (read) =>
+          compose({
+            ...kept,
+            premium: read.value ?? '',
+            ...(read.label ? { sumInsured: read.label } : {}),
+          }),
       });
     }
     if (progress.stopBefore(index)) return handOver();
+    if (index === 0) await look('before the first step');
+    const at = Date.now();
     let result = await exec(wc, step.op);
     // Niva Bupa draws the members' rows again after the plan is chosen (the date box's caption
     // changes), which may empty a date just picked: pick it once more.
@@ -293,7 +354,27 @@ export async function runNivaHealthQuote(deps: {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       result = await exec(wc, step.op);
     }
+    trace.push({
+      step: index,
+      label: step.label,
+      op: step.op.op,
+      ok: result.ok,
+      ...(result.detail ? { detail: result.detail.slice(0, 300) } : {}),
+      ms: Date.now() - at,
+    });
+    // How the page is built around the plan (its box, the City box, the lists open).
+    // And after any step that failed (its buttons too: a footer's Calculate Premium, "+ Add").
+    if (
+      !result.ok ||
+      ((step.label === 'Plan' || step.label === 'I Know My Plan') &&
+        step.op.op !== 'pause' &&
+        step.op.op !== 'markPresent')
+    ) {
+      await look(`after ${step.label}: ${step.op.op}${result.ok ? '' : ' (failed)'}`);
+    }
     if (result.ok && step.keep && result.value) kept[step.keep] = result.value;
+    // The premium's reading also gives the sum insured shown with it.
+    if (result.ok && step.keep === 'premium' && result.label) kept.sumInsured = result.label;
     if (step.popupAfter) {
       const popup = await exec(wc, { op: 'popup' });
       if (popup.errors) {

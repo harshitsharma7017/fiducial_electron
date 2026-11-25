@@ -72,16 +72,45 @@ async function openPieFrom1up(
       why: `1up's "Private Car" was not found after Issue Quotes & Policy (${product.detail}).`,
     };
   }
-  // PIE's redirect (WrapperApi/RedirectToDashboardGet) signs the tab in and shows PIE there.
+  // PIE's redirect (WrapperApi/RedirectToDashboardGet) signs the tab in, then sends it on by
+  // itself to the product pressed (Private Car's form, 1.5 to 6 seconds later in the recordings of
+  // 5 November 2026). The app waits for that, so its own navigation is not overtaken by it.
   const deadline = Date.now() + 45_000;
-  while (Date.now() < deadline) {
-    const pie = windows().find(
-      (w) => !w.isDestroyed() && originOf(w) === origins.pie && !w.webContents.isLoading(),
-    );
-    if (pie) return { pie };
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  const pie = await (async () => {
+    while (Date.now() < deadline) {
+      const found = windows().find((w) => !w.isDestroyed() && originOf(w) === origins.pie);
+      if (found) return found;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return null;
+  })();
+  if (pie) return { pie: await settledOnPie(pie, deadline) };
+  const at = oneUp.isDestroyed() ? 'closed' : originOf(oneUp) || 'no page';
+  return {
+    why: `PIE did not open from 1up within 45 seconds (the tab is on ${at} after Private Car was pressed).`,
+  };
+}
+
+const onRedirect = (w: PortalPage): boolean => {
+  try {
+    return /^\/WrapperApi\//i.test(new URL(w.webContents.getURL()).pathname);
+  } catch {
+    return false;
   }
-  return { why: 'PIE did not open from 1up within 45 seconds.' };
+};
+
+/**
+ * A PIE tab once it has settled: off PIE's sign-in redirect page (it moves on by itself, up to 30
+ * seconds), then loaded, or 5 seconds on (PIE may keep something loading).
+ */
+async function settledOnPie(pie: PortalPage, deadline: number): Promise<PortalPage> {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const redirectEnd = Math.min(deadline, Date.now() + 30_000);
+  while (!pie.isDestroyed() && onRedirect(pie) && Date.now() < redirectEnd) await sleep(300);
+  const loadEnd = Date.now() + 5000;
+  while (!pie.isDestroyed() && pie.webContents.isLoading() && Date.now() < loadEnd)
+    await sleep(300);
+  return pie;
 }
 
 /** The page showing PIE's form at `path`: one already there, else a PIE page sent there. */
@@ -122,10 +151,18 @@ async function openPieForm(
       }
       pie = opened.pie;
     }
-    try {
-      await pie.webContents.loadURL(`${origin}${path}`);
-    } catch {
-      // A redirect after the load started reports as a failure; the check below decides.
+    // PIE's own redirect may still be under way (it sends the tab on to the product pressed in
+    // 1up): let it finish, then open the form; once more if PIE moved the tab elsewhere meanwhile.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      pie = await settledOnPie(pie, Date.now() + 30_000);
+      if (pie.isDestroyed() || pathOf(pie).toLowerCase() === path.toLowerCase()) break;
+      try {
+        await pie.webContents.loadURL(`${origin}${path}`);
+      } catch {
+        // A redirect after the load started reports as a failure; the check below decides.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (pie.isDestroyed() || pathOf(pie).toLowerCase() === path.toLowerCase()) break;
     }
     if (pie.isDestroyed() || pathOf(pie).toLowerCase() !== path.toLowerCase()) {
       return {

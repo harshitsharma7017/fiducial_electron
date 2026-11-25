@@ -139,7 +139,17 @@ export function planNivaHealthQuote(
   const members = adults.length + children.length;
   const optional = (ifMissed: string): Partial<NivaHealthStep> => ({ optional: true, ifMissed });
 
-  // 1. Basic Details. A tab left in "Plan Recommendation" mode (an earlier run) is set back first,
+  // 1. Basic Details. First the page ready: UNO's loading overlay gone and the members' boxes drawn
+  // (the traces of 25 November 2026: marks taken before the page was drawn missed the City box,
+  // later taken for the plan box).
+  add('I Know My Plan', { op: 'waitGone', selector: 'ion-loading', timeoutMs: 30000 });
+  add('I Know My Plan', {
+    op: 'waitFor',
+    selector: 'input[placeholder="DD/MM/YYYY"]',
+    timeoutMs: 20000,
+  });
+  add('I Know My Plan', { op: 'pause', ms: 1000 });
+  // A tab left in "Plan Recommendation" mode (an earlier run) is set back first,
   // so "I Know My Plan" is pressed afresh and the plan dropdown loads again.
   add(
     'I Know My Plan',
@@ -178,6 +188,8 @@ export function planNivaHealthQuote(
     avoid: 'City',
     fallback: NOT_MARKED_SUGGESTING_BOX,
     fallbackAfterMs: 5000,
+    // Never the City box (the trace of 25 November 2026: taken for the plan box, cities offered).
+    notNear: 'City',
     timeoutMs: 20000,
   });
   add('Plan', { op: 'pause', ms: 2000 });
@@ -388,9 +400,11 @@ export function planNivaHealthQuote(
       op: 'ionRadioRead',
       group: { selector: NIVA_PREMIUM_GROUP },
       timeoutMs: 20000,
-      // The client's sum insured and period, not Niva Bupa's recommended ones (a handed-over form
-      // is read only once the advisor has chosen them).
-      requires: { select: nivaRupees(run.sumInsured), label: `${run.years} Year` },
+      // Once a sum insured is chosen (the client's, or any the advisor chooses on a handed-over
+      // form: the caption then reads "Select Sum Insured", not "RECOMMENDED"); never Niva Bupa's
+      // recommended one. The sum insured shown is read with it, for the PDF.
+      requires: { select: nivaRupees(run.sumInsured), chosen: 'Select Sum Insured' },
+      withSelect: true,
     },
     { keep: 'premium' },
   );

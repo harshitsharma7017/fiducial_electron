@@ -45,6 +45,7 @@ import {
   hdfcRetailRunSchema,
   hdfcTravelRunSchema,
 } from '../insurers/hdfc';
+import { bajajPaRunSchema } from '../insurers/bajaj';
 import {
   propertyClientSchema,
   propertyRecordSchema,
@@ -411,6 +412,16 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       travellerId: entityIdSchema,
       insurerId: insurerIdSchema,
       run: hdfcTravelRunSchema,
+    })
+    .strict(),
+  // Bajaj Allianz's Personal Accident form, for a health client's proposer: the plan, and the
+  // client's details for it (src/shared/insurers/bajaj.ts).
+  z
+    .object({
+      product: z.literal('bajaj-pa'),
+      clientId: entityIdSchema,
+      insurerId: insurerIdSchema,
+      run: bajajPaRunSchema,
     })
     .strict(),
   // HDFC ERGO's PIE MST (Medisure Super Top-up) form, for a health client.

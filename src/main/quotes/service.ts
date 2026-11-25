@@ -57,6 +57,7 @@ import { runNiaFireQuote } from './run-nia-fire';
 import { runNiaRuralQuote } from './run-nia-rural';
 import { runNiaTravelQuote } from './run-nia-travel';
 import { runNivaHealthQuote } from './run-niva-health';
+import { runBajajPaQuote } from './run-bajaj-pa';
 import {
   runHdfcMotorQuote,
   runHdfcMstQuote,
@@ -131,6 +132,7 @@ const KIND: Partial<Record<QuoteRunRequest['product'], string>> = {
   'nia-health': 'Health',
   'hdfc-mst': 'Health',
   'hdfc-retail': 'Health',
+  'bajaj-pa': 'Personal Accident',
   motor: 'Motor',
   'hdfc-motor': 'Motor',
   'icici-motor': 'Motor',
@@ -157,6 +159,7 @@ const PRODUCT_TITLE: Partial<Record<QuoteRunRequest['product'], string>> = {
   'icici-motor': 'motor',
   'icici-api-motor': 'motor',
   'hdfc-mst': 'MST',
+  'bajaj-pa': 'personal accident',
   'hdfc-retail': 'health',
   'hdfc-travel': 'travel',
   'niva-health': 'health',
@@ -181,6 +184,8 @@ export function createQuoteService(deps: {
   now?: () => Date;
   /** Where fetched quotes are saved as PDFs; absent, none are saved. */
   pdfs?: QuotePdfs;
+  /** Saves a run's trace for support (a file of the app's own); returns its name, or null. */
+  diagnose?: (name: string, data: unknown) => string | null;
   /**
    * ICICI Lombard's partner API, in the environment chosen in Settings: its client, with the IMID
    * code for health premiums; null when it is not set up.
@@ -237,8 +242,7 @@ export function createQuoteService(deps: {
     return {
       outcome: 'cancelled',
       step: null,
-      message:
-        "Cancelled. The insurer's form stays as far as it got, in its tab; nothing was submitted.",
+      message: "Cancelled: nothing was submitted. The insurer's tab goes back to its home page.",
       problems: [],
     };
   };
@@ -381,6 +385,51 @@ export function createQuoteService(deps: {
     }
     return null;
   };
+  /**
+   * The insurer's tab back to its home page (requests of 25 November 2026): before every quote,
+   * and after it is cancelled or ends (unless a form is left for the advisor to finish), so no quote
+   * ever starts from a form left half-way. The tab the run worked in, else the insurer's first; the
+   * advisor stays signed in. Resolves once the home page has loaded (or 20 seconds on); a tab that
+   * cannot be sent home is left as it is.
+   */
+  const resetPortal = async (insurerId: string): Promise<void> => {
+    const home = findPortal(insurerId)?.homeUrl;
+    if (!home) return;
+    const pages = deps.windowsOf(insurerId).filter((w) => !w.isDestroyed());
+    const worked = lastWorkedPage();
+    const page = pages.find((w) => w.webContents === worked) ?? pages[0];
+    if (!page) return;
+    const wc = page.webContents;
+    try {
+      // A home address differing only after "#" (Niva Bupa's, ICICI's) does not load the page
+      // again: the single-page app keeps its old screens (Ionic keeps a calculator left half-way,
+      // its loading overlay, the run's marks: the traces of 25 November 2026). It is reloaded then.
+      const sameDocument = (() => {
+        try {
+          const now = new URL(wc.getURL());
+          const to = new URL(home);
+          return (
+            now.origin === to.origin && now.pathname === to.pathname && now.search === to.search
+          );
+        } catch {
+          return false;
+        }
+      })();
+      await Promise.race([
+        Promise.resolve(wc.loadURL(home)).catch(() => undefined),
+        pauseMs(20_000),
+      ]);
+      if (sameDocument && !page.isDestroyed()) {
+        wc.reload();
+        await pauseMs(500);
+      }
+      // Settled: loaded, or 3 seconds on (a page may keep something loading).
+      const settle = Date.now() + 3000;
+      while (!page.isDestroyed() && wc.isLoading?.() && Date.now() < settle) await pauseMs(300);
+    } catch {
+      // Left as it is.
+    }
+  };
   const finished = async (p: Pending, result: QuoteRunResult): Promise<QuoteRunResult> => {
     deps.logger.log('info', 'quote.finished', {
       insurer: p.insurerId,
@@ -389,6 +438,8 @@ export function createQuoteService(deps: {
     const saved = await withPdf(result, p.request, p.facts);
     p.done = saved;
     if (pending === p) pending = null;
+    // The handed-over form is finished: the tab goes back to its home page.
+    void resetPortal(p.insurerId);
     return saved;
   };
   /** ICICI Lombard by its partner API: no portal, no form; a premium or ICICI's reason. */
@@ -496,6 +547,8 @@ export function createQuoteService(deps: {
       if (running) return stopRun();
       if (!pending || pending.stopWatching) return false;
       pending.stopWatching = true;
+      // Cancelled: the tab goes back to its home page (the premium can still be typed in).
+      void resetPortal(pending.insurerId);
       return true;
     },
     finish: async ({ waitMs, amount }) => {
@@ -549,270 +602,115 @@ export function createQuoteService(deps: {
     },
     openPdf: (name) => deps.pdfs?.open(name) ?? Promise.resolve(false),
     run: async (request) => {
-      if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
-      const { insurerId } = request;
-      // A new run replaces any form left to finish.
-      pending = null;
-      if (request.product === 'icici-api-motor' || request.product === 'icici-api-health') {
-        return runByIciciApi(request);
-      }
-      const newIndiaMotor = insurerId === 'new-india' && request.product === 'motor';
-      const newIndiaOnly =
-        request.product === 'nia-health' ||
-        request.product === 'nia-travel' ||
-        request.product === 'nia-rural' ||
-        request.product === 'nia-marine' ||
-        request.product === 'nia-pa' ||
-        request.product === 'nia-fire';
-      const wrongInsurer =
-        request.product === 'hdfc-motor' ||
-        request.product === 'hdfc-mst' ||
-        request.product === 'hdfc-retail' ||
-        request.product === 'hdfc-travel'
-          ? insurerId !== 'hdfc-ergo'
-          : request.product === 'niva-health'
-            ? insurerId !== 'niva-bupa'
+      const api = request.product === 'icici-api-motor' || request.product === 'icici-api-health';
+      // A quote asked for while another runs is refused as busy: neither reset touches the tab the
+      // running one works in.
+      const resets = !api && deps.enabled && !running;
+      // Every quote starts from the insurer's home page.
+      if (resets) await resetPortal(request.insurerId);
+      const result = await runOnce(request);
+      // Every quote ends back there too, whatever its outcome, unless a form is left for the
+      // advisor to finish (it stays until they do, or stop watching).
+      if (resets && !result.finish) void resetPortal(request.insurerId);
+      return result;
+    },
+  };
+  async function runOnce(request: QuoteRunRequest): Promise<QuoteRunResult> {
+    if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
+    const { insurerId } = request;
+    // A new run replaces any form left to finish.
+    pending = null;
+    if (request.product === 'icici-api-motor' || request.product === 'icici-api-health') {
+      return runByIciciApi(request);
+    }
+    const newIndiaMotor = insurerId === 'new-india' && request.product === 'motor';
+    const newIndiaOnly =
+      request.product === 'nia-health' ||
+      request.product === 'nia-travel' ||
+      request.product === 'nia-rural' ||
+      request.product === 'nia-marine' ||
+      request.product === 'nia-pa' ||
+      request.product === 'nia-fire';
+    const wrongInsurer =
+      request.product === 'hdfc-motor' ||
+      request.product === 'hdfc-mst' ||
+      request.product === 'hdfc-retail' ||
+      request.product === 'hdfc-travel'
+        ? insurerId !== 'hdfc-ergo'
+        : request.product === 'niva-health'
+          ? insurerId !== 'niva-bupa'
+          : request.product === 'bajaj-pa'
+            ? insurerId !== 'bajaj-allianz'
             : request.product === 'icici-motor'
               ? insurerId !== 'icici-lombard'
               : newIndiaOnly
                 ? insurerId !== 'new-india'
                 : insurerId !== 'united-india' && !newIndiaMotor;
-      if (wrongInsurer) {
-        return {
-          outcome: 'refused',
-          step: null,
-          message: 'Quote automation is not built for this insurer yet.',
-          problems: [],
-        };
-      }
-      if (running) {
-        return {
-          outcome: 'refused',
-          step: null,
-          message: 'A quote is already being filled.',
-          problems: [],
-        };
-      }
-      const notReady = await portalNotReady(insurerId);
-      if (notReady) return notReady;
-      // Read before the run starts: an unknown client, travel client, rural client or vehicle is
-      // refused at once.
-      if (
-        request.product === 'nia-rural' ||
-        request.product === 'nia-marine' ||
-        request.product === 'nia-fire'
-      ) {
-        const today = (deps.now ?? (() => new Date()))();
-        const windows = () => deps.windowsOf(insurerId);
-        const start =
-          request.product === 'nia-rural'
+    if (wrongInsurer) {
+      return {
+        outcome: 'refused',
+        step: null,
+        message: 'Quote automation is not built for this insurer yet.',
+        problems: [],
+      };
+    }
+    if (running) {
+      return {
+        outcome: 'refused',
+        step: null,
+        message: 'A quote is already being filled.',
+        problems: [],
+      };
+    }
+    const notReady = await portalNotReady(insurerId);
+    if (notReady) return notReady;
+    // Read before the run starts: an unknown client, travel client, rural client or vehicle is
+    // refused at once.
+    if (
+      request.product === 'nia-rural' ||
+      request.product === 'nia-marine' ||
+      request.product === 'nia-fire'
+    ) {
+      const today = (deps.now ?? (() => new Date()))();
+      const windows = () => deps.windowsOf(insurerId);
+      const start =
+        request.product === 'nia-rural'
+          ? {
+              kind: 'rural' as const,
+              rural: (await deps.clients.getRural(request.ruralId)).rural,
+              run: request.run,
+            }
+          : request.product === 'nia-fire'
             ? {
-                kind: 'rural' as const,
-                rural: (await deps.clients.getRural(request.ruralId)).rural,
+                kind: 'fire' as const,
+                client: (await deps.clients.getProperty(request.propertyId)).property,
                 run: request.run,
               }
-            : request.product === 'nia-fire'
-              ? {
-                  kind: 'fire' as const,
-                  client: (await deps.clients.getProperty(request.propertyId)).property,
-                  run: request.run,
-                }
-              : {
-                  kind: 'marine' as const,
-                  holder: (await deps.clients.getMarine(request.marineId)).marine,
-                  shipment: request.shipment,
-                };
-        running = true;
-        beginRun();
-        follow(insurerId);
-        try {
-          const result =
-            start.kind === 'rural'
-              ? await runNiaRuralQuote({ windows, rural: start.rural, run: start.run, today })
-              : start.kind === 'fire'
-                ? await runNiaFireQuote({ windows, client: start.client, run: start.run, today })
-                : await runNiaMarineQuote({
-                    windows,
-                    holder: start.holder,
-                    shipment: start.shipment,
-                    today,
-                  });
-          deps.logger.log(result.outcome === 'failed' ? 'warn' : 'info', 'quote.run', {
-            insurer: insurerId,
-            quoteOutcome: result.outcome,
-          });
-          return await conclude(result, request, { clientName: null, details: [] });
-        } catch (err) {
-          return whenCancelled(err, insurerId);
-        } finally {
-          running = false;
-          endRun();
-          followWork(null);
-        }
-      }
-      const subject =
-        request.product === 'motor' ||
-        request.product === 'hdfc-motor' ||
-        request.product === 'icici-motor'
-          ? {
-              kind: 'vehicle' as const,
-              vehicle: (await deps.clients.getVehicle(request.vehicleId)).saved.vehicle,
-            }
-          : request.product === 'travel-proposal' ||
-              request.product === 'omp-proposal' ||
-              request.product === 'nia-travel' ||
-              request.product === 'hdfc-travel'
-            ? {
-                kind: 'traveller' as const,
-                record: await deps.clients.getTraveller(request.travellerId),
-              }
-            : await (async () => {
-                const record = await deps.clients.get(request.clientId);
-                // Each insurer's run reads only its own additional details (as `proposal`).
-                return {
-                  kind: 'client' as const,
-                  record: { ...record, client: clientForInsurer(record.client, insurerId) },
-                };
-              })();
+            : {
+                kind: 'marine' as const,
+                holder: (await deps.clients.getMarine(request.marineId)).marine,
+                shipment: request.shipment,
+              };
       running = true;
       beginRun();
       follow(insurerId);
       try {
-        const today = (deps.now ?? (() => new Date()))();
-        const windows = () => deps.windowsOf(insurerId);
-        let result: QuoteRunResult;
-        if (subject.kind === 'vehicle') {
-          result =
-            request.product === 'hdfc-motor'
-              ? await runHdfcMotorQuote({ windows, vehicle: subject.vehicle, run: request.run })
-              : request.product === 'icici-motor'
-                ? await runIciciMotorQuote({ windows, vehicle: subject.vehicle, run: request.run })
-                : newIndiaMotor
-                  ? await runNiaMotorQuote({ windows, vehicle: subject.vehicle, today })
-                  : await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
-        } else if (subject.kind === 'traveller') {
-          const travel = {
-            windows,
-            traveller: subject.record.traveller,
-            aadhaar: await deps.clients.aadhaarFor(subject.record.id),
-            passportNumber: await deps.clients.passportFor(subject.record.id),
-            today,
-          };
-          result =
-            request.product === 'hdfc-travel'
-              ? await runHdfcTravelQuote({
+        const result =
+          start.kind === 'rural'
+            ? await runNiaRuralQuote({ windows, rural: start.rural, run: start.run, today })
+            : start.kind === 'fire'
+              ? await runNiaFireQuote({ windows, client: start.client, run: start.run, today })
+              : await runNiaMarineQuote({
                   windows,
-                  traveller: subject.record.traveller,
-                  run: request.run,
+                  holder: start.holder,
+                  shipment: start.shipment,
                   today,
-                })
-              : request.product === 'nia-travel'
-                ? await runNiaTravelQuote({
-                    windows,
-                    traveller: subject.record.traveller,
-                    trip: request.trip,
-                    passportNumber: travel.passportNumber,
-                    noPreExisting: request.noPreExistingConfirmed,
-                    today,
-                  })
-                : request.product === 'omp-proposal'
-                  ? await runUiicOmpProposal({ ...travel, trip: request.trip })
-                  : request.product === 'travel-proposal'
-                    ? await runUiicTravelProposal({ ...travel, trip: request.trip })
-                    : (() => {
-                        throw new AppException('VALIDATION_FAILED');
-                      })();
-        } else if (request.product === 'nia-pa') {
-          result = await runNiaPaQuote({
-            windows,
-            client: subject.record.client,
-            run: request.run,
-            noClaims: request.noClaimsConfirmed,
-            noDisabilities: request.noDisabilitiesConfirmed,
-          });
-        } else if (request.product === 'hdfc-retail') {
-          result = await runHdfcRetailQuote({
-            windows,
-            client: subject.record.client,
-            run: request.run,
-            today,
-          });
-        } else if (request.product === 'hdfc-mst') {
-          result = await runHdfcMstQuote({
-            windows,
-            client: subject.record.client,
-            run: request.run,
-          });
-        } else if (request.product === 'niva-health') {
-          result = await runNivaHealthQuote({
-            windows,
-            client: subject.record.client,
-            run: request.run,
-            today,
-          });
-        } else if (request.product === 'nia-health') {
-          result = await runNiaHealthQuote({
-            windows,
-            client: subject.record.client,
-            policy: request.policy,
-            goodHealth: request.goodHealthConfirmed,
-            today,
-          });
-        } else if (
-          request.product !== 'health' &&
-          request.product !== 'motor' &&
-          request.product !== 'hdfc-motor' &&
-          request.product !== 'icici-motor' &&
-          request.product !== 'travel-proposal' &&
-          request.product !== 'omp-proposal' &&
-          request.product !== 'nia-travel' &&
-          request.product !== 'hdfc-travel'
-        ) {
-          result = await runUiicHealthProposal({
-            windows,
-            form: PROPOSAL_FORM[request.product],
-            client: subject.record.client,
-            aadhaar: await deps.clients.aadhaarFor(subject.record.id),
-          });
-        } else {
-          result = await runUiicHealthQuote({
-            windows,
-            client: subject.record.client,
-            goodHealth: request.product === 'health' && request.goodHealthConfirmed,
-            today,
-          });
-        }
+                });
         deps.logger.log(result.outcome === 'failed' ? 'warn' : 'info', 'quote.run', {
           insurer: insurerId,
           quoteOutcome: result.outcome,
         });
-        return await conclude(
-          result,
-          request,
-          subject.kind === 'traveller'
-            ? {
-                clientName: subject.record.traveller.customer.name,
-                ...travellerFacts(subject.record.traveller, today),
-              }
-            : subject.kind === 'client'
-              ? {
-                  clientName: subject.record.client.customer.name,
-                  ...healthFacts(subject.record.client, today),
-                }
-              : request.product === 'icici-motor'
-                ? {
-                    clientName: null,
-                    // ICICI works its own IDV out (shown with the premium), so the vehicle's is
-                    // not repeated; the registration number it was quoted for is.
-                    details: [
-                      ['Registration number', request.run.registrationNumber],
-                      ...vehicleFacts(subject.vehicle).details.filter(
-                        ([k]) => k !== 'Insured declared value',
-                      ),
-                    ],
-                  }
-                : { clientName: null, ...vehicleFacts(subject.vehicle) },
-        );
+        return await conclude(result, request, { clientName: null, details: [] });
       } catch (err) {
         return whenCancelled(err, insurerId);
       } finally {
@@ -820,6 +718,183 @@ export function createQuoteService(deps: {
         endRun();
         followWork(null);
       }
-    },
-  };
+    }
+    const subject =
+      request.product === 'motor' ||
+      request.product === 'hdfc-motor' ||
+      request.product === 'icici-motor'
+        ? {
+            kind: 'vehicle' as const,
+            vehicle: (await deps.clients.getVehicle(request.vehicleId)).saved.vehicle,
+          }
+        : request.product === 'travel-proposal' ||
+            request.product === 'omp-proposal' ||
+            request.product === 'nia-travel' ||
+            request.product === 'hdfc-travel'
+          ? {
+              kind: 'traveller' as const,
+              record: await deps.clients.getTraveller(request.travellerId),
+            }
+          : await (async () => {
+              const record = await deps.clients.get(request.clientId);
+              // Each insurer's run reads only its own additional details (as `proposal`).
+              return {
+                kind: 'client' as const,
+                record: { ...record, client: clientForInsurer(record.client, insurerId) },
+              };
+            })();
+    running = true;
+    beginRun();
+    follow(insurerId);
+    try {
+      const today = (deps.now ?? (() => new Date()))();
+      const windows = () => deps.windowsOf(insurerId);
+      let result: QuoteRunResult;
+      if (subject.kind === 'vehicle') {
+        result =
+          request.product === 'hdfc-motor'
+            ? await runHdfcMotorQuote({ windows, vehicle: subject.vehicle, run: request.run })
+            : request.product === 'icici-motor'
+              ? await runIciciMotorQuote({ windows, vehicle: subject.vehicle, run: request.run })
+              : newIndiaMotor
+                ? await runNiaMotorQuote({ windows, vehicle: subject.vehicle, today })
+                : await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
+      } else if (subject.kind === 'traveller') {
+        const travel = {
+          windows,
+          traveller: subject.record.traveller,
+          aadhaar: await deps.clients.aadhaarFor(subject.record.id),
+          passportNumber: await deps.clients.passportFor(subject.record.id),
+          today,
+        };
+        result =
+          request.product === 'hdfc-travel'
+            ? await runHdfcTravelQuote({
+                windows,
+                traveller: subject.record.traveller,
+                run: request.run,
+                today,
+              })
+            : request.product === 'nia-travel'
+              ? await runNiaTravelQuote({
+                  windows,
+                  traveller: subject.record.traveller,
+                  trip: request.trip,
+                  passportNumber: travel.passportNumber,
+                  noPreExisting: request.noPreExistingConfirmed,
+                  today,
+                })
+              : request.product === 'omp-proposal'
+                ? await runUiicOmpProposal({ ...travel, trip: request.trip })
+                : request.product === 'travel-proposal'
+                  ? await runUiicTravelProposal({ ...travel, trip: request.trip })
+                  : (() => {
+                      throw new AppException('VALIDATION_FAILED');
+                    })();
+      } else if (request.product === 'nia-pa') {
+        result = await runNiaPaQuote({
+          windows,
+          client: subject.record.client,
+          run: request.run,
+          noClaims: request.noClaimsConfirmed,
+          noDisabilities: request.noDisabilitiesConfirmed,
+        });
+      } else if (request.product === 'hdfc-retail') {
+        result = await runHdfcRetailQuote({
+          windows,
+          client: subject.record.client,
+          run: request.run,
+          today,
+        });
+      } else if (request.product === 'bajaj-pa') {
+        result = await runBajajPaQuote({
+          windows,
+          client: subject.record.client,
+          run: request.run,
+        });
+      } else if (request.product === 'hdfc-mst') {
+        result = await runHdfcMstQuote({
+          windows,
+          client: subject.record.client,
+          run: request.run,
+        });
+      } else if (request.product === 'niva-health') {
+        result = await runNivaHealthQuote({
+          windows,
+          client: subject.record.client,
+          run: request.run,
+          today,
+          ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
+        });
+      } else if (request.product === 'nia-health') {
+        result = await runNiaHealthQuote({
+          windows,
+          client: subject.record.client,
+          policy: request.policy,
+          goodHealth: request.goodHealthConfirmed,
+          today,
+        });
+      } else if (
+        request.product !== 'health' &&
+        request.product !== 'motor' &&
+        request.product !== 'hdfc-motor' &&
+        request.product !== 'icici-motor' &&
+        request.product !== 'travel-proposal' &&
+        request.product !== 'omp-proposal' &&
+        request.product !== 'nia-travel' &&
+        request.product !== 'hdfc-travel'
+      ) {
+        result = await runUiicHealthProposal({
+          windows,
+          form: PROPOSAL_FORM[request.product],
+          client: subject.record.client,
+          aadhaar: await deps.clients.aadhaarFor(subject.record.id),
+        });
+      } else {
+        result = await runUiicHealthQuote({
+          windows,
+          client: subject.record.client,
+          goodHealth: request.product === 'health' && request.goodHealthConfirmed,
+          today,
+        });
+      }
+      deps.logger.log(result.outcome === 'failed' ? 'warn' : 'info', 'quote.run', {
+        insurer: insurerId,
+        quoteOutcome: result.outcome,
+      });
+      return await conclude(
+        result,
+        request,
+        subject.kind === 'traveller'
+          ? {
+              clientName: subject.record.traveller.customer.name,
+              ...travellerFacts(subject.record.traveller, today),
+            }
+          : subject.kind === 'client'
+            ? {
+                clientName: subject.record.client.customer.name,
+                ...healthFacts(subject.record.client, today),
+              }
+            : request.product === 'icici-motor'
+              ? {
+                  clientName: null,
+                  // ICICI works its own IDV out (shown with the premium), so the vehicle's is
+                  // not repeated; the registration number it was quoted for is.
+                  details: [
+                    ['Registration number', request.run.registrationNumber],
+                    ...vehicleFacts(subject.vehicle).details.filter(
+                      ([k]) => k !== 'Insured declared value',
+                    ),
+                  ],
+                }
+              : { clientName: null, ...vehicleFacts(subject.vehicle) },
+      );
+    } catch (err) {
+      return whenCancelled(err, insurerId);
+    } finally {
+      running = false;
+      endRun();
+      followWork(null);
+    }
+  }
 }

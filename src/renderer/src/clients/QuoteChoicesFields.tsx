@@ -16,6 +16,7 @@ import {
   HDFC_OPTIMA_SECURE_PLANS,
 } from '../../../shared/insurers/hdfc';
 import { ICICI_BOOSTER_DEDUCTIBLES, ICICI_ELEVATE_SUMS } from '../../../shared/insurers/icici-api';
+import { BAJAJ_OCCUPATIONS, type BajajOccupation } from '../../../shared/insurers/bajaj';
 import { rememberedPosp, rememberPosp } from '../insurers/hdfc-posp';
 
 const lakh = (n: number) => `₹${(n / 100000).toLocaleString('en-IN')} lakh`;
@@ -74,6 +75,9 @@ export function QuoteChoicesFields(props: {
       )}
       {insurer === 'hdfc-ergo' && (
         <Hdfc value={value['hdfc-ergo'] ?? {}} patch={(c) => patch('hdfc-ergo', c)} />
+      )}
+      {insurer === 'bajaj-allianz' && (
+        <Bajaj value={value['bajaj-allianz'] ?? {}} patch={(c) => patch('bajaj-allianz', c)} />
       )}
       {insurer === 'icici-lombard' && (
         <Icici value={value['icici-lombard'] ?? {}} patch={(c) => patch('icici-lombard', c)} />
@@ -484,5 +488,97 @@ function Icici(props: {
         </select>
       </label>
     </div>
+  );
+}
+
+/** A whole number of rupees typed in a box, or nothing. */
+function Rupees(props: {
+  label: string;
+  value: number | undefined;
+  onChange: (value: number | undefined) => void;
+}): React.JSX.Element {
+  return (
+    <label>
+      {props.label}
+      <input
+        inputMode="numeric"
+        value={props.value ?? ''}
+        onChange={(e) => {
+          const n = Number(e.target.value.replace(/\D/g, ''));
+          props.onChange(n > 0 ? n : undefined);
+        }}
+      />
+    </label>
+  );
+}
+
+function Bajaj(props: {
+  value: Of<'bajaj-allianz'>;
+  patch: (c: Partial<Of<'bajaj-allianz'>>) => void;
+}): React.JSX.Element {
+  const { value: c, patch } = props;
+  return (
+    <>
+      <h4>Personal Accident</h4>
+      <div className="form-grid">
+        <label>
+          Policy tenure
+          <select
+            value={c.paTenureYears ?? 1}
+            onChange={(e) => patch({ paTenureYears: Number(e.target.value) as 1 | 2 | 3 })}
+          >
+            {YEARS.map((y) => (
+              <option key={y} value={y}>
+                {y} year{y > 1 ? 's' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Rupees
+          label="Family income, a year (₹)"
+          value={c.familyIncome}
+          onChange={(familyIncome) => patch({ familyIncome })}
+        />
+        <Rupees
+          label="Gross monthly income (₹)"
+          value={c.monthlyIncome}
+          onChange={(monthlyIncome) => patch({ monthlyIncome })}
+        />
+        <label>
+          Occupation (Bajaj's list)
+          <select
+            value={c.occupation ?? ''}
+            onChange={(e) =>
+              patch({ occupation: (e.target.value || undefined) as BajajOccupation | undefined })
+            }
+          >
+            <option value="">Not given</option>
+            {(Object.entries(BAJAJ_OCCUPATIONS) as [BajajOccupation, string][]).map(([code, n]) => (
+              <option key={code} value={code}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="insurer-note">Sums insured: at least one cover, as Bajaj asks.</p>
+      <div className="form-grid">
+        <Rupees
+          label="Death (₹)"
+          value={c.deathSumInsured}
+          onChange={(deathSumInsured) => patch({ deathSumInsured })}
+        />
+        <Rupees
+          label="Permanent partial disability (₹)"
+          value={c.partialDisabilitySumInsured}
+          onChange={(partialDisabilitySumInsured) => patch({ partialDisabilitySumInsured })}
+        />
+        <Rupees
+          label="Permanent total disability (₹)"
+          value={c.totalDisabilitySumInsured}
+          onChange={(totalDisabilitySumInsured) => patch({ totalDisabilitySumInsured })}
+        />
+      </div>
+    </>
   );
 }

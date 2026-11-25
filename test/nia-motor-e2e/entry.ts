@@ -12,6 +12,7 @@ import { runNiaPaQuote } from '../../src/main/quotes/run-nia-pa';
 import { runNiaRuralQuote } from '../../src/main/quotes/run-nia-rural';
 import { runNiaTravelQuote } from '../../src/main/quotes/run-nia-travel';
 import { runNivaHealthQuote } from '../../src/main/quotes/run-niva-health';
+import { runBajajPaQuote } from '../../src/main/quotes/run-bajaj-pa';
 import { exec } from '../../src/main/quotes/run-uiic-health';
 import {
   runHdfcMotorQuote,
@@ -30,6 +31,7 @@ export {
   formRecorderAgent,
   installNavigationPolicy,
   keepAliveAgent,
+  runBajajPaQuote,
   runHdfcMotorQuote,
   runHdfcMstQuote,
   runHdfcRetailQuote,

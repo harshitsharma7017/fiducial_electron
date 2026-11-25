@@ -87,7 +87,9 @@
         setTimeout(() => {
           // For the harness (this page is gone once PIE shows): what was tapped, and canvas taps.
           const tapped = encodeURIComponent(window.__tapped.join('|'));
-          location.href = `${pie}/WrapperApi/RedirectToDashboardGet?data=synthetic&tapped=${tapped}&canvasTaps=${window.__canvasTaps}`;
+          // ?hang=1: PIE's page keeps loading.
+          const hang = new URLSearchParams(location.search).get('hang') === '1' ? '&hang=1' : '';
+          location.href = `${pie}/WrapperApi/RedirectToDashboardGet?data=synthetic&tapped=${tapped}&canvasTaps=${window.__canvasTaps}${hang}`;
         }, 300);
       };
       const products = () =>

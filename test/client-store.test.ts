@@ -408,6 +408,25 @@ describe('the client service and IPC channels', () => {
   };
   const idOf = (result: unknown) => (result as { data: { id: string } }).data.id;
 
+  it('saves and reads back the quote choices through the app (Bajaj Allianz among them)', async () => {
+    const { call } = setup(true);
+    const quoteChoices = {
+      'bajaj-allianz': {
+        paTenureYears: 3,
+        familyIncome: 1200000,
+        monthlyIncome: 60000,
+        occupation: '108',
+        deathSumInsured: 500000,
+      },
+    };
+    const id = idOf(await call('clients:save', { client: { ...HOLDER, quoteChoices } }));
+    const got = (await call('clients:get', { id })) as { data: { client: unknown } };
+    expect(got.data.client).toMatchObject({ quoteChoices });
+    await call('clients:save', { id, client: { ...HOLDER, quoteChoices } });
+    const again = (await call('clients:get', { id })) as { data: { client: unknown } };
+    expect(again.data.client).toMatchObject({ quoteChoices });
+  });
+
   it('keeps an Aadhaar number in the vault, never in the database, showing only its last four digits', async () => {
     const { clients, call, records, p } = setup(true);
     const id = idOf(await call('clients:save', { client: HOLDER, aadhaar: AADHAAR }));

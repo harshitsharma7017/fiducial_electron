@@ -30,11 +30,23 @@ setTimeout(() => {
   console.log('FAIL  harness timed out');
   app.exit(1);
 }, 360_000).unref();
+const hanging = new Set();
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
+  // A request PIE's page keeps open (the page never finishes loading).
+  if (url.pathname === '/hang') {
+    hanging.add(res);
+    return;
+  }
   const render = FIXTURES[url.pathname];
-  res.writeHead(render ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
-  res.end(render ? render() : 'not found');
+  const answer = () => {
+    res.writeHead(render ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(render ? render(url.searchParams) : 'not found');
+  };
+  // PIE's forms answer slowly (seconds, live): a form asked for while PIE's own redirect is under
+  // way is overtaken by it unless the run waits for that redirect.
+  if (/\/CreateQuote$/i.test(url.pathname)) setTimeout(answer, 2500);
+  else answer();
 });
 
 const CAR = {
@@ -246,8 +258,66 @@ const CASES = [
     },
   },
   {
+    name: 'MST from 1up: PIE sends the tab on to Private Car by itself; the run waits, then opens MST',
+    start: '/dashBoardScreen',
+    on1up: true,
+    kind: 'mst',
+    client: FAMILY,
+    run: { cover: 'family-floater', years: 2 },
+    outcome: 'ready',
+    amount: '6900',
+    read: READ_MST,
+    expect: {
+      business: 'New Business',
+      cover: 'Family Floater',
+      term: '2 Years',
+      adults: '2',
+      children: '1',
+      dobs: ['25/01/1986', '02/07/1988', '14/03/2018'],
+      relations: ['string:Self', 'string:Spouse', 'string:Dependent Son'],
+      total: 'Rs6900',
+      saved: false,
+    },
+  },
+  {
     name: 'Optima Secure family, 2 years, 10 lakh: lists, eldest age, members, POSP, premium after BASIC DETAILS',
     start: '/WrapperApi/RedirectToDashboardGet',
+    kind: 'retail',
+    client: FAMILY,
+    run: {
+      product: 'optima-secure',
+      cover: 'family',
+      years: 2,
+      sumInsuredLacs: 10,
+      city: 'Mumbai',
+      posp: 'Synthetic POSP',
+    },
+    outcome: 'ready',
+    amount: '25000',
+    read: `(() => ({
+      ...window.__plan,
+      business: document.querySelector('#BusinessType').value, planType: document.querySelector('#OptimaSecurePlanType').value,
+      age: document.querySelector('#AgeOfIndividual').value, period: document.querySelector('[name="PolicyPeriod"]').value,
+      lacs: document.querySelector('[name="SumInsuredInLacs"]').value, members: document.querySelector('[name="IndividualFamilyPlan"]').value,
+      pospType: document.querySelector('#PospType').value, saved: window.__saved,
+    }))()`,
+    expect: {
+      cover: 'Family',
+      business: 'New Business',
+      planType: 'Optima Secure',
+      age: '40',
+      period: '2 Year',
+      lacs: '10',
+      members: '2Adult+1Child',
+      pospType: 'POSP',
+      posp: 'SYNTHETIC POSP - 1234',
+      saved: false,
+    },
+  },
+  {
+    name: 'health from 1up, PIE never finishing loading: Private Car tile, then the Optima Secure form itself, premium',
+    start: '/dashBoardScreen?hang=1',
+    on1up: true,
     kind: 'retail',
     client: FAMILY,
     run: {
@@ -335,9 +405,16 @@ app.whenReady().then(async () => {
     const today = new Date(2026, 10, 5);
     const result =
       c.kind === 'mst'
-        ? await runHdfcMstQuote({ windows, client: c.client, run: c.run, origin })
+        ? await runHdfcMstQuote({ windows, client: c.client, run: c.run, origin, oneUpOrigin })
         : c.kind === 'retail'
-          ? await runHdfcRetailQuote({ windows, client: c.client, run: c.run, today, origin })
+          ? await runHdfcRetailQuote({
+              windows,
+              client: c.client,
+              run: c.run,
+              today,
+              origin,
+              oneUpOrigin,
+            })
           : c.kind === 'travel'
             ? await runHdfcTravelQuote({
                 windows,
@@ -377,6 +454,7 @@ app.whenReady().then(async () => {
     failures += problems.length ? 1 : 0;
   }
   console.log(`\n${CASES.length - failures} of ${CASES.length} HDFC PIE checks passed`);
+  for (const res of hanging) res.destroy();
   server.close();
   app.exit(failures ? 1 : 0);
 });

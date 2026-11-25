@@ -161,8 +161,16 @@
             <p>City</p>
             <!-- Drawn a moment after the calculator opens (as UNO may): before the run looks at
                  the page, so the City box cannot be told apart by being there first. -->
+            <!-- As live (the trace of 25 November 2026): the City box suggests too (628 cities). -->
             <mat-form-field id="city-field" class="hidden">
-              <input id="mat-input-6" type="text" class="mat-input-element" />
+              <input
+                id="mat-input-6"
+                type="text"
+                class="mat-mdc-autocomplete-trigger mat-mdc-input-element"
+                aria-autocomplete="list"
+                role="combobox"
+                aria-expanded="false"
+              />
             </mat-form-field>
             <p>Phone no. (optional)</p>
             <ion-input
@@ -350,8 +358,12 @@
         // for it, and never take the City box for it).
         if (knowing) {
           // ?noplan=1: the dropdown never shows (the run must stop, not go on without it).
-          if (new URLSearchParams(location.search).get('noplan') !== '1') {
-            setTimeout(() => $('#plan-field').classList.remove('hidden'), 1500);
+          // ?slowplan=1: the plan box shows 7 seconds later (as live, the trace of 25 November
+          // 2026), after the City box is drawn.
+          const search = new URLSearchParams(location.search);
+          if (search.get('noplan') !== '1') {
+            const after = search.get('slowplan') === '1' ? 7000 : 1500;
+            setTimeout(() => $('#plan-field').classList.remove('hidden'), after);
           }
           // As on Niva Bupa (recording of 24 November 2026): the plans load about 5 seconds later.
           // Until then the box suggests nothing, and it does not offer them by itself once loaded.
@@ -537,8 +549,13 @@
         // filter on the value's changes does; opening the box shows the last one worked out (empty
         // until the plans have loaded and something is typed after that).
         let last = [];
+        // As Angular Material's autocomplete (the trace of 25 November 2026): text typed again the
+        // same is no change, and the list is not worked out again.
+        let previous = null;
         const show = (typing) => {
           if (typedOnly && !typing) return render(last);
+          if (typedOnly && box.value === previous) return render(last);
+          previous = box.value;
           const typed = box.value.trim().toLowerCase();
           last = (box.id === 'mat-input-7' && !window.__plansLoaded ? [] : list).filter((c) =>
             c.toLowerCase().includes(typed),

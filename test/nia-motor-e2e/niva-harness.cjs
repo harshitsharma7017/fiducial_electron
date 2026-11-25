@@ -171,6 +171,19 @@ const CASES = [
     expect: { mode: 'Plan Recommendation', plan: 'ReAssure2.0 Individual', city: 'Ahmedabad' },
   },
   {
+    name: 'the plan box slow to show, the City box drawn first: the City box is never taken for it',
+    start: '/uno/?slowplan=1#/new-premiumcalculator',
+    client: SINGLE,
+    run: { ...RUN, sumInsured: 500000, years: 1, addOns: [], tieredNetwork: false },
+    outcome: 'ready',
+    premiumLabel: 'ReAssure2.0 Individual, ₹ 500,000, 1 Year',
+    expect: {
+      plan: 'ReAssure2.0 Individual',
+      planBox: 'ReAssure2.0 Individual',
+      city: 'Ahmedabad',
+    },
+  },
+  {
     name: 'the plan dropdown never appears: stopped at Plan, nothing else touched',
     start: '/uno/?noplan=1#/new-premiumcalculator',
     client: FAMILY,
@@ -181,6 +194,7 @@ const CASES = [
     expect: { mode: 'Plan Recommendation', plan: '', city: '', calculated: false },
   },
   {
+    traced: true,
     name: "as the app runs now, family from UNO's home page: ReAssure 2.0 floater, ₹20 lakh, 2 years, add-ons, Tiered Network, on to Plan Summary",
     start: '/uno/#/landing-page',
     client: FAMILY,
@@ -332,9 +346,30 @@ const CASES = [
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
+ * The run's trace, for support: every step's result, and looks at the page around the plan (its
+ * box found and named, the City box apart, the lists open), never a box's value.
+ */
+function checkTrace(trace, problems) {
+  if (!trace) return problems.push('no trace saved');
+  const steps = trace.trace.filter((e) => 'step' in e);
+  if (!steps.some((e) => e.label === 'Plan' && e.op === 'pickOption' && e.ok))
+    problems.push(`trace lacks the plan picked: ${JSON.stringify(steps.slice(0, 8))}`);
+  const look = trace.trace.find((e) => e.look === 'after Plan: pickOption');
+  const plan = look?.page?.boxes?.find((b) => b.fqfBox === 'plan');
+  if (!plan || plan.id !== 'mat-input-7' || plan.ariaAutocomplete !== 'list')
+    problems.push(`trace's look after the plan lacks the plan box: ${JSON.stringify(look)}`);
+  const city = look?.page?.boxes?.find((b) => b.id === 'mat-input-6');
+  if (!city || city.fqfBox === 'plan')
+    problems.push(`trace's look lacks the City box apart: ${JSON.stringify(city)}`);
+  if (JSON.stringify(trace).includes('Ahmedabad') || JSON.stringify(trace).includes('9876543210'))
+    problems.push("trace holds the client's data");
+}
+
+/**
  * After a hand-over: the advisor reaches Customize Your Plan, where Niva Bupa shows a premium for
- * its recommended sum insured (₹ 500,000); the app's reading must not take it. Once the client's
- * sum insured (₹ 2,000,000) and period (2 years) are chosen, it reads that premium.
+ * its recommended sum insured (₹ 500,000); the app's reading must not take it. Once a sum insured
+ * is chosen (another than the client's, ₹ 1,000,000, then the client's ₹ 2,000,000 for 2 years),
+ * it reads that premium, with the sum insured shown.
  */
 async function checkFinishing(win, result, problems) {
   const read = result.handOver?.read;
@@ -351,13 +386,22 @@ async function checkFinishing(win, result, problems) {
   })()`);
   const early = await exec(win.webContents, op);
   if (early.ok) problems.push(`read the recommended sum insured's premium: ${early.value}`);
+  // The advisor chooses another sum insured than the client's: the premium is read (the PDF made)
+  // as soon as it is chosen, with the sum insured shown.
+  await win.webContents.executeJavaScript(`(() => {
+    document.querySelector('#sum').set('₹ 1,000,000');
+    price();
+  })()`);
+  const other = await exec(win.webContents, op);
+  if (!other.ok || !/^1 Year ₹[\d,]+$/.test(other.value ?? '') || other.label !== '₹ 1,000,000')
+    problems.push(`after another sum insured chosen: ${JSON.stringify(other)}`);
   await win.webContents.executeJavaScript(`(() => {
     document.querySelector('#sum').set('₹ 2,000,000');
     document.querySelectorAll('#premium ion-radio')[1].click();
     price();
   })()`);
   const chosen = await exec(win.webContents, op);
-  if (!chosen.ok || !/^2 Year ₹[\d,]+$/.test(chosen.value ?? ''))
+  if (!chosen.ok || !/^2 Year ₹[\d,]+$/.test(chosen.value ?? '') || chosen.label !== '₹ 2,000,000')
     problems.push(`after the client's sum insured and period: ${JSON.stringify(chosen)}`);
 }
 function check(c, result, state, problems) {
@@ -411,7 +455,12 @@ app.whenReady().then(async () => {
     const win = await newWindow(origin, 'run');
     await win.loadURL(origin + c.start);
     if (c.prepare) await win.webContents.executeJavaScript(c.prepare);
+    const traces = [];
     const result = await runNivaHealthQuote({
+      diagnose: (name, data) => {
+        traces.push(data);
+        return `${name}-test.json`;
+      },
       windows: () => [win],
       client: c.client,
       run: c.run,
@@ -423,6 +472,7 @@ app.whenReady().then(async () => {
       .catch((e) => ({ error: e.message }));
     const problems = [];
     check(c, result, state, problems);
+    if (c.traced) checkTrace(traces[0], problems);
     if (c.finishing) await checkFinishing(win, result, problems);
     win.destroy();
     report(c.name, problems);

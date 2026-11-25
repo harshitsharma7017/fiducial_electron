@@ -113,12 +113,17 @@ describe('finishing a handed-over form', () => {
   ];
   /** United India's home page and calculator; the quotes table shows once `shown.premium`. */
   const portal = () => {
-    const shown = { premium: false, pressed: [] as string[] };
+    const shown = { premium: false, pressed: [] as string[], sentHome: [] as number[] };
     let opened = false;
     const wc = (id: number, url: string) => ({
       id,
       isDestroyed: () => false,
       getURL: () => url,
+      // The tab sent back to United India's home page (a quote cancelled or completed).
+      loadURL: (to: string) => {
+        if (to === 'https://www.uiic.in/GCWebPortal/login/HomeAction.do') shown.sentHome.push(id);
+        return Promise.resolve();
+      },
       executeJavaScriptInIsolatedWorld: (_world: number, scripts: { code: string }[]) => {
         const code = scripts[0]!.code;
         if (code.includes('"op":"clickLink"')) opened = true;
@@ -188,6 +193,9 @@ describe('finishing a handed-over form', () => {
     expect(shown.pressed).toContain('Get Quote');
     expect(shown.pressed).not.toContain('Check Premium');
     expect(save).not.toHaveBeenCalled();
+    // The quote started from United India's home page (its tab sent home first); the form is then
+    // the advisor's to finish: its tab is left as it is.
+    expect(shown.sentHome).toEqual([1]);
   }, 20_000);
 
   it('reads the premium once the advisor has it, and saves the PDF', async () => {
@@ -206,6 +214,8 @@ describe('finishing a handed-over form', () => {
     });
     expect(save).toHaveBeenCalledTimes(1);
     expect(save.mock.calls[0]![0].members).toHaveLength(2);
+    // Completed: the calculator's tab goes back to United India's home page.
+    expect(shown.sentHome).toEqual([1, 2]);
     // Finished: nothing is waiting any more.
     expect((await service.finish({ waitMs: 0 })).outcome).toBe('refused');
   }, 20_000);
@@ -222,12 +232,14 @@ describe('finishing a handed-over form', () => {
   }, 20_000);
 
   it('stops watching when asked, and the premium can still be typed', async () => {
-    const { save, service, request } = setup();
+    const { shown, save, service, request } = setup();
     await service.run(request);
     const waiting = service.finish({ waitMs: 60_000 });
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(service.cancel()).toBe(true);
     expect(await waiting).toMatchObject({ outcome: 'handed-over' });
+    // Cancelled: the tab goes back to United India's home page (after the start's).
+    expect(shown.sentHome.length).toBe(2);
     expect((await service.finish({ waitMs: 0, amount: '9000' })).outcome).toBe('ready');
     expect(save).toHaveBeenCalledTimes(1);
   }, 20_000);

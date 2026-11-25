@@ -143,6 +143,7 @@ describe('the quote service', () => {
   const unused = () => Promise.reject(new Error('not used'));
   // United India's home page, signed in; opening the calculator never finishes.
   let opened: () => void = () => undefined;
+  const sentHome: string[] = [];
   const portal = {
     isDestroyed: () => false,
     focus: () => undefined,
@@ -150,6 +151,10 @@ describe('the quote service', () => {
       id: 1,
       isDestroyed: () => false,
       getURL: () => 'https://www.uiic.in/GCWebPortal/login/HomeAction.do',
+      loadURL: (to: string) => {
+        sentHome.push(to);
+        return Promise.resolve();
+      },
       executeJavaScriptInIsolatedWorld: (_world: number, scripts: { code: string }[]) => {
         if (scripts[0]!.code === 'window.__fqfStop = true') return Promise.resolve();
         if (scripts[0]!.code.includes('"op":"clickLink"')) {
@@ -193,6 +198,10 @@ describe('the quote service', () => {
     });
     const run = service.run(request);
     await reached;
+    // A second quote while this one runs is refused as busy, and its tab is not sent home.
+    const homeBefore = sentHome.length;
+    await expect(service.run(request)).resolves.toMatchObject({ outcome: 'refused' });
+    expect(sentHome.length).toBe(homeBefore);
     expect(service.cancel()).toBe(true);
     await expect(run).resolves.toMatchObject({
       outcome: 'cancelled',
@@ -200,6 +209,11 @@ describe('the quote service', () => {
       message: expect.stringContaining('nothing was submitted') as string,
     });
     expect(service.cancel()).toBe(false);
+    // The quote started from United India's home page, and its tab goes back there once cancelled.
+    expect(sentHome).toEqual([
+      'https://www.uiic.in/GCWebPortal/login/HomeAction.do',
+      'https://www.uiic.in/GCWebPortal/login/HomeAction.do',
+    ]);
 
     const again = new Promise<void>((resolve) => {
       opened = resolve;

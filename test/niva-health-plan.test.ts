@@ -54,7 +54,14 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
   });
 
   it('goes "I Know My Plan", then picks the plan by name in the box that appears, not the city', () => {
-    const list = ops();
+    const all = ops();
+    // The page ready first: UNO's loading overlay gone, the members' boxes drawn.
+    expect(all.slice(0, 3)).toEqual([
+      { op: 'waitGone', selector: 'ion-loading', timeoutMs: 30000 },
+      { op: 'waitFor', selector: 'input[placeholder="DD/MM/YYYY"]', timeoutMs: 20000 },
+      { op: 'pause', ms: 1000 },
+    ]);
+    const list = all.slice(3);
     // A tab left in "Plan Recommendation" mode is set back first, so the toggle is pressed afresh.
     expect(list[0]).toEqual({
       op: 'ensureShown',
@@ -77,6 +84,8 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
       name: 'plan',
       near: 'Select Plan',
       avoid: 'City',
+      // Never the City box, even by order.
+      notNear: 'City',
       timeoutMs: 20000,
     });
     expect(list[4]).toEqual({ op: 'pause', ms: 2000 });
@@ -102,7 +111,7 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
       },
       { op: 'pause', ms: 2000 },
     ]);
-    expect(ops(SINGLE)[5]).toMatchObject({ options: ['ReAssure2.0 Individual'] });
+    expect(ops(SINGLE)[8]).toMatchObject({ options: ['ReAssure2.0 Individual'] });
     expect(nivaPlanOptions({ ...RUN, plan: 'reassure-3' }, 1)).toEqual(['ReAssure3.0 Individual']);
     expect(nivaPlanOptions({ ...RUN, plan: 'health-recharge' }, 2)[0]).toBe(
       'HealthRechargeV2 Family Floater',
@@ -110,7 +119,7 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
   });
 
   it('counts the members, then dates of birth eldest first; a floater may ask only the eldest', () => {
-    expect(ops().slice(9, 14)).toEqual([
+    expect(ops().slice(12, 17)).toEqual([
       { op: 'stepper', index: 0, count: 2, timeoutMs: 15000 },
       { op: 'stepper', index: 1, count: 1, timeoutMs: 5000 },
       { op: 'matDate', counter: 0, nth: 0, date: '1986-01-25' },
@@ -120,7 +129,7 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
     // The eldest's box is always asked; the others are skipped when Niva Bupa shows no box.
     expect(
       steps()
-        .slice(11, 14)
+        .slice(14, 17)
         .map((s) => s.skipIfNoBox),
     ).toEqual([false, true, true]);
   });

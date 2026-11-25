@@ -22,6 +22,7 @@ import { createPortalHost } from './insurers/portal-host';
 import { createPortalWindows } from './insurers/portal-windows';
 import { createSessionClock } from './insurers/session-clock';
 import { createSessionKeeper } from './insurers/session-keeper';
+import { createDiagnostics } from './support/diagnostics';
 import { createQuotePdfs } from './quotes/quote-pdf';
 import { createPdfRenderer } from './quotes/render-pdf';
 import { createQuoteService } from './quotes/service';
@@ -193,6 +194,7 @@ function start(): void {
       iciciApi: () => iciciApi.connect(),
       windowsOf: (id) => portalWindows.pagesOf(id),
       logger,
+      diagnose: createDiagnostics(join(app.getPath('userData'), 'diagnostics')),
       pdfs: createQuotePdfs({
         dir: () => app.getPath('downloads'),
         openPath: (path) => shell.openPath(path),

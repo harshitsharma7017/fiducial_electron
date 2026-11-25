@@ -110,11 +110,14 @@ export type PageOp =
       timeoutMs: number;
       /**
        * Read only once the page shows these (else nothing is read): a dropdown (ion-select)
-       * showing `select` (its digits: "₹ 2,000,000"), and a chosen radio starting with `label`
-       * ("2 Year"). Niva Bupa shows a premium for its recommended sum insured first: a handed-over
-       * form is read only once the advisor has chosen the client's.
+       * showing `select` (its digits: "₹ 2,000,000") or, with `chosen`, a caption reading it (Niva
+       * Bupa's "Select Sum Insured", in place of "RECOMMENDED" once a sum insured is chosen: any
+       * sum insured chosen will do then), and a chosen radio starting with `label` ("2 Year").
+       * Niva Bupa shows a premium for its recommended sum insured first: it is never read.
        */
-      requires?: { select?: string; label?: string };
+      requires?: { select?: string; chosen?: string; label?: string };
+      /** Also gives, as `label`, the first shown dropdown reading an amount (the sum insured). */
+      withSelect?: boolean;
     }
   /**
    * Adds a listed add-on: in the row naming it, presses "+ Add" and checks it is gone. A row
@@ -147,6 +150,11 @@ export type PageOp =
       startsWith?: boolean;
       /** How long to wait for the suggestions once typed; 4 seconds if absent. */
       suggestMs?: number;
+      /**
+       * Where the page shows the choice when it empties the box (a vue-select: the chosen option
+       * in .vs__selected, the typing box cleared): the choice is checked there instead.
+       */
+      shownIn?: string;
       /**
        * Names the box used (data-fqf-box), so later steps can leave it alone: Niva Bupa's plan box,
        * which its page code puts after the City box.
@@ -291,6 +299,15 @@ export type PageOp =
    * `ok: true`; `value` is empty when nothing is marked.
    */
   | { op: 'fieldErrors' }
+  /** Waits until no shown element matches `selector` (a loading overlay gone). */
+  | { op: 'waitGone'; selector: string; timeoutMs: number }
+  /**
+   * For support: how the page's typing boxes and open lists are built, as JSON in `value` (never a
+   * box's value: only its length). Each shown box: id, type, classes, read-only, its autocomplete
+   * markings and the list it names, the app's own marks, its form, and the caption nearest it. Each
+   * shown list: its id and options. And the page's address and the element in focus.
+   */
+  | { op: 'inspect' }
   /**
    * Finds a box by what surrounds it and names it (data-fqf-box = `name`), for later steps: the
    * shown box matching `selector` whose nearest surrounding element reading `near` (a word, any
@@ -307,6 +324,11 @@ export type PageOp =
       avoid?: string;
       fallback?: string;
       fallbackAfterMs?: number;
+      /**
+       * Never taken by the fallback: a box whose nearest surrounding element reading this word
+       * does not read `near` (Niva Bupa's City box, never taken for the plan box).
+       */
+      notNear?: string;
       timeoutMs: number;
     }
   /**
@@ -569,6 +591,14 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           (caption.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
       ) ?? null
     );
+  };
+
+  /** What an Ionic dropdown shows (its chosen option), from its shadow root or value. */
+  const selectShows = (el: Element): string => {
+    const shadow = el.shadowRoot?.querySelector('.select-text')?.textContent;
+    if (shadow) return shadow;
+    const value = (el as HTMLElement & { value?: unknown }).value;
+    return typeof value === 'string' || typeof value === 'number' ? String(value) : text(el);
   };
 
   switch (command.op) {
@@ -1446,7 +1476,19 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         const caption = byCaption();
         if (caption) return { box: caption, how: 'by-caption' };
         if (command.fallback && Date.now() - started >= (command.fallbackAfterMs ?? 5000)) {
-          const fb = first(document, command.fallback);
+          const other = command.notNear ? word(command.notNear) : null;
+          /** Whether the nearest element reading `notNear` around the box does not read `near`. */
+          const elsewhere = (box: Element): boolean => {
+            if (!other) return false;
+            let n: Element | null = box.parentElement;
+            for (let up = 1; n && n !== document.body && up <= 8; up += 1, n = n.parentElement) {
+              if (reads(n, other)) return !reads(n, near);
+            }
+            return false;
+          };
+          const fb = Array.from(document.querySelectorAll<HTMLElement>(command.fallback)).find(
+            (b) => visible(b) && !elsewhere(b),
+          );
           if (fb) return { box: fb, how: 'by-order' };
         }
         return null;
@@ -1457,6 +1499,91 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       }
       found.box.setAttribute('data-fqf-box', command.name);
       return { ok: true, detail: found.how };
+    }
+    case 'waitGone': {
+      const gone = await until(
+        () => (Array.from(document.querySelectorAll(command.selector)).some(visible) ? null : true),
+        command.timeoutMs,
+      );
+      return gone ? { ok: true } : { ok: false, detail: 'still-shown' };
+    }
+    case 'inspect': {
+      const short = (t: string | null | undefined, n = 80) =>
+        (t ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+      const forms = Array.from(document.querySelectorAll('form'));
+      /** The nearest caption: the first ancestor (5 levels up) with short text of its own. */
+      const caption = (el: Element): string => {
+        let n: Element | null = el.parentElement;
+        for (let up = 0; n && up < 5; up += 1, n = n.parentElement) {
+          const t = short(text(n), 200);
+          if (t && t.length <= 80) return t;
+        }
+        return '';
+      };
+      const boxes = Array.from(document.querySelectorAll<HTMLInputElement>('input, textarea'))
+        .filter((b) => visible(b) && !/^(hidden|checkbox|radio|button|submit)$/i.test(b.type))
+        .slice(0, 25)
+        .map((b) => ({
+          id: b.id || null,
+          name: b.getAttribute('name'),
+          type: b.type,
+          classes: short(b.className, 120),
+          readOnly: b.readOnly,
+          disabled: b.disabled,
+          role: b.getAttribute('role'),
+          ariaAutocomplete: b.getAttribute('aria-autocomplete'),
+          ariaOwns: b.getAttribute('aria-owns'),
+          ariaControls: b.getAttribute('aria-controls'),
+          ariaExpanded: b.getAttribute('aria-expanded'),
+          placeholder: short(b.placeholder, 60),
+          fqfBefore: b.hasAttribute('data-fqf-before'),
+          fqfBox: b.getAttribute('data-fqf-box'),
+          valueLength: b.value.length,
+          form: b.form ? forms.indexOf(b.form) : null,
+          caption: caption(b),
+        }));
+      const lists = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[role="listbox"], .mat-autocomplete-panel, .mat-mdc-autocomplete-panel, .cdk-overlay-pane',
+        ),
+      )
+        .filter(visible)
+        .slice(0, 10)
+        .map((l) => {
+          const options = Array.from(
+            l.querySelectorAll<HTMLElement>('[role="option"], mat-option, li'),
+          ).filter(visible);
+          return {
+            id: l.id || null,
+            classes: short(l.className, 80),
+            options: options.length,
+            first: options.slice(0, 8).map((o) => short(text(o), 60)),
+          };
+        });
+      const active = document.activeElement;
+      // The buttons shown (a footer's Continue or Calculate Premium, an add-on's "+ Add").
+      const buttons = Array.from(
+        document.querySelectorAll<HTMLElement>('button, ion-button, [role="button"]'),
+      )
+        .filter(visible)
+        .map((b) => short(text(b), 40))
+        .filter((t, i, all) => t && all.indexOf(t) === i)
+        .slice(0, 40);
+      const overlays = Array.from(document.querySelectorAll('ion-loading, ion-alert, ion-modal'))
+        .filter(visible)
+        .map((o) => o.tagName.toLowerCase());
+      return {
+        ok: true,
+        value: JSON.stringify({
+          url: `${location.pathname}${location.hash}`,
+          active: active ? `${active.tagName.toLowerCase()}#${active.id}` : null,
+          forms: forms.length,
+          overlays,
+          boxes,
+          lists,
+          buttons,
+        }),
+      };
     }
     case 'revealButton': {
       const squash = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -2029,21 +2156,24 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           : undefined;
         if (!radio) return null;
         const need = command.requires;
-        if (need?.select !== undefined) {
+        if (need?.select !== undefined || need?.chosen !== undefined) {
           const digits = (t: string) => t.replace(/\D/g, '');
-          const want = digits(need.select);
-          const shows = (el: Element): string => {
-            const shadow = el.shadowRoot?.querySelector('.select-text')?.textContent;
-            if (shadow) return shadow;
-            const value = (el as HTMLElement & { value?: unknown }).value;
-            return typeof value === 'string' || typeof value === 'number'
-              ? String(value)
-              : text(el);
-          };
-          const ok = Array.from(document.querySelectorAll('ion-select')).some(
-            (el) => visible(el) && digits(shows(el)) === want,
-          );
-          if (!ok) return null;
+          const want = need.select !== undefined ? digits(need.select) : null;
+          const showsWanted =
+            want !== null &&
+            Array.from(document.querySelectorAll('ion-select')).some(
+              (el) => visible(el) && digits(selectShows(el)) === want,
+            );
+          const squash = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+          const chosen =
+            need.chosen !== undefined &&
+            Array.from(document.querySelectorAll('body *')).some(
+              (el) =>
+                el.childElementCount === 0 &&
+                visible(el) &&
+                squash(text(el)) === squash(need.chosen!),
+            );
+          if (!showsWanted && !chosen) return null;
         }
         for (let n: Element | null = radio, up = 0; n && up < 4; n = n.parentElement, up += 1) {
           if (n.querySelectorAll('ion-radio').length > 1) break;
@@ -2060,7 +2190,14 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         return null;
       };
       const value = await until(read, command.timeoutMs);
-      return value ? { ok: true, value } : { ok: false, detail: 'nothing-chosen' };
+      if (!value) return { ok: false, detail: 'nothing-chosen' };
+      const sum = command.withSelect
+        ? Array.from(document.querySelectorAll('ion-select'))
+            .filter(visible)
+            .map((el) => selectShows(el).replace(/\s+/g, ' ').trim())
+            .find((t) => /\d/.test(t) && /₹|rs|inr|\d,\d/i.test(t))
+        : undefined;
+      return { ok: true, value, ...(sum ? { label: sum } : {}) };
     }
     case 'addOn': {
       const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -2190,12 +2327,37 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       fire(box, 'input');
       fire(box, 'keyup');
       // A list loaded from the insurer may come late: while none is shown, the box is asked again
-      // every 1.5 seconds, as a person would click it again.
+      // every 1.5 seconds, as a person would: a click on the field around the box (the recording of
+      // 24 November 2026 opened Niva Bupa's plan list so, not on the box), the Down arrow (which
+      // opens an Angular Material list), and the text typed again.
+      const field =
+        (box
+          .closest('mat-form-field, .mat-mdc-form-field')
+          ?.querySelector(
+            '.mat-form-field-infix, .mat-mdc-form-field-infix, .mat-form-field-flex',
+          ) as HTMLElement | null) ?? box.parentElement;
+      // The text must change each time: Angular Material works its list out again only when the
+      // box's text changes (the trace of 25 November 2026: "ReAssure2.0" typed again and again, the
+      // plans loaded meanwhile, no list ever shown). So the retries take turns: the box emptied
+      // (every option listed, as a person clicking an empty box sees), then the text typed again.
+      let emptied = false;
       const shown = await listed(command.suggestMs ?? 4000, 1500, () => {
+        emptied = !emptied;
+        if (field && field !== box) pressEl(field);
         box.focus();
         pressEl(box);
+        if (setter?.set) setter.set.call(box, emptied ? '' : command.type);
+        else box.value = emptied ? '' : command.type;
         fire(box, 'input');
         fire(box, 'keyup');
+        box.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'ArrowDown',
+            code: 'ArrowDown',
+            keyCode: 40,
+            bubbles: true,
+          }),
+        );
       });
       if (!shown) return { ok: false, detail: 'no-match (no suggestions)' };
       let match: HTMLElement | undefined;
@@ -2216,9 +2378,26 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         return { ok: false, detail: `no-match (offered: ${offered})` };
       }
       const chosen = text(match);
+      const wanted = command.options.find((o) =>
+        command.startsWith ? loose(chosen).startsWith(loose(o)) : loose(chosen) === loose(o),
+      );
       match.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
       match.click();
       await sleep(700);
+      if (command.shownIn) {
+        const shown = await until(
+          () =>
+            Array.from(document.querySelectorAll(command.shownIn!)).some(
+              (el) => visible(el) && loose(text(el)).startsWith(loose(wanted ?? chosen)),
+            )
+              ? true
+              : null,
+          3000,
+        );
+        return shown
+          ? { ok: true, value: chosen }
+          : { ok: false, detail: `not-kept: ${command.shownIn} does not show it` };
+      }
       const kept = find();
       return kept && loose(kept.value) === loose(chosen)
         ? { ok: true, value: chosen }

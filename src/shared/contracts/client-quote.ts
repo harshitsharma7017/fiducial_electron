@@ -16,6 +16,12 @@ import {
   type HdfcRetailRun,
 } from '../insurers/hdfc';
 import {
+  BAJAJ_OCCUPATIONS,
+  type BajajOccupation,
+  type BajajPaPlan,
+  type BajajPaRun,
+} from '../insurers/bajaj';
+import {
   ICICI_BOOSTER_DEDUCTIBLES,
   ICICI_ELEVATE_SUMS,
   type IciciApiHealthRun,
@@ -32,6 +38,7 @@ export const QUOTE_CHOICE_INSURERS = [
   'niva-bupa',
   'hdfc-ergo',
   'icici-lombard',
+  'bajaj-allianz',
 ] as const;
 export type QuoteChoiceInsurer = (typeof QUOTE_CHOICE_INSURERS)[number];
 export const QUOTE_CHOICE_INSURER_NAMES: Record<QuoteChoiceInsurer, string> = {
@@ -40,6 +47,7 @@ export const QUOTE_CHOICE_INSURER_NAMES: Record<QuoteChoiceInsurer, string> = {
   'niva-bupa': 'Niva Bupa',
   'hdfc-ergo': 'HDFC ERGO',
   'icici-lombard': 'ICICI Lombard',
+  'bajaj-allianz': 'Bajaj Allianz',
 };
 
 export const clientQuoteChoicesSchema = z.strictObject({
@@ -100,6 +108,22 @@ export const clientQuoteChoicesSchema = z.strictObject({
       tenure: z.int().min(1).max(5).optional(),
       preExistingDisease: z.boolean().optional(),
       paymentOption: z.enum(['annual', 'monthly', 'quarterly']).optional(),
+    })
+    .optional(),
+  // Personal Accident (recording of 25 November 2026).
+  'bajaj-allianz': z
+    .strictObject({
+      paTenureYears: years3.optional(),
+      /** The family's income, a year (₹). */
+      familyIncome: z.int().positive().max(1_000_000_000).optional(),
+      /** The proposer's gross monthly income (₹). */
+      monthlyIncome: z.int().positive().max(1_000_000_000).optional(),
+      occupation: z
+        .enum(Object.keys(BAJAJ_OCCUPATIONS) as [BajajOccupation, ...BajajOccupation[]])
+        .optional(),
+      deathSumInsured: z.int().positive().max(1_000_000_000).optional(),
+      partialDisabilitySumInsured: z.int().positive().max(1_000_000_000).optional(),
+      totalDisabilitySumInsured: z.int().positive().max(1_000_000_000).optional(),
     })
     .optional(),
 });
@@ -274,6 +298,40 @@ export function iciciHealthFromChoices(
       ...(product === 'activate-booster' ? { deductible } : {}),
       preExistingDisease: c.preExistingDisease!,
       paymentOption: c.paymentOption ?? QUOTE_DEFAULTS.iciciPayment,
+    },
+  };
+}
+
+/** Bajaj Allianz's Personal Accident run, from the client's details (the plan chosen here). */
+export function bajajPaFromChoices(
+  plan: BajajPaPlan,
+  choices: ClientQuoteChoices | undefined,
+): FromChoices<BajajPaRun> {
+  const c = choices?.['bajaj-allianz'] ?? {};
+  const missing = [
+    ...(c.familyIncome ? [] : [`the family income ${where('bajaj-allianz')}`]),
+    ...(c.monthlyIncome ? [] : [`the gross monthly income ${where('bajaj-allianz')}`]),
+    ...(c.occupation ? [] : [`the occupation ${where('bajaj-allianz')}`]),
+    ...(c.deathSumInsured || c.partialDisabilitySumInsured || c.totalDisabilitySumInsured
+      ? []
+      : [`a sum insured for at least one cover ${where('bajaj-allianz')}`]),
+  ];
+  if (missing.length > 0) return { ok: false, missing };
+  return {
+    ok: true,
+    value: {
+      plan,
+      tenureYears: c.paTenureYears ?? 1,
+      familyIncome: c.familyIncome!,
+      monthlyIncome: c.monthlyIncome!,
+      occupation: c.occupation!,
+      ...(c.deathSumInsured ? { deathSumInsured: c.deathSumInsured } : {}),
+      ...(c.partialDisabilitySumInsured
+        ? { partialDisabilitySumInsured: c.partialDisabilitySumInsured }
+        : {}),
+      ...(c.totalDisabilitySumInsured
+        ? { totalDisabilitySumInsured: c.totalDisabilitySumInsured }
+        : {}),
     },
   };
 }
