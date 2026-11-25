@@ -1,11 +1,17 @@
 // HDFC ERGO's PIE forms that start from a health client (Energy, Optima Secure, Optima Restore) or
 // a travel client (Retail Travel): the advisor's choices for one run, and the premium PIE works out.
 // The SP/POSP name or code is remembered on this computer (it is the advisor's, not the client's).
+// A health client's choices besides the product are its saved details (request of 24 November 2026).
 import { useState } from 'react';
+import { hdfcRetailFromChoices } from '../../../shared/contracts/client-quote';
 import {
-  HDFC_CITIES,
-  HDFC_ENERGY_PLANS,
-  HDFC_OPTIMA_SECURE_PLANS,
+  missingMessage,
+  readChoices,
+  SavedChoicesNote,
+  useSavedChoices,
+} from '../clients/saved-choices';
+import { rememberedPosp } from './hdfc-posp';
+import {
   HDFC_RETAIL_NAMES,
   HDFC_RETAIL_PRODUCTS,
   type HdfcRetailRun,
@@ -14,22 +20,6 @@ import type { QuoteRunResultView } from '../../../shared/ipc/contract';
 import { runQuote } from '../quote/run';
 
 type Result = QuoteRunResultView | { error: string } | null;
-const POSP_KEY = 'fqf.hdfc.posp';
-
-function remembered(): string {
-  try {
-    return localStorage.getItem(POSP_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-function remember(value: string): void {
-  try {
-    localStorage.setItem(POSP_KEY, value);
-  } catch {
-    // Not kept: asked again next time.
-  }
-}
 
 function ResultView(props: { result: Result }): React.JSX.Element | null {
   const { result } = props;
@@ -75,46 +65,48 @@ function ResultView(props: { result: Result }): React.JSX.Element | null {
 }
 
 const OPENING =
-  'Sign in to HDFC and open any product from 1up once (Issue Quotes & Policy), so the tab is signed in to PIE.';
+  "Sign in to HDFC's 1up. From 1up's home page the app opens PIE itself (Issue Quotes & Policy, then Private Car).";
 
-/** Energy, Optima Secure, Optima Restore for a health client. */
+/**
+ * Energy, Optima Secure, Optima Restore for a health client: the product is chosen here, the rest
+ * is the client's details (Additional details, HDFC ERGO) and the advisor's SP/POSP code.
+ */
 export function HdfcRetailPanel(props: { clientId: string }): React.JSX.Element {
   const [product, setProduct] = useState<HdfcRetailRun['product']>('optima-secure');
-  const [cover, setCover] = useState<HdfcRetailRun['cover']>('individual');
-  const [years, setYears] = useState<HdfcRetailRun['years']>(1);
-  const [sumInsuredLacs, setSumInsuredLacs] = useState(10);
-  const [plan, setPlan] = useState('');
-  const [city, setCity] = useState<HdfcRetailRun['city']>('Mumbai');
-  const [existing, setExisting] = useState('');
-  const [posp, setPosp] = useState(remembered);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result>(null);
-  const plans =
-    product === 'optima-secure'
-      ? HDFC_OPTIMA_SECURE_PLANS
-      : product === 'energy'
-        ? HDFC_ENERGY_PLANS
-        : [];
+  const saved = useSavedChoices(props.clientId);
+  const shown = hdfcRetailFromChoices(product, saved ?? undefined, rememberedPosp() || '--');
+  const lines = shown.ok
+    ? [
+        ...(product !== 'energy' ? [shown.value.cover === 'family' ? 'Family' : 'Individual'] : []),
+        ...(shown.value.plan ? [`plan ${shown.value.plan}`] : []),
+        `${shown.value.years} year${shown.value.years > 1 ? 's' : ''}`,
+        ...(shown.value.sumInsuredLacs ? [`${shown.value.sumInsuredLacs} lakh`] : []),
+        ...(product !== 'optima-secure' ? [`stays in ${shown.value.city}`] : []),
+        rememberedPosp() ? `SP/POSP ${rememberedPosp()}` : 'your SP/POSP code not given yet',
+      ]
+    : [];
   const run = async () => {
     setBusy(true);
     setResult(null);
-    remember(posp.trim());
+    const read = await readChoices(props.clientId);
+    if ('error' in read) {
+      setBusy(false);
+      setResult(read);
+      return;
+    }
+    const built = hdfcRetailFromChoices(product, read.choices, rememberedPosp());
+    if (!built.ok) {
+      setBusy(false);
+      setResult({ error: missingMessage(built.missing) });
+      return;
+    }
     const r = await runQuote({
       clientId: props.clientId,
       insurerId: 'hdfc-ergo',
       product: 'hdfc-retail',
-      run: {
-        product,
-        cover: product === 'energy' ? 'individual' : cover,
-        years,
-        city,
-        posp,
-        ...(product !== 'energy' ? { sumInsuredLacs } : {}),
-        ...(plan ? { plan } : {}),
-        ...(product === 'energy' && Number(existing) > 0
-          ? { existingSumInsured: Number(existing) }
-          : {}),
-      },
+      run: built.value,
     }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
@@ -131,10 +123,7 @@ export function HdfcRetailPanel(props: { clientId: string }): React.JSX.Element 
         Product{' '}
         <select
           value={product}
-          onChange={(e) => {
-            setProduct(e.target.value as HdfcRetailRun['product']);
-            setPlan('');
-          }}
+          onChange={(e) => setProduct(e.target.value as HdfcRetailRun['product'])}
         >
           {HDFC_RETAIL_PRODUCTS.map((p) => (
             <option key={p} value={p}>
@@ -142,81 +131,10 @@ export function HdfcRetailPanel(props: { clientId: string }): React.JSX.Element 
             </option>
           ))}
         </select>
-      </label>{' '}
-      {product !== 'energy' && (
-        <label>
-          Cover{' '}
-          <select
-            value={cover}
-            onChange={(e) => setCover(e.target.value as HdfcRetailRun['cover'])}
-          >
-            <option value="individual">Individual</option>
-            <option value="family">Family</option>
-          </select>
-        </label>
-      )}{' '}
-      {plans.length > 0 && (
-        <label>
-          Plan{' '}
-          <select value={plan} onChange={(e) => setPlan(e.target.value)}>
-            <option value="">(PIE&rsquo;s first)</option>
-            {plans.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}{' '}
-      <label>
-        Policy period{' '}
-        <select
-          value={years}
-          onChange={(e) => setYears(Number(e.target.value) as HdfcRetailRun['years'])}
-        >
-          <option value={1}>1 year</option>
-          <option value={2}>2 years</option>
-          <option value={3}>3 years</option>
-        </select>
-      </label>{' '}
-      {product !== 'energy' && (
-        <label>
-          Sum insured (lakh){' '}
-          <input
-            type="number"
-            min={1}
-            max={500}
-            value={sumInsuredLacs}
-            onChange={(e) => setSumInsuredLacs(Number(e.target.value))}
-          />
-        </label>
-      )}{' '}
-      {product !== 'optima-secure' && (
-        <label>
-          I stay in{' '}
-          <select value={city} onChange={(e) => setCity(e.target.value as HdfcRetailRun['city'])}>
-            {HDFC_CITIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}{' '}
-      {product === 'energy' && (
-        <label>
-          Existing health insurance sum insured (₹, if any){' '}
-          <input
-            value={existing}
-            onChange={(e) => setExisting(e.target.value.replace(/\D/g, ''))}
-          />
-        </label>
-      )}
-      <label>
-        Your SP/POSP name or code <input value={posp} onChange={(e) => setPosp(e.target.value)} />
       </label>
+      <SavedChoicesNote insurer="hdfc-ergo" lines={lines} />
       <div className="insurer-actions">
-        <button type="button" disabled={busy || posp.trim().length < 2} onClick={() => void run()}>
+        <button type="button" disabled={busy} onClick={() => void run()}>
           {busy ? 'Working on PIE…' : `Get ${HDFC_RETAIL_NAMES[product]} premium`}
         </button>
       </div>

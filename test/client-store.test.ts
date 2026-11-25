@@ -1146,3 +1146,53 @@ describe('proposal details for e-proposals (schema version 4)', () => {
     store.close();
   });
 });
+
+describe("a health client's details per insurer and quote choices (schema version 10)", () => {
+  const base = {
+    customer: { name: 'Synthetic Proposer' },
+    pincode: '560001',
+    members: [{ relationship: 'self', age: 40 }],
+  };
+  const insurerDetails = {
+    'united-india': { pan: 'abcde1234f', occupation: 'Software Professional' },
+    'new-india': { occupation: 'Professional', address: '1 Synthetic Road' },
+    'niva-bupa': { city: 'Bengaluru' },
+  };
+  const quoteChoices = {
+    'niva-bupa': { sumInsured: 2000000, years: 2, addOns: ['Safeguard'], tieredNetwork: true },
+    'icici-lombard': { preExistingDisease: false, tenure: 2 },
+    'hdfc-ergo': { mstCover: 'individual', mstYears: 3 },
+  };
+
+  it('saves them, reads them back, keeps them across a restart, and updates and clears them', async () => {
+    const p = place();
+    const store = await open(p);
+    const saved = store.save(null, { ...base, insurerDetails, quoteChoices } as never);
+    const read = store.get(saved.id)?.client;
+    expect(read?.insurerDetails).toEqual({
+      ...insurerDetails,
+      'united-india': { pan: 'ABCDE1234F', occupation: 'Software Professional' },
+    });
+    expect(read?.quoteChoices).toEqual(quoteChoices);
+    store.close();
+
+    const again = await open(p);
+    expect(again.get(saved.id)?.client.quoteChoices).toEqual(quoteChoices);
+    // Updated in place; then cleared when saved without them.
+    again.save(saved.id, {
+      ...base,
+      insurerDetails: { 'niva-bupa': { city: 'Mysuru' } },
+      quoteChoices: { 'united-india': { goodHealth: true } },
+    } as never);
+    expect(again.get(saved.id)?.client.insurerDetails).toEqual({
+      'niva-bupa': { city: 'Mysuru' },
+    });
+    expect(again.get(saved.id)?.client.quoteChoices).toEqual({
+      'united-india': { goodHealth: true },
+    });
+    again.save(saved.id, base as never);
+    expect(again.get(saved.id)?.client).not.toHaveProperty('insurerDetails');
+    expect(again.get(saved.id)?.client).not.toHaveProperty('quoteChoices');
+    again.close();
+  });
+});

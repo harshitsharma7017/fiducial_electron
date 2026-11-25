@@ -162,10 +162,13 @@ describe('United India health calculator', () => {
     const raw = { ...CLIENT, customer: { name: 'Synthetic Proposer' } };
     const client = clientInputSchema.parse(raw);
     expect(uiicMissingForClient('health', client, { aadhaar: false })).toEqual(['email', 'phone']);
-    expect(planUiicHealthQuote(client, { goodHealth: true, today: TODAY }).ok).toBe(false);
+    // Since the hand-over (20 November 2026) the plan fills the rest and leaves these two.
+    const partial = planUiicHealthQuote(client, { goodHealth: true, today: TODAY });
+    expect(partial.ok && partial.left.length).toBe(2);
     const complete = clientInputSchema.parse(CLIENT);
     expect(uiicMissingForClient('health', complete, { aadhaar: false })).toEqual([]);
-    expect(planUiicHealthQuote(complete, { goodHealth: true, today: TODAY }).ok).toBe(true);
+    const full = planUiicHealthQuote(complete, { goodHealth: true, today: TODAY });
+    expect(full.ok && full.left).toEqual([]);
   });
 });
 

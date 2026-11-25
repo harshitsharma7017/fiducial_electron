@@ -53,20 +53,49 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
     expect(NIVA_HEALTH_PLANS).toEqual(['reassure-2', 'reassure-3', 'health-recharge']);
   });
 
-  it('goes "I Know My Plan", then picks the plan by name: Individual or Family Floater', () => {
+  it('goes "I Know My Plan", then picks the plan by name in the box that appears, not the city', () => {
     const list = ops();
+    // A tab left in "Plan Recommendation" mode is set back first, so the toggle is pressed afresh.
     expect(list[0]).toEqual({
+      op: 'ensureShown',
+      shown: { text: 'I Know My Plan' },
+      open: { text: 'Plan Recommendation' },
+      timeoutMs: 5000,
+    });
+    // The boxes there before (the City box) are marked: the plan box is the new one.
+    expect(list[1]).toMatchObject({ op: 'markPresent', unlessText: 'Plan Recommendation' });
+    expect(list[2]).toEqual({
       op: 'ensureShown',
       shown: { text: 'Plan Recommendation' },
       open: { text: 'I Know My Plan' },
       timeoutMs: 8000,
     });
-    expect(list[1]).toMatchObject({
+    // Then the plan dropdown must have appeared, then 2 seconds before anything is filled.
+    expect(list[3]).toMatchObject({ op: 'waitFor', timeoutMs: 20000 });
+    expect(list[4]).toEqual({ op: 'pause', ms: 2000 });
+    expect(list[5]).toMatchObject({
       op: 'pickOption',
       type: 'ReAssure2.0',
       options: ['ReAssure2.0 Family Floater'],
+      // Niva Bupa's plans load late (about 5 seconds).
+      suggestMs: 20000,
+      // The box is named for the City step.
+      markAs: 'plan',
     });
-    expect(ops(SINGLE)[1]).toMatchObject({ options: ['ReAssure2.0 Individual'] });
+    expect((list[3] as { selector: string }).selector).toContain(':not([data-fqf-before])');
+    expect((list[5] as { selector: string }).selector).toContain(':not([data-fqf-before])');
+    // Before the details: the plan dropdown again, showing the plan picked, then 2 seconds.
+    expect(list.slice(6, 9)).toEqual([
+      { op: 'waitFor', selector: 'input[data-fqf-box="plan"]', timeoutMs: 10000 },
+      {
+        op: 'waitForValue',
+        selector: 'input[data-fqf-box="plan"]',
+        rejectValues: ['ReAssure2.0'],
+        timeoutMs: 5000,
+      },
+      { op: 'pause', ms: 2000 },
+    ]);
+    expect(ops(SINGLE)[5]).toMatchObject({ options: ['ReAssure2.0 Individual'] });
     expect(nivaPlanOptions({ ...RUN, plan: 'reassure-3' }, 1)).toEqual(['ReAssure3.0 Individual']);
     expect(nivaPlanOptions({ ...RUN, plan: 'health-recharge' }, 2)[0]).toBe(
       'HealthRechargeV2 Family Floater',
@@ -74,7 +103,7 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
   });
 
   it('counts the members, then dates of birth eldest first; a floater may ask only the eldest', () => {
-    expect(ops().slice(3, 8)).toEqual([
+    expect(ops().slice(9, 14)).toEqual([
       { op: 'stepper', index: 0, count: 2, timeoutMs: 15000 },
       { op: 'stepper', index: 1, count: 1, timeoutMs: 5000 },
       { op: 'matDate', counter: 0, nth: 0, date: '1986-01-25' },
@@ -84,7 +113,7 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
     // The eldest's box is always asked; the others are skipped when Niva Bupa shows no box.
     expect(
       steps()
-        .slice(5, 8)
+        .slice(11, 14)
         .map((s) => s.skipIfNoBox),
     ).toEqual([false, true, true]);
   });

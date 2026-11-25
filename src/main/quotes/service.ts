@@ -17,6 +17,7 @@ import type { PortalPage } from '../insurers/portal-host';
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
 import type { QuoteRunRequest } from '../../shared/ipc/contract';
+import { clientForInsurer } from '../../shared/contracts/client';
 import { findPortal, mayFillLogin } from '../../shared/insurers/portals';
 import { GUESSED_READING, type HandOver } from './hand-over';
 import type { PageOp, PageOpResult } from './page-ops';
@@ -665,7 +666,14 @@ export function createQuoteService(deps: {
                 kind: 'traveller' as const,
                 record: await deps.clients.getTraveller(request.travellerId),
               }
-            : { kind: 'client' as const, record: await deps.clients.get(request.clientId) };
+            : await (async () => {
+                const record = await deps.clients.get(request.clientId);
+                // Each insurer's run reads only its own additional details (as `proposal`).
+                return {
+                  kind: 'client' as const,
+                  record: { ...record, client: clientForInsurer(record.client, insurerId) },
+                };
+              })();
       running = true;
       beginRun();
       follow(insurerId);

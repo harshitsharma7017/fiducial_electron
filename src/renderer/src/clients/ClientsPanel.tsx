@@ -1,9 +1,10 @@
 // Saved clients: the details quotes are fetched for, kept encrypted on this computer until the
 // advisor deletes them. Members carry relationship and age, and optionally date of birth and
 // gender (United India's calculator needs them); the proposer may have a marital status. Each
-// client can be quoted from here ("Get quote"). Proposal details (PAN, address, occupation, nominee
-// and so on) are for e-proposal forms; the Aadhaar number is kept apart, in the secret vault, and
-// only its last four digits are ever shown. Vehicles are not part of a client: see
+// client can be quoted from here ("Get quote"). The client form has two tabs (request of 24 November
+// 2026): Basic details, and Additional details kept per insurer (PAN, address, occupation, nominee
+// and so on, as each insurer's forms ask them); the Aadhaar number is kept apart, in the secret
+// vault, and only its last four digits are ever shown. Vehicles are not part of a client: see
 // ../vehicles/VehiclesPanel.tsx.
 import { HeartPulse, MapPin, Pencil, Trash2, Users, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -17,6 +18,13 @@ import { IciciApiHealthPanel, useIciciApiReady } from '../quote/IciciApiPanels';
 import { QuoteWorkspace, type QuoteOption } from '../quote/QuoteWorkspace';
 import {
   ageOn,
+  CLIENT_DETAIL_INSURER_NAMES,
+  CLIENT_DETAIL_INSURERS,
+  INSURER_DETAIL_FIELDS,
+  insurerDetailsOf,
+  NIA_GRAMIN_OCCUPATIONS,
+  UIIC_OCCUPATIONS,
+  type ClientDetailInsurer,
   type ClientInputRaw,
   type ClientSummary,
   type Gender,
@@ -25,10 +33,11 @@ import {
 import {
   aadhaarChange,
   EMPTY_PROPOSAL,
+  hasInsurerDetails,
+  insurerProposalToInput,
   MARITAL_LABELS,
   ProposalFields,
   proposalFromRecord,
-  proposalToInput,
   type AadhaarDraft,
   type ProposalDraft,
 } from './proposal-fields';
@@ -40,26 +49,38 @@ import {
   type NiaHealthPolicy,
 } from '../../../shared/insurers/nia-health';
 import {
-  NIA_PA_EXCESS,
   NIA_PA_FORM_NAMES,
   NIA_PA_FORMS,
   NIA_PA_STATUSES,
-  NIA_PA_SUMS,
   type NiaPaForm,
-  type NiaPaRun,
 } from '../../../shared/insurers/nia-pa';
 import {
   NIVA_HEALTH_PLAN_NAMES,
   NIVA_HEALTH_PLANS,
-  NIVA_KNOWN_ADD_ONS,
-  NIVA_SUMS_INSURED,
   type NivaHealthPlan,
 } from '../../../shared/insurers/niva-health';
-import type { HdfcMstRun } from '../../../shared/insurers/hdfc';
 import { HdfcRetailPanel } from '../insurers/HdfcPanels';
 import { PAISE_PER_RUPEE } from '../../../shared/money';
 import { runQuote } from '../quote/run';
-import { UiicRequiredFields, useUiicRequired } from '../quote/UiicRequiredFields';
+import { UiicMissingNote, useUiicRequired } from '../quote/UiicRequiredFields';
+import { QuoteChoicesFields } from './QuoteChoicesFields';
+import {
+  missingMessage,
+  QuoteResult,
+  readChoices,
+  SavedChoicesNote,
+  useSavedChoices,
+} from './saved-choices';
+import {
+  hdfcMstFromChoices,
+  niaPaFromChoices,
+  nivaRunFromChoices,
+  QUOTE_CHOICE_INSURER_NAMES,
+  QUOTE_CHOICE_INSURERS,
+  QUOTE_DEFAULTS,
+  type ClientQuoteChoices,
+  type QuoteChoiceInsurer,
+} from '../../../shared/contracts/client-quote';
 
 const RELATIONSHIP_LABELS: Record<Relationship, string> = {
   self: 'Self',
@@ -90,8 +111,10 @@ interface Draft {
   maritalStatus: MaritalStatus | '';
   members: MemberDraft[];
   withPreferences: boolean;
-  withProposal: boolean;
-  proposal: ProposalDraft;
+  /** Additional details, per insurer. */
+  details: Record<ClientDetailInsurer, ProposalDraft>;
+  /** What each insurer's quotes use besides the product. */
+  choices: ClientQuoteChoices;
   aadhaar: AadhaarDraft;
   coverType: 'individual' | 'floater';
   sumInsuredRupees: string;
@@ -108,8 +131,12 @@ const EMPTY: Draft = {
   maritalStatus: '',
   members: [{ relationship: 'self', age: '', dateOfBirth: '', gender: '' }],
   withPreferences: true,
-  withProposal: false,
-  proposal: EMPTY_PROPOSAL,
+  choices: {},
+  details: {
+    'united-india': EMPTY_PROPOSAL,
+    'new-india': EMPTY_PROPOSAL,
+    'niva-bupa': EMPTY_PROPOSAL,
+  },
   aadhaar: { lastFour: null, input: '', remove: false },
   coverType: 'floater',
   sumInsuredRupees: '',
@@ -145,9 +172,49 @@ function toInput(d: Draft): ClientInputRaw {
           },
         }
       : {}),
-    ...(d.withProposal ? { proposal: proposalToInput(d.proposal) } : {}),
+    ...insurerDetailsInput(d),
+    ...quoteChoicesInput(d.choices),
   };
 }
+
+/** The additional details to save, per insurer (none when nothing is given). */
+function insurerDetailsInput(d: Draft): { insurerDetails?: Record<string, unknown> } {
+  const given = CLIENT_DETAIL_INSURERS.flatMap((insurer) => {
+    const details = insurerProposalToInput(insurer, d.details[insurer]);
+    return details ? [[insurer, details] as const] : [];
+  });
+  return given.length > 0 ? { insurerDetails: Object.fromEntries(given) } : {};
+}
+
+/** The quote choices to save: each insurer's given ones (none when nothing is given). */
+function quoteChoicesInput(c: ClientQuoteChoices): { quoteChoices?: ClientQuoteChoices } {
+  const kept = Object.fromEntries(
+    Object.entries(c)
+      .map(([insurer, choices]) => [
+        insurer,
+        Object.fromEntries(
+          Object.entries(choices ?? {}).filter(([, v]) => v !== undefined && v !== ''),
+        ),
+      ])
+      .filter(([, choices]) => Object.keys(choices as object).length > 0),
+  ) as ClientQuoteChoices;
+  return Object.keys(kept).length > 0 ? { quoteChoices: kept } : {};
+}
+
+/** Each insurer's occupation list (Niva Bupa's forms do not ask one). */
+const OCCUPATIONS: Record<ClientDetailInsurer, readonly string[]> = {
+  'united-india': UIIC_OCCUPATIONS,
+  'new-india': NIA_GRAMIN_OCCUPATIONS,
+  'niva-bupa': [],
+};
+
+/** What each insurer's additional details are used for, as the tab says. */
+const DETAILS_USE: Record<ClientDetailInsurer, string> = {
+  'united-india':
+    'Used by United India’s health e-proposals (Family Medicare, Individual Health, Arogya Sanjeevani, Super Top-up, Yuvaan).',
+  'new-india': 'Used by New India’s personal accident forms (Sukshma, Janata, Pension).',
+  'niva-bupa': 'Used by Niva Bupa’s premium calculator (the city, as Niva Bupa lists it).',
+};
 
 export function ClientsPanel(): React.JSX.Element | null {
   const [list, setList] = useState<ClientListResponse | null>(null);
@@ -194,9 +261,17 @@ export function ClientsPanel(): React.JSX.Element | null {
         gender: m.gender ?? '',
       })),
       withPreferences: !!client.preferences,
-      withProposal: !!client.proposal || result.data.aadhaarLastFour !== null,
       aadhaar: { lastFour: result.data.aadhaarLastFour, input: '', remove: false },
-      proposal: proposalFromRecord(client.proposal),
+      // A client saved before 24 November 2026 has one set: United India's (insurerDetailsOf).
+      choices: client.quoteChoices ?? {},
+      details: (() => {
+        const all = insurerDetailsOf(client);
+        return {
+          'united-india': proposalFromRecord(all['united-india']),
+          'new-india': proposalFromRecord(all['new-india']),
+          'niva-bupa': proposalFromRecord(all['niva-bupa']),
+        };
+      })(),
       coverType: client.preferences?.coverType ?? 'floater',
       sumInsuredRupees: client.preferences
         ? String(client.preferences.sumInsuredPaise / PAISE_PER_RUPEE)
@@ -440,20 +515,26 @@ function healthQuoteOptions(c: ClientSummary, iciciApi: boolean): QuoteOption[] 
   ];
 }
 
-/** HDFC ERGO: fills PIE's MST form for the client's members and reads the premium. */
+/** HDFC ERGO's MST: nothing is chosen here, the cover and term are the client's details. */
 function HdfcMstPanel(props: { clientId: string }): React.JSX.Element {
-  const [cover, setCover] = useState<HdfcMstRun['cover']>('family-floater');
-  const [years, setYears] = useState<HdfcMstRun['years']>(1);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const saved = useSavedChoices(props.clientId);
+  const shown = hdfcMstFromChoices(saved ?? undefined);
   const run = async () => {
     setBusy(true);
     setResult(null);
+    const read = await readChoices(props.clientId);
+    if ('error' in read) {
+      setBusy(false);
+      setResult(read);
+      return;
+    }
     const r = await runQuote({
       clientId: props.clientId,
       insurerId: 'hdfc-ergo',
       product: 'hdfc-mst',
-      run: { cover, years },
+      run: hdfcMstFromChoices(read.choices),
     }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
@@ -461,66 +542,24 @@ function HdfcMstPanel(props: { clientId: string }): React.JSX.Element {
   return (
     <div className="quote-panel">
       <p className="insurer-note">
-        <strong>HDFC ERGO, MST (Medisure Super Top-up), PIE.</strong> Sign in to HDFC and open any
-        product from 1up once (Issue Quotes &amp; Policy), so the tab is signed in to PIE. The app
-        opens the MST form, fills the cover, term and members, and reads the premium PIE works out.
-        It never presses Generate Quote.
+        <strong>HDFC ERGO, MST (Medisure Super Top-up), PIE.</strong> Sign in to HDFC&rsquo;s 1up.
+        From 1up&rsquo;s home page the app opens PIE itself (Issue Quotes &amp; Policy, then Private
+        Car), then opens the MST form, fills the cover, term and members, and reads the premium PIE
+        works out. It never presses Generate Quote.
       </p>
-      <label>
-        Cover{' '}
-        <select value={cover} onChange={(e) => setCover(e.target.value as HdfcMstRun['cover'])}>
-          <option value="family-floater">Family Floater</option>
-          <option value="individual">Individual (one member)</option>
-        </select>
-      </label>{' '}
-      <label>
-        Term{' '}
-        <select
-          value={years}
-          onChange={(e) => setYears(Number(e.target.value) as HdfcMstRun['years'])}
-        >
-          <option value={1}>1 year</option>
-          <option value={2}>2 years</option>
-          <option value={3}>3 years</option>
-        </select>
-      </label>
+      <SavedChoicesNote
+        insurer="hdfc-ergo"
+        lines={[
+          shown.cover === 'individual' ? 'Individual' : 'Family Floater',
+          `${shown.years} year${shown.years > 1 ? 's' : ''}`,
+        ]}
+      />
       <div className="insurer-actions">
         <button type="button" disabled={busy} onClick={() => void run()}>
-          {busy ? 'Working on PIE…' : 'Get HDFC ERGO MST premium'}
+          {busy ? 'Working on PIE…' : 'Get MST premium'}
         </button>
       </div>
-      {result && 'error' in result && (
-        <p className="error" role="alert">
-          {result.error}
-        </p>
-      )}
-      {result && 'outcome' in result && (
-        <div role="status">
-          {result.premium && (
-            <p>
-              <strong>₹{result.premium.amount}</strong> &mdash; {result.premium.label}
-            </p>
-          )}
-          <p className={result.outcome === 'ready' ? undefined : 'error'}>
-            {result.step ? `${result.step}: ` : ''}
-            {result.message}
-          </p>
-          {result.problems.length > 0 && (
-            <ul>
-              {result.problems.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-          )}
-          {result.toDo && result.toDo.length > 0 && (
-            <ul>
-              {result.toDo.map((t) => (
-                <li key={t}>{t}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <QuoteResult result={result} />
     </div>
   );
 }
@@ -534,6 +573,8 @@ function ClientForm(props: {
   const { draft: d, onChange } = props;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<'basic' | 'additional'>('basic');
+  const [insurer, setInsurer] = useState<QuoteChoiceInsurer>('united-india');
   const set = (patch: Partial<Draft>) => onChange({ ...d, ...patch });
   const setMember = (i: number, patch: Partial<MemberDraft>) =>
     set({ members: d.members.map((m, j) => (j === i ? { ...m, ...patch } : m)) });
@@ -559,207 +600,234 @@ function ClientForm(props: {
           ? `Check these details: ${[...new Set(fields.map((f) => describeField(f.path)))].join(', ')}.`
           : (result?.error.message ?? 'The client could not be saved.'),
       );
+      // Show the tab (and insurer) the first problem is on.
+      const first = fields?.[0]?.path.split('.') ?? [];
+      if (first[1] === 'insurerDetails' || first[1] === 'quoteChoices' || first[0] === 'aadhaar') {
+        setTab('additional');
+        const at = first[0] === 'aadhaar' ? 'united-india' : first[2];
+        if ((QUOTE_CHOICE_INSURERS as readonly string[]).includes(at ?? ''))
+          setInsurer(at as QuoteChoiceInsurer);
+      } else if (fields?.length) setTab('basic');
     }
   };
 
   return (
     <form className="login-form client-form" onSubmit={(e) => void submit(e)}>
-      <label>
-        Client name
-        <input
-          value={d.name}
-          onChange={(e) => set({ name: e.target.value })}
-          maxLength={100}
-          required
-        />
-      </label>
-      <label>
-        Mobile (optional)
-        <input
-          value={d.phone}
-          onChange={(e) => set({ phone: e.target.value })}
-          inputMode="tel"
-          maxLength={20}
-        />
-      </label>
-      <label>
-        Email (optional)
-        <input
-          value={d.email}
-          onChange={(e) => set({ email: e.target.value })}
-          type="email"
-          maxLength={254}
-        />
-      </label>
-      <label>
-        Pincode
-        <input
-          value={d.pincode}
-          onChange={(e) => set({ pincode: e.target.value })}
-          inputMode="numeric"
-          maxLength={7}
-          required
-        />
-      </label>
-      <fieldset>
-        <legend>Members to insure</legend>
-        {d.members.map((m, i) => (
-          <div className="member-row" key={i}>
-            <select
-              aria-label={`Member ${i + 1} relationship`}
-              value={m.relationship}
-              onChange={(e) => setMember(i, { relationship: e.target.value as Relationship })}
-            >
-              {RELATIONSHIPS.map((r) => (
-                <option key={r} value={r}>
-                  {RELATIONSHIP_LABELS[r]}
-                </option>
-              ))}
-            </select>
-            <input
-              aria-label={`Member ${i + 1} date of birth`}
-              type="date"
-              value={m.dateOfBirth}
-              min="1900-01-01"
-              max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => {
-                const dateOfBirth = e.target.value;
-                // The age follows the date of birth.
-                setMember(i, {
-                  dateOfBirth,
-                  ...(dateOfBirth ? { age: String(ageOn(dateOfBirth, new Date())) } : {}),
-                });
-              }}
-            />
-            <input
-              aria-label={`Member ${i + 1} age`}
-              value={m.age}
-              onChange={(e) => setMember(i, { age: e.target.value })}
-              inputMode="numeric"
-              placeholder="Age"
-              maxLength={3}
-              required
-              readOnly={!!m.dateOfBirth}
-            />
-            <select
-              aria-label={`Member ${i + 1} gender`}
-              value={m.gender}
-              onChange={(e) => setMember(i, { gender: e.target.value as Gender | '' })}
-            >
-              <option value="">Gender</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="transgender">Transgender</option>
-            </select>
-            {d.members.length > 1 && (
-              <button
-                type="button"
-                onClick={() => set({ members: d.members.filter((_, j) => j !== i) })}
-              >
-                Remove
-              </button>
-            )}
-          </div>
-        ))}
-        {hasSelf && (
-          <label>
-            Proposer&rsquo;s marital status
-            <select
-              value={d.maritalStatus}
-              onChange={(e) => set({ maritalStatus: e.target.value as MaritalStatus | '' })}
-            >
-              <option value="">Not given</option>
-              {(Object.keys(MARITAL_LABELS) as MaritalStatus[]).map((k) => (
-                <option key={k} value={k}>
-                  {MARITAL_LABELS[k]}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {d.members.length < 12 && (
-          <button
-            type="button"
-            onClick={() =>
-              set({
-                members: [
-                  ...d.members,
-                  { relationship: 'spouse', age: '', dateOfBirth: '', gender: '' },
-                ],
-              })
-            }
-          >
-            Add member
-          </button>
-        )}
-      </fieldset>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={d.withProposal}
-          onChange={(e) => set({ withProposal: e.target.checked })}
-        />
-        Add proposal details (for e-proposal forms)
-      </label>
-      {d.withProposal && (
-        <ProposalFields
-          value={d.proposal}
-          onChange={(proposal) => set({ proposal })}
-          aadhaar={d.aadhaar}
+      <div className="form-tabs" role="tablist" aria-label="Client details">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'basic'}
+          onClick={() => setTab('basic')}
+        >
+          Basic details
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'additional'}
+          onClick={() => setTab('additional')}
+        >
+          Additional details
+        </button>
+      </div>
+      {tab === 'additional' && (
+        <AdditionalDetails
+          draft={d}
+          insurer={insurer}
+          onInsurer={setInsurer}
+          onChange={(details) => set({ details })}
+          onChoices={(choices) => set({ choices })}
           onAadhaarChange={(aadhaar) => set({ aadhaar })}
         />
       )}
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={d.withPreferences}
-          onChange={(e) => set({ withPreferences: e.target.checked })}
-        />
-        Save quote details (needed to fetch quotes)
-      </label>
-      {d.withPreferences && (
+      {tab === 'basic' && (
         <>
           <label>
-            Cover type
-            <select
-              value={d.coverType}
-              onChange={(e) => set({ coverType: e.target.value as Draft['coverType'] })}
-            >
-              <option value="floater">Family floater</option>
-              <option value="individual">Individual</option>
-            </select>
-          </label>
-          <label>
-            Sum insured (₹)
+            Client name
             <input
-              value={d.sumInsuredRupees}
-              onChange={(e) => set({ sumInsuredRupees: e.target.value.replace(/[,\s]/g, '') })}
-              inputMode="numeric"
-              placeholder="for example 1000000"
+              value={d.name}
+              onChange={(e) => set({ name: e.target.value })}
+              maxLength={100}
               required
             />
           </label>
           <label>
-            Policy term (years)
-            <select value={d.tenureYears} onChange={(e) => set({ tenureYears: e.target.value })}>
-              {[1, 2, 3, 4, 5].map((y) => (
-                <option key={y} value={String(y)}>
-                  {y}
-                </option>
-              ))}
-            </select>
+            Mobile (optional)
+            <input
+              value={d.phone}
+              onChange={(e) => set({ phone: e.target.value })}
+              inputMode="tel"
+              maxLength={20}
+            />
+          </label>
+          <label>
+            Email (optional)
+            <input
+              value={d.email}
+              onChange={(e) => set({ email: e.target.value })}
+              type="email"
+              maxLength={254}
+            />
+          </label>
+          <label>
+            Pincode
+            <input
+              value={d.pincode}
+              onChange={(e) => set({ pincode: e.target.value })}
+              inputMode="numeric"
+              maxLength={7}
+              required
+            />
+          </label>
+          <fieldset>
+            <legend>Members to insure</legend>
+            {d.members.map((m, i) => (
+              <div className="member-row" key={i}>
+                <select
+                  aria-label={`Member ${i + 1} relationship`}
+                  value={m.relationship}
+                  onChange={(e) => setMember(i, { relationship: e.target.value as Relationship })}
+                >
+                  {RELATIONSHIPS.map((r) => (
+                    <option key={r} value={r}>
+                      {RELATIONSHIP_LABELS[r]}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  aria-label={`Member ${i + 1} date of birth`}
+                  type="date"
+                  value={m.dateOfBirth}
+                  min="1900-01-01"
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => {
+                    const dateOfBirth = e.target.value;
+                    // The age follows the date of birth.
+                    setMember(i, {
+                      dateOfBirth,
+                      ...(dateOfBirth ? { age: String(ageOn(dateOfBirth, new Date())) } : {}),
+                    });
+                  }}
+                />
+                <input
+                  aria-label={`Member ${i + 1} age`}
+                  value={m.age}
+                  onChange={(e) => setMember(i, { age: e.target.value })}
+                  inputMode="numeric"
+                  placeholder="Age"
+                  maxLength={3}
+                  required
+                  readOnly={!!m.dateOfBirth}
+                />
+                <select
+                  aria-label={`Member ${i + 1} gender`}
+                  value={m.gender}
+                  onChange={(e) => setMember(i, { gender: e.target.value as Gender | '' })}
+                >
+                  <option value="">Gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="transgender">Transgender</option>
+                </select>
+                {d.members.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => set({ members: d.members.filter((_, j) => j !== i) })}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+            {hasSelf && (
+              <label>
+                Proposer&rsquo;s marital status
+                <select
+                  value={d.maritalStatus}
+                  onChange={(e) => set({ maritalStatus: e.target.value as MaritalStatus | '' })}
+                >
+                  <option value="">Not given</option>
+                  {(Object.keys(MARITAL_LABELS) as MaritalStatus[]).map((k) => (
+                    <option key={k} value={k}>
+                      {MARITAL_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {d.members.length < 12 && (
+              <button
+                type="button"
+                onClick={() =>
+                  set({
+                    members: [
+                      ...d.members,
+                      { relationship: 'spouse', age: '', dateOfBirth: '', gender: '' },
+                    ],
+                  })
+                }
+              >
+                Add member
+              </button>
+            )}
+          </fieldset>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={d.withPreferences}
+              onChange={(e) => set({ withPreferences: e.target.checked })}
+            />
+            Save quote details (needed to fetch quotes)
+          </label>
+          {d.withPreferences && (
+            <>
+              <label>
+                Cover type
+                <select
+                  value={d.coverType}
+                  onChange={(e) => set({ coverType: e.target.value as Draft['coverType'] })}
+                >
+                  <option value="floater">Family floater</option>
+                  <option value="individual">Individual</option>
+                </select>
+              </label>
+              <label>
+                Sum insured (₹)
+                <input
+                  value={d.sumInsuredRupees}
+                  onChange={(e) => set({ sumInsuredRupees: e.target.value.replace(/[,\s]/g, '') })}
+                  inputMode="numeric"
+                  placeholder="for example 1000000"
+                  required
+                />
+              </label>
+              <label>
+                Policy term (years)
+                <select
+                  value={d.tenureYears}
+                  onChange={(e) => set({ tenureYears: e.target.value })}
+                >
+                  {[1, 2, 3, 4, 5].map((y) => (
+                    <option key={y} value={String(y)}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+          <label>
+            Notes (optional)
+            <textarea
+              value={d.notes}
+              onChange={(e) => set({ notes: e.target.value })}
+              maxLength={1000}
+              rows={2}
+            />
           </label>
         </>
       )}
-      <label>
-        Notes (optional)
-        <textarea
-          value={d.notes}
-          onChange={(e) => set({ notes: e.target.value })}
-          maxLength={1000}
-          rows={2}
-        />
-      </label>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -776,6 +844,96 @@ function ClientForm(props: {
     </form>
   );
 }
+
+/**
+ * The Additional details tab: one sub-tab per insurer, each with the details its forms use and the
+ * choices its quotes use besides the product.
+ */
+function AdditionalDetails(props: {
+  draft: Draft;
+  insurer: QuoteChoiceInsurer;
+  onInsurer: (insurer: QuoteChoiceInsurer) => void;
+  onChange: (details: Draft['details']) => void;
+  onChoices: (choices: ClientQuoteChoices) => void;
+  onAadhaarChange: (aadhaar: AadhaarDraft) => void;
+}): React.JSX.Element {
+  const { draft: d, insurer } = props;
+  const withForms = (CLIENT_DETAIL_INSURERS as readonly string[]).includes(insurer)
+    ? (insurer as ClientDetailInsurer)
+    : null;
+  const marked = (i: QuoteChoiceInsurer): boolean =>
+    Object.values(d.choices[i] ?? {}).some((v) => v !== undefined) ||
+    ((CLIENT_DETAIL_INSURERS as readonly string[]).includes(i) &&
+      hasInsurerDetails(i as ClientDetailInsurer, d.details[i as ClientDetailInsurer]));
+  return (
+    <>
+      <p className="insurer-note">
+        Each insurer&rsquo;s details are filled in separately, as its forms and quotes ask them;
+        nothing is copied from one insurer to another, and a quote or proposal uses only that
+        insurer&rsquo;s. A quote asks only the product: everything else comes from here. Stored
+        encrypted.
+      </p>
+      <div className="form-tabs small" role="tablist" aria-label="Insurer">
+        {QUOTE_CHOICE_INSURERS.map((i) => (
+          <button
+            key={i}
+            type="button"
+            role="tab"
+            aria-selected={insurer === i}
+            onClick={() => props.onInsurer(i)}
+          >
+            {QUOTE_CHOICE_INSURER_NAMES[i]}
+            {marked(i) && (
+              <span className="tab-mark" aria-label="(has details)">
+                •
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      {withForms && (
+        <ProposalFields
+          key={withForms}
+          legend={`${CLIENT_DETAIL_INSURER_NAMES[withForms]}’s details`}
+          note={<p className="insurer-note">{DETAILS_USE[withForms]}</p>}
+          value={d.details[withForms]}
+          onChange={(value) => props.onChange({ ...d.details, [withForms]: value })}
+          fields={INSURER_DETAIL_FIELDS[withForms]}
+          occupations={OCCUPATIONS[withForms]}
+          // The Aadhaar number is one per client, asked by United India's e-proposals.
+          {...(withForms === 'united-india'
+            ? { aadhaar: d.aadhaar, onAadhaarChange: props.onAadhaarChange }
+            : {})}
+        />
+      )}
+      <QuoteChoicesFields
+        key={`choices-${insurer}`}
+        insurer={insurer}
+        value={d.choices}
+        onChange={props.onChoices}
+      />
+    </>
+  );
+}
+
+/** Labels of the additional details, for a rejected field. */
+const DETAIL_LABELS: Record<string, string> = {
+  pan: 'PAN',
+  address: 'address',
+  state: 'state',
+  city: 'city',
+  village: 'village',
+  occupation: 'occupation',
+  landlineStdCode: 'landline STD code',
+  landlineNumber: 'landline number',
+  ckycNumber: 'CKYC number',
+  eInsuranceAccountNumber: 'e-insurance account number',
+  nomineeName: "nominee's name",
+  nomineeRelationship: 'nominee relationship',
+  nomineeAddress: "nominee's address",
+  nomineeContact: "nominee's contact number",
+  intermediaryPlace: "intermediary's place of signing",
+};
 
 /** A readable name for a rejected field path such as "client.members.1.age". */
 function describeField(path: string): string {
@@ -794,50 +952,40 @@ function describeField(path: string): string {
     );
   if (parts[0] === 'pincode') return 'pincode';
   if (parts[0] === 'aadhaar') return 'Aadhaar number';
-  if (parts[0] === 'proposal')
-    return (
-      {
-        pan: 'PAN',
-        address: 'address',
-        state: 'state',
-        city: 'city',
-        village: 'village',
-        occupation: 'occupation',
-        landlineStdCode: 'landline STD code',
-        landlineNumber: 'landline number',
-        ckycNumber: 'CKYC number',
-        eInsuranceAccountNumber: 'e-insurance account number',
-        nomineeName: "nominee's name",
-        nomineeRelationship: 'nominee relationship',
-        nomineeAddress: "nominee's address",
-        nomineeContact: "nominee's contact number",
-        intermediaryPlace: "intermediary's place of signing",
-      }[parts[1] ?? ''] ?? 'proposal details'
-    );
+  if (parts[0] === 'proposal') return DETAIL_LABELS[parts[1] ?? ''] ?? 'proposal details';
+  if (parts[0] === 'quoteChoices') {
+    const name = QUOTE_CHOICE_INSURER_NAMES[parts[1] as QuoteChoiceInsurer] ?? 'an insurer';
+    return `quote choices (${name}, Additional details)`;
+  }
+  if (parts[0] === 'insurerDetails') {
+    const at = parts[1] as ClientDetailInsurer;
+    const name = CLIENT_DETAIL_INSURER_NAMES[at] ?? 'an insurer';
+    return `${DETAIL_LABELS[parts[2] ?? ''] ?? 'details'} (${name}, Additional details)`;
+  }
   return 'details';
 }
 
-/** Fills an insurer's quote form for one saved client (United India health so far). */
+/** United India's health calculator: nothing is chosen here, the declaration is the client's. */
 function QuotePanel(props: { clientId: string }): React.JSX.Element {
-  const [goodHealth, setGoodHealth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
   const required = useUiicRequired({ kind: 'client', id: props.clientId, form: 'health' });
+  const saved = useSavedChoices(props.clientId);
 
   const run = async () => {
     setBusy(true);
     setResult(null);
-    const problem = await required.save();
-    if (problem) {
+    const read = await readChoices(props.clientId);
+    if ('error' in read) {
       setBusy(false);
-      setResult({ error: problem });
+      setResult(read);
       return;
     }
     const r = await runQuote({
       clientId: props.clientId,
       insurerId: 'united-india',
       product: 'health',
-      goodHealthConfirmed: goodHealth,
+      goodHealthConfirmed: read.choices?.['united-india']?.goodHealth ?? false,
     }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
@@ -851,45 +999,21 @@ function QuotePanel(props: { clientId: string }): React.JSX.Element {
         enters the client&rsquo;s e-mail and mobile in &ldquo;User Details&rdquo;, presses Check
         Premium and shows the premium. United India may send the quote to that e-mail and mobile.
       </p>
-      <UiicRequiredFields required={required} />
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={goodHealth}
-          onChange={(e) => setGoodHealth(e.target.checked)}
-        />
-        Every member is in good health: no obesity, diabetes, hypertension or pre-existing condition
-        (United India&rsquo;s declaration, for this quote).
-      </label>
+      <SavedChoicesNote
+        insurer="united-india"
+        lines={[
+          saved?.['united-india']?.goodHealth
+            ? 'every member in good health (confirmed)'
+            : 'good-health declaration not confirmed',
+        ]}
+      />
+      <UiicMissingNote required={required} />
       <div className="insurer-actions">
-        <button
-          type="button"
-          disabled={busy || required.loading || !required.complete}
-          onClick={() => void run()}
-        >
+        <button type="button" disabled={busy || required.loading} onClick={() => void run()}>
           {busy ? 'Filling United India…' : 'Get United India premium'}
         </button>
       </div>
-      {result && 'error' in result && (
-        <p className="error" role="alert">
-          {result.error}
-        </p>
-      )}
-      {result && 'outcome' in result && (
-        <div role="status">
-          <p className={result.outcome === 'ready' ? undefined : 'error'}>
-            {result.step ? `${result.step}: ` : ''}
-            {result.message}
-          </p>
-          {result.problems.length > 0 && (
-            <ul>
-              {result.problems.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <QuoteResult result={result} />
     </div>
   );
 }
@@ -915,12 +1039,6 @@ function ProposalPanel(props: {
   const run = async () => {
     setBusy(true);
     setResult(null);
-    const problem = await required.save();
-    if (problem) {
-      setBusy(false);
-      setResult({ error: problem });
-      return;
-    }
     const r = await runQuote({
       clientId: props.clientId,
       insurerId: 'united-india',
@@ -940,13 +1058,9 @@ function ProposalPanel(props: {
         nominee relationship, then stops. It never saves or submits the proposal: you complete the
         rest, check it, and press Save As Draft yourself.
       </p>
-      <UiicRequiredFields required={required} />
+      <UiicMissingNote required={required} />
       <div className="insurer-actions">
-        <button
-          type="button"
-          disabled={busy || required.loading || !required.complete}
-          onClick={() => void run()}
-        >
+        <button type="button" disabled={busy || required.loading} onClick={() => void run()}>
           {busy ? 'Filling United India…' : `Fill ${form.name} proposal`}
         </button>
       </div>
@@ -984,42 +1098,41 @@ function ProposalPanel(props: {
   );
 }
 
-/** Fills Niva Bupa's premium calculator for a saved client and works the premium out. */
+/** Niva Bupa's premium calculator: the plan is chosen here, the rest is the client's details. */
 function NivaHealthPanel(props: { clientId: string }): React.JSX.Element {
   const [plan, setPlan] = useState<NivaHealthPlan>('reassure-2');
-  const [sumInsured, setSumInsured] = useState<number>(500000);
-  const [years, setYears] = useState<1 | 2 | 3>(1);
-  const [known, setKnown] = useState<string[]>([]);
-  const [otherAddOns, setOtherAddOns] = useState('');
-  const [tieredNetwork, setTieredNetwork] = useState(false);
-  const [medicalPractitioner, setMedicalPractitioner] = useState(false);
-  const [porting, setPorting] = useState(false);
-  const [previousEnd, setPreviousEnd] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const saved = useSavedChoices(props.clientId);
+  const c = saved?.['niva-bupa'] ?? {};
+  const lines = [
+    `sum insured ₹${(c.sumInsured ?? QUOTE_DEFAULTS.nivaSumInsured).toLocaleString('en-IN')}`,
+    `${c.years ?? QUOTE_DEFAULTS.nivaYears} year${(c.years ?? 1) > 1 ? 's' : ''}`,
+    c.addOns?.length ? `add-ons: ${c.addOns.join(', ')}` : 'no add-ons',
+    ...(c.tieredNetwork ? ['Tiered Network'] : []),
+    ...(c.medicalPractitioner ? ['a medical practitioner insured'] : []),
+    ...(c.previousPolicyEndDate ? [`porting, ends ${c.previousPolicyEndDate}`] : []),
+  ];
   const run = async () => {
     setBusy(true);
     setResult(null);
-    const addOns = [
-      ...known,
-      ...otherAddOns
-        .split(',')
-        .map((a) => a.trim())
-        .filter((a) => a.length >= 2),
-    ];
+    const read = await readChoices(props.clientId);
+    if ('error' in read) {
+      setBusy(false);
+      setResult(read);
+      return;
+    }
+    const built = nivaRunFromChoices(plan, read.choices);
+    if (!built.ok) {
+      setBusy(false);
+      setResult({ error: missingMessage(built.missing) });
+      return;
+    }
     const r = await runQuote({
       clientId: props.clientId,
       insurerId: 'niva-bupa',
       product: 'niva-health',
-      run: {
-        plan,
-        sumInsured,
-        years,
-        addOns,
-        tieredNetwork,
-        medicalPractitioner,
-        ...(porting && previousEnd ? { previousPolicyEndDate: previousEnd } : {}),
-      },
+      run: built.value,
     }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
@@ -1028,11 +1141,11 @@ function NivaHealthPanel(props: { clientId: string }): React.JSX.Element {
     <div className="quote-panel">
       <p className="insurer-note">
         <strong>Niva Bupa, premium calculator.</strong> Sign in to Niva Bupa and leave it on
-        UNO&rsquo;s home page (or the calculator&rsquo;s first step). The app opens the Premium
-        Calculator, chooses &ldquo;I Know My Plan&rdquo; and the plan, fills the members, dates of
-        birth, city, phone and questions, then the sum insured, policy period and add-ons, presses
-        Calculate Premium and reads the premium. It stops before the summary that asks the
-        customer&rsquo;s name and email.
+        UNO&rsquo;s home page (or the calculator&rsquo;s first step). For now the app opens the
+        Premium Calculator, presses &ldquo;I Know My Plan&rdquo;, picks the plan, fills the
+        client&rsquo;s Basic Details (members, dates of birth, city, phone, questions) and stops
+        before Continue: you check them, press Continue and choose the sum insured. It saves the
+        quote as a PDF when Niva Bupa shows the premium.
       </p>
       <label>
         Plan{' '}
@@ -1043,133 +1156,39 @@ function NivaHealthPanel(props: { clientId: string }): React.JSX.Element {
             </option>
           ))}
         </select>
-      </label>{' '}
-      <label>
-        Sum insured{' '}
-        <select value={sumInsured} onChange={(e) => setSumInsured(Number(e.target.value))}>
-          {NIVA_SUMS_INSURED.map((s) => (
-            <option key={s} value={s}>
-              ₹{s.toLocaleString('en-IN')}
-            </option>
-          ))}
-        </select>
-      </label>{' '}
-      <label>
-        Policy period{' '}
-        <select value={years} onChange={(e) => setYears(Number(e.target.value) as 1 | 2 | 3)}>
-          <option value={1}>1 year</option>
-          <option value={2}>2 years</option>
-          <option value={3}>3 years</option>
-        </select>
       </label>
-      <fieldset>
-        <legend>Key Add-Ons</legend>
-        {NIVA_KNOWN_ADD_ONS.map((a) => (
-          <label key={a} className="check">
-            <input
-              type="checkbox"
-              checked={known.includes(a)}
-              onChange={(e) =>
-                setKnown(e.target.checked ? [...known, a] : known.filter((k) => k !== a))
-              }
-            />
-            {a}
-          </label>
-        ))}
-        <label>
-          Others, as Niva Bupa names them (comma-separated){' '}
-          <input value={otherAddOns} onChange={(e) => setOtherAddOns(e.target.value)} />
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={tieredNetwork}
-            onChange={(e) => setTieredNetwork(e.target.checked)}
-          />
-          Tiered Network (Niva Bupa&rsquo;s discount with a co-pay)
-        </label>
-      </fieldset>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={medicalPractitioner}
-          onChange={(e) => setMedicalPractitioner(e.target.checked)}
-        />
-        An insured member is a medical practitioner
-      </label>
-      <label className="check">
-        <input type="checkbox" checked={porting} onChange={(e) => setPorting(e.target.checked)} />
-        Transfer (port) a current health policy
-      </label>
-      {porting && (
-        <label>
-          Previous policy end date{' '}
-          <input type="date" value={previousEnd} onChange={(e) => setPreviousEnd(e.target.value)} />
-        </label>
-      )}
+      <SavedChoicesNote insurer="niva-bupa" lines={lines} />
       <div className="insurer-actions">
-        <button
-          type="button"
-          disabled={busy || (porting && !previousEnd)}
-          onClick={() => void run()}
-        >
+        <button type="button" disabled={busy} onClick={() => void run()}>
           {busy ? 'Working on Niva Bupa…' : `Get ${NIVA_HEALTH_PLAN_NAMES[plan]} premium`}
         </button>
       </div>
-      {result && 'error' in result && (
-        <p className="error" role="alert">
-          {result.error}
-        </p>
-      )}
-      {result && 'outcome' in result && (
-        <div role="status">
-          {result.premium && (
-            <p>
-              <strong>{result.premium.amount}</strong> &mdash; {result.premium.label}
-            </p>
-          )}
-          <p className={result.outcome === 'ready' ? undefined : 'error'}>
-            {result.step ? `${result.step}: ` : ''}
-            {result.message}
-          </p>
-          {result.problems.length > 0 && (
-            <ul>
-              {result.problems.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-          )}
-          {result.toDo && result.toDo.length > 0 && (
-            <>
-              <p>Still to do by hand:</p>
-              <ul>
-                {result.toDo.map((t) => (
-                  <li key={t}>{t}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
+      <QuoteResult result={result} />
     </div>
   );
 }
 
-/** Fills one of New India's health quote forms for a saved client, stopping before its premium. */
+/** New India's health forms: the policy is chosen here, the declaration is the client's details. */
 function NiaHealthPanel(props: { clientId: string }): React.JSX.Element {
   const [policy, setPolicy] = useState<NiaHealthPolicy>('arogya-sanjeevani');
-  const [goodHealth, setGoodHealth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
+  const saved = useSavedChoices(props.clientId);
   const run = async () => {
     setBusy(true);
     setResult(null);
+    const read = await readChoices(props.clientId);
+    if ('error' in read) {
+      setBusy(false);
+      setResult(read);
+      return;
+    }
     const r = await runQuote({
       clientId: props.clientId,
       insurerId: 'new-india',
       product: 'nia-health',
       policy,
-      goodHealthConfirmed: goodHealth,
+      goodHealthConfirmed: read.choices?.['new-india']?.goodHealth ?? false,
     }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
@@ -1192,85 +1211,71 @@ function NiaHealthPanel(props: { clientId: string }): React.JSX.Element {
           ))}
         </select>
       </label>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={goodHealth}
-          onChange={(e) => setGoodHealth(e.target.checked)}
-        />
-        No member has diabetes, hypertension, a critical, chronic or recurring illness or an adverse
-        medical history (New India&rsquo;s questions, for this quote).
-      </label>
+      <SavedChoicesNote
+        insurer="new-india"
+        lines={[
+          saved?.['new-india']?.goodHealth
+            ? 'no member has diabetes, hypertension or a chronic illness (confirmed)'
+            : 'health questions not confirmed',
+        ]}
+      />
       <div className="insurer-actions">
         <button type="button" disabled={busy} onClick={() => void run()}>
           {busy ? 'Filling New India…' : `Fill ${NIA_HEALTH_POLICY_NAMES[policy]} form`}
         </button>
       </div>
-      {result && 'error' in result && (
-        <p className="error" role="alert">
-          {result.error}
-        </p>
-      )}
-      {result && 'outcome' in result && (
-        <div role="status">
-          <p className={result.outcome === 'ready' ? undefined : 'error'}>
-            {result.step ? `${result.step}: ` : ''}
-            {result.message}
-          </p>
-          {result.problems.length > 0 && (
-            <ul>
-              {result.problems.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-          )}
-          {result.toDo && result.toDo.length > 0 && (
-            <>
-              <p>Still to fill in by hand:</p>
-              <ul>
-                {result.toDo.map((t) => (
-                  <li key={t}>{t}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
+      <QuoteResult result={result} />
     </div>
   );
 }
 
-/** Fills one of New India's Personal Accident forms for the client's proposer ("Self"). */
+/** New India's personal accident forms: the form is chosen here, the rest is the client's details. */
 function NiaPaPanel(props: { clientId: string }): React.JSX.Element {
   const [form, setForm] = useState<NiaPaForm>('janta');
-  const [sumInsured, setSumInsured] = useState<(typeof NIA_PA_SUMS)[number]>('100000');
-  const [status, setStatus] = useState<keyof typeof NIA_PA_STATUSES>('earning');
-  const [term, setTerm] = useState(1);
-  const [excess, setExcess] = useState<(typeof NIA_PA_EXCESS)[number]>('0');
-  const [pension, setPension] = useState('');
-  const [organisation, setOrganisation] = useState('');
-  const [noClaims, setNoClaims] = useState(false);
-  const [noDisabilities, setNoDisabilities] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
-
-  const runOf = (): NiaPaRun =>
+  const saved = useSavedChoices(props.clientId);
+  const c = saved?.['new-india'] ?? {};
+  const lines =
     form === 'pension'
-      ? { form, monthlyPensionRupees: Number(pension || 'NaN'), organisation: organisation.trim() }
-      : form === 'janta'
-        ? { form, sumInsured, status, term, excess }
-        : { form, sumInsured, status, term };
-  const run = async (event: React.FormEvent) => {
-    event.preventDefault();
+      ? [
+          c.monthlyPensionRupees
+            ? `monthly pension ₹${c.monthlyPensionRupees.toLocaleString('en-IN')}`
+            : 'monthly pension not given',
+          c.pensionOrganisation
+            ? `organisation ${c.pensionOrganisation}`
+            : 'organisation not given',
+        ]
+      : [
+          `sum insured ₹${Number(c.paSumInsured ?? QUOTE_DEFAULTS.paSumInsured).toLocaleString('en-IN')}`,
+          NIA_PA_STATUSES[c.paStatus ?? QUOTE_DEFAULTS.paStatus],
+          `${c.paTerm ?? QUOTE_DEFAULTS.paTerm} year${(c.paTerm ?? 1) > 1 ? 's' : ''}`,
+          ...(form === 'janta' ? [`excess ${c.paExcess ?? QUOTE_DEFAULTS.paExcess}%`] : []),
+        ];
+  lines.push(c.noClaims ? 'no claims (confirmed)' : 'no-claims not confirmed');
+  lines.push(c.noDisabilities ? 'no disabilities (confirmed)' : 'no-disabilities not confirmed');
+  const run = async () => {
     setBusy(true);
     setResult(null);
+    const read = await readChoices(props.clientId);
+    if ('error' in read) {
+      setBusy(false);
+      setResult(read);
+      return;
+    }
+    const built = niaPaFromChoices(form, read.choices);
+    if (!built.ok) {
+      setBusy(false);
+      setResult({ error: missingMessage(built.missing) });
+      return;
+    }
     const r = await runQuote({
       clientId: props.clientId,
       insurerId: 'new-india',
       product: 'nia-pa',
-      run: runOf(),
-      noClaimsConfirmed: noClaims,
-      noDisabilitiesConfirmed: noDisabilities,
+      run: built.value.run,
+      noClaimsConfirmed: built.value.noClaims,
+      noDisabilitiesConfirmed: built.value.noDisabilities,
     }).catch(() => null);
     setBusy(false);
     setResult(
@@ -1279,13 +1284,13 @@ function NiaPaPanel(props: { clientId: string }): React.JSX.Element {
         : {
             error:
               r?.ok === false && r.error.code === 'VALIDATION_FAILED'
-                ? 'Check the details: one is missing or not valid.'
+                ? "Check the client's details: one is missing or not valid."
                 : (r?.error.message ?? 'The quote could not be started.'),
           },
     );
   };
   return (
-    <form className="quote-panel login-form" onSubmit={(e) => void run(e)}>
+    <div className="quote-panel">
       <p className="insurer-note">
         <strong>New India, Personal Accident quote.</strong> The client&rsquo;s proposer
         (&ldquo;Self&rdquo;) is the insured. Sign in to New India and leave it on its dashboard (or
@@ -1302,124 +1307,13 @@ function NiaPaPanel(props: { clientId: string }): React.JSX.Element {
           ))}
         </select>
       </label>
-      {form === 'pension' ? (
-        <div className="member-row">
-          <label>
-            Monthly pension (₹)
-            <input
-              value={pension}
-              onChange={(e) => setPension(e.target.value.replace(/\D/g, ''))}
-              inputMode="numeric"
-              maxLength={8}
-              required
-            />
-          </label>
-          <label>
-            Organisation before retirement
-            <input
-              value={organisation}
-              onChange={(e) => setOrganisation(e.target.value)}
-              maxLength={30}
-              required
-            />
-          </label>
-        </div>
-      ) : (
-        <div className="member-row">
-          <label>
-            Sum insured (₹)
-            <select
-              value={sumInsured}
-              onChange={(e) => setSumInsured(e.target.value as typeof sumInsured)}
-            >
-              {NIA_PA_SUMS.map((s) => (
-                <option key={s} value={s}>
-                  {Number(s).toLocaleString('en-IN')}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Status of the insured
-            <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
-              {Object.entries(NIA_PA_STATUSES).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Years
-            <select value={term} onChange={(e) => setTerm(Number(e.target.value))}>
-              {[1, 2, 3].map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </label>
-          {form === 'janta' && (
-            <label>
-              Excess (%)
-              <select value={excess} onChange={(e) => setExcess(e.target.value as typeof excess)}>
-                {NIA_PA_EXCESS.map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
-      )}
-      <label className="check">
-        <input type="checkbox" checked={noClaims} onChange={(e) => setNoClaims(e.target.checked)} />
-        No claim in the previous three years (New India does not issue the policy online otherwise).
-      </label>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={noDisabilities}
-          onChange={(e) => setNoDisabilities(e.target.checked)}
-        />
-        The insured has no physical disabilities or defects.
-      </label>
+      <SavedChoicesNote insurer="new-india" lines={lines} />
       <div className="insurer-actions">
-        <button type="submit" disabled={busy}>
+        <button type="button" disabled={busy} onClick={() => void run()}>
           {busy ? 'Filling New India…' : `Fill ${NIA_PA_FORM_NAMES[form]} form`}
         </button>
       </div>
-      {result && 'error' in result && (
-        <p className="error" role="alert">
-          {result.error}
-        </p>
-      )}
-      {result && 'outcome' in result && (
-        <div role="status">
-          <p className={result.outcome === 'ready' ? undefined : 'error'}>
-            {result.step ? `${result.step}: ` : ''}
-            {result.message}
-          </p>
-          {result.problems.length > 0 && (
-            <ul>
-              {result.problems.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-          )}
-          {result.toDo && result.toDo.length > 0 && (
-            <>
-              <p>Still to fill in by hand:</p>
-              <ul>
-                {result.toDo.map((t) => (
-                  <li key={t}>{t}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
-    </form>
+      <QuoteResult result={result} />
+    </div>
   );
 }

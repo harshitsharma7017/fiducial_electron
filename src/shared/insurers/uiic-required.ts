@@ -3,7 +3,7 @@
 // can fill and United India works the premium out. The lists follow what each form's plan
 // (src/main/quotes/uiic-*.ts) would otherwise leave for the advisor; the client's own answers
 // (medical questions, declarations), signatures, uploads and payment stay with the advisor.
-import type { ClientInput } from '../contracts/client';
+import { detailsFor, type ClientInput } from '../contracts/client';
 import type { Traveller } from '../contracts/traveller';
 
 /** A required detail, by where it is kept. */
@@ -49,7 +49,7 @@ export function uiicMissingForClient(
   if (!client.customer.phone) missing.push('phone');
   if (form === 'health') return missing;
 
-  const p = client.proposal ?? {};
+  const p = detailsFor(client, 'united-india') ?? {};
   const self = client.members.find((m) => m.relationship === 'self');
   if (self && !self.dateOfBirth) missing.push('dateOfBirth');
   if (self && !self.gender) missing.push('gender');

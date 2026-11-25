@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ageOn,
   GENDERS,
+  insurerDetailsOf,
+  type InsurerDetails,
   HIGH_RISK_TYPES,
   NOMINEE_RELATIONSHIPS,
   UIIC_OCCUPATIONS,
@@ -35,6 +37,15 @@ const GENDER_LABELS: Record<Gender, string> = {
   female: 'Female',
   transgender: 'Transgender',
 };
+
+/** The client's details per insurer, with United India's patched; the old shared set retired. */
+function withUiicDetails(
+  client: ClientView['client'],
+  patch: Record<string, string>,
+): InsurerDetails {
+  const all = insurerDetailsOf(client);
+  return { ...all, 'united-india': { ...all['united-india'], ...patch } };
+}
 
 export type UiicSubject =
   | { kind: 'client'; id: string; form: UiicClientForm }
@@ -228,7 +239,10 @@ export function useUiicRequired(subject: UiicSubject): UiicRequired {
             ...(missing.includes('maritalStatus')
               ? { proposerMaritalStatus: given('maritalStatus') as 'married' | 'unmarried' }
               : {}),
-            proposal: { ...client.proposal, ...proposalPatch },
+            // United India's own additional details (others' are kept as they are); the old
+            // shared set is now split per insurer.
+            proposal: undefined,
+            insurerDetails: withUiicDetails(client, proposalPatch),
           },
           ...(missing.includes('aadhaar') ? { aadhaar: given('aadhaar') } : {}),
         })
@@ -324,5 +338,30 @@ export function UiicRequiredFields(props: { required: UiicRequired }): React.JSX
         );
       })}
     </fieldset>
+  );
+}
+
+/**
+ * The missing details, named only (a health client's quote screens ask nothing: request of 24
+ * November 2026). The run fills the rest and lists these for the advisor; they belong in the
+ * client's details.
+ */
+export function UiicMissingNote(props: { required: UiicRequired }): React.JSX.Element | null {
+  const { required } = props;
+  if (required.error) {
+    return (
+      <p className="error" role="alert">
+        {required.error}
+      </p>
+    );
+  }
+  if (required.missing.length === 0) return null;
+  return (
+    <p className="insurer-note">
+      <strong>Not in the client&rsquo;s details:</strong>{' '}
+      {required.missing.map((k) => FIELDS[k].label).join(', ')}. Add them in Edit client (Basic
+      details, or Additional details &rarr; United India) so the app fills them; otherwise it fills
+      the rest and you complete these on United India&rsquo;s page.
+    </p>
   );
 }

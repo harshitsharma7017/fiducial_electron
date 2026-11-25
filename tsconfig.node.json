@@ -17,6 +17,7 @@
     "src/shared/**/*.ts",
     "src/renderer/src/dev/demo-*.ts",
     "src/renderer/src/dev/workflow/*.ts",
+    "src/renderer/src/clients/proposal-draft.ts",
     "src/demo/portal-automation/**/*.ts",
     "test/**/*.ts",
     "scripts/**/*.d.mts",

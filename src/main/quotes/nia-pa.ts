@@ -12,7 +12,7 @@
 //   Pension Protect (miscPWModelObj): Policy Details (new policy, previous claim), Pension Details
 //     (name, date of birth, monthly pension, physical defects, last organisation, previous claim),
 //     Nominee Details.
-import type { ClientInput } from '../../shared/contracts/client';
+import { NIA_GRAMIN_OCCUPATIONS, type ClientInput } from '../../shared/contracts/client';
 import {
   NIA_PA_FORM_NAMES,
   NIA_PA_STATUSES,
@@ -40,17 +40,7 @@ export function niaPaForm(form: NiaPaForm): { name: string; heading: string; til
 }
 
 /** The Janata forms' occupation list (Gramin), matched by name to the client's occupation. */
-const GRAMIN = [
-  'Agriculturalist',
-  'Business',
-  'Driver',
-  'Housewife',
-  'Others',
-  'Professional',
-  'Retired',
-  'Service',
-  'Student',
-];
+const GRAMIN: readonly string[] = NIA_GRAMIN_OCCUPATIONS;
 /** Nominee relationships as each form lists them; others are left to the advisor. */
 const JANATA_NOMINEE: Record<string, string> = {
   spouse: 'Spouse',

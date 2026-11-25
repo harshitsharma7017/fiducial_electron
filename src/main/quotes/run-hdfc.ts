@@ -1,8 +1,9 @@
 // Runs an HDFC ERGO PIE plan (hdfc-motor.ts, hdfc-mst.ts) in HDFC's own page. PIE is opened from
-// the 1up portal, whose tiles are drawn on a canvas (the app cannot press them): once the advisor
-// has opened any PIE product from 1up (signing the tab in to PIE), the run opens the form it needs
-// by its PIE address in that tab. It never presses Generate Quote, Generate Proposal or anything
-// after Calculate Premium.
+// the 1up portal, a Flutter page drawn on a canvas. When no tab is on PIE yet, the run opens it from
+// 1up's dashboard as the advisor does (request of 24 November 2026): Issue Quotes & Policy, then
+// Private Car, tapped by their labels (Flutter's semantics, page-ops.ts flutterTap), which signs
+// the tab in to PIE. It then opens the form it needs by its PIE address in that tab. It never
+// presses Generate Quote, Generate Proposal or anything after Calculate Premium.
 import type { PortalPage } from '../insurers/portal-host';
 import type { ClientInput } from '../../shared/contracts/client';
 import type { Vehicle } from '../../shared/contracts/vehicle';
@@ -27,36 +28,99 @@ import { exec, type QuoteRunResult } from './run-uiic-health';
 import { FillProgress, handedOver } from './hand-over';
 
 export const PIE_ORIGIN = 'https://pie.hdfcergo.com';
+export const ONE_UP_ORIGIN = 'https://1up.hdfcergo.com';
+
+/** Where HDFC's pages are served from: HDFC's own, or in tests the local copies. */
+export interface HdfcOrigins {
+  pie: string;
+  oneUp: string;
+}
+
+/** 1up's tiles the run taps to reach PIE, as 1up labels them. */
+const ISSUE_QUOTES = ['Issue Quotes & Policy', 'Issue Quotes and Policy', 'Issue Quote & Policy'];
+const A_PRODUCT = ['Private Car'];
+const OPEN_FROM_1UP =
+  "Open any product from HDFC's 1up yourself (Issue Quotes & Policy, for example Private Car), so the tab is signed in to PIE, then press again.";
+
+const originOf = (w: PortalPage): string => {
+  try {
+    return new URL(w.webContents.getURL()).origin;
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * Signs a 1up tab in to PIE as the advisor does: Issue Quotes & Policy, then Private Car (any
+ * product signs the tab in), and waits for PIE's redirect to land. The PIE page, or why not.
+ */
+async function openPieFrom1up(
+  windows: () => PortalPage[],
+  oneUp: PortalPage,
+  origins: HdfcOrigins,
+): Promise<{ pie: PortalPage } | { why: string }> {
+  const wc = oneUp.webContents;
+  const issue = await exec(wc, { op: 'flutterTap', labels: ISSUE_QUOTES, timeoutMs: 20000 });
+  if (!issue.ok) {
+    return {
+      why: `1up's "Issue Quotes & Policy" was not found (${issue.detail}). Is the tab on 1up's home page, with no message open?`,
+    };
+  }
+  const product = await exec(wc, { op: 'flutterTap', labels: A_PRODUCT, timeoutMs: 20000 });
+  if (!product.ok) {
+    return {
+      why: `1up's "Private Car" was not found after Issue Quotes & Policy (${product.detail}).`,
+    };
+  }
+  // PIE's redirect (WrapperApi/RedirectToDashboardGet) signs the tab in and shows PIE there.
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    const pie = windows().find(
+      (w) => !w.isDestroyed() && originOf(w) === origins.pie && !w.webContents.isLoading(),
+    );
+    if (pie) return { pie };
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return { why: 'PIE did not open from 1up within 45 seconds.' };
+}
 
 /** The page showing PIE's form at `path`: one already there, else a PIE page sent there. */
 async function openPieForm(
   windows: () => PortalPage[],
   path: string,
   ready: string,
-  /** In tests: the origin the PIE pages are served from. */
-  origin: string,
+  origins: HdfcOrigins,
 ): Promise<{ page: PortalPage } | QuoteRunResult> {
+  const origin = origins.pie;
   const pages = windows().filter((w) => !w.isDestroyed());
-  const onPie = (w: PortalPage) => {
-    try {
-      return new URL(w.webContents.getURL()).origin === origin;
-    } catch {
-      return false;
-    }
-  };
+  const onPie = (w: PortalPage) => originOf(w) === origin;
   const pathOf = (w: PortalPage) =>
     new URL(w.webContents.getURL()).pathname.replace(/^\/en-US/i, '');
   let page = pages.find((w) => onPie(w) && pathOf(w).toLowerCase() === path.toLowerCase());
   if (!page) {
-    const pie = pages.find(onPie);
+    let pie = pages.find(onPie);
     if (!pie) {
-      return {
-        outcome: 'refused',
-        step: null,
-        message:
-          "Open any product from HDFC's 1up (Issue Quotes & Policy, for example Private Car), so the tab is signed in to PIE, then press again. The app opens the form it needs from there.",
-        problems: [],
-      };
+      const oneUp = pages.find((w) => originOf(w) === origins.oneUp);
+      if (!oneUp) {
+        return {
+          outcome: 'refused',
+          step: null,
+          message:
+            "Sign in to HDFC ERGO's 1up first (Insurer portals, HDFC ERGO), then press again. The app opens PIE and the form from 1up's home page.",
+          problems: [],
+        };
+      }
+      const opened = await openPieFrom1up(windows, oneUp, origins);
+      if ('why' in opened) {
+        oneUp.focus();
+        return {
+          outcome: 'refused',
+          step: 'Open PIE from 1up',
+          message: `The app could not open PIE from 1up: ${opened.why} ${OPEN_FROM_1UP}`,
+          problems: [],
+        };
+      }
+      pie = opened.pie;
     }
     try {
       await pie.webContents.loadURL(`${origin}${path}`);
@@ -180,6 +244,8 @@ export async function runHdfcMotorQuote(deps: {
   vehicle: Vehicle;
   run: HdfcMotorRun;
   origin?: string;
+  /** In tests: the origin 1up is served from. */
+  oneUpOrigin?: string;
 }): Promise<QuoteRunResult> {
   const name = HDFC_MOTOR_NAMES[deps.run.product];
   const plan = planHdfcMotorQuote(deps.vehicle, deps.run);
@@ -195,7 +261,7 @@ export async function runHdfcMotorQuote(deps: {
     deps.windows,
     HDFC_MOTOR_PATHS[deps.run.product],
     '#ManufacturerName',
-    deps.origin ?? PIE_ORIGIN,
+    { pie: deps.origin ?? PIE_ORIGIN, oneUp: deps.oneUpOrigin ?? ONE_UP_ORIGIN },
   );
   if ('outcome' in opened) return opened;
   return runPlan(opened.page, plan, (kept) =>
@@ -210,6 +276,8 @@ export async function runHdfcMstQuote(deps: {
   client: ClientInput;
   run: HdfcMstRun;
   origin?: string;
+  /** In tests: the origin 1up is served from. */
+  oneUpOrigin?: string;
 }): Promise<QuoteRunResult> {
   const plan = planHdfcMstQuote(deps.client, deps.run);
   if (!plan.ok) {
@@ -224,7 +292,7 @@ export async function runHdfcMstQuote(deps: {
     deps.windows,
     HDFC_MST_PATH,
     '#buttonPlusAdult, label[name="Risk101"]',
-    deps.origin ?? PIE_ORIGIN,
+    { pie: deps.origin ?? PIE_ORIGIN, oneUp: deps.oneUpOrigin ?? ONE_UP_ORIGIN },
   );
   if ('outcome' in opened) return opened;
   return runPlan(
@@ -241,6 +309,8 @@ export async function runHdfcRetailQuote(deps: {
   run: HdfcRetailRun;
   today: Date;
   origin?: string;
+  /** In tests: the origin 1up is served from. */
+  oneUpOrigin?: string;
 }): Promise<QuoteRunResult> {
   const name = HDFC_RETAIL_NAMES[deps.run.product];
   const plan = planHdfcRetailQuote(deps.client, deps.run, { today: deps.today });
@@ -256,7 +326,7 @@ export async function runHdfcRetailQuote(deps: {
     deps.windows,
     HDFC_RETAIL_PATHS[deps.run.product],
     '#BusinessType, #ProductType_Individual',
-    deps.origin ?? PIE_ORIGIN,
+    { pie: deps.origin ?? PIE_ORIGIN, oneUp: deps.oneUpOrigin ?? ONE_UP_ORIGIN },
   );
   if ('outcome' in opened) return opened;
   return runPlan(opened.page, plan, () =>
@@ -278,6 +348,8 @@ export async function runHdfcTravelQuote(deps: {
   run: HdfcTravelRun;
   today: Date;
   origin?: string;
+  /** In tests: the origin 1up is served from. */
+  oneUpOrigin?: string;
 }): Promise<QuoteRunResult> {
   const plan = planHdfcTravelQuote(deps.traveller, deps.run, { today: deps.today });
   if (!plan.ok) {
@@ -292,7 +364,7 @@ export async function runHdfcTravelQuote(deps: {
     deps.windows,
     HDFC_TRAVEL_PATH,
     '#PolicyEffectiveFromDate, #Risk103',
-    deps.origin ?? PIE_ORIGIN,
+    { pie: deps.origin ?? PIE_ORIGIN, oneUp: deps.oneUpOrigin ?? ONE_UP_ORIGIN },
   );
   if ('outcome' in opened) return opened;
   return runPlan(

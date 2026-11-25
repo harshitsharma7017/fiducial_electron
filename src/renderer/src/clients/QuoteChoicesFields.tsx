@@ -1,0 +1,488 @@
+// A health client's quote choices for one insurer, in the client form's Additional details
+// (request of 24 November 2026): what the quote screens used to ask besides the product, saved with
+// the client so a quote asks only the product. See src/shared/contracts/client-quote.ts.
+import { useState } from 'react';
+import {
+  iciciSumsFor,
+  QUOTE_DEFAULTS,
+  type ClientQuoteChoices,
+  type QuoteChoiceInsurer,
+} from '../../../shared/contracts/client-quote';
+import { NIVA_KNOWN_ADD_ONS, NIVA_SUMS_INSURED } from '../../../shared/insurers/niva-health';
+import { NIA_PA_EXCESS, NIA_PA_STATUSES, NIA_PA_SUMS } from '../../../shared/insurers/nia-pa';
+import {
+  HDFC_CITIES,
+  HDFC_ENERGY_PLANS,
+  HDFC_OPTIMA_SECURE_PLANS,
+} from '../../../shared/insurers/hdfc';
+import { ICICI_BOOSTER_DEDUCTIBLES, ICICI_ELEVATE_SUMS } from '../../../shared/insurers/icici-api';
+import { rememberedPosp, rememberPosp } from '../insurers/hdfc-posp';
+
+const lakh = (n: number) => `₹${(n / 100000).toLocaleString('en-IN')} lakh`;
+const rupees = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+const YEARS = [1, 2, 3] as const;
+
+type Of<K extends QuoteChoiceInsurer> = NonNullable<ClientQuoteChoices[K]>;
+
+/** A yes/no answer kept as a checkbox; unticked is saved as "no". */
+function Check(props: {
+  checked: boolean | undefined;
+  onChange: (value: boolean) => void;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <label className="check">
+      <input
+        type="checkbox"
+        checked={props.checked ?? false}
+        onChange={(e) => props.onChange(e.target.checked)}
+      />
+      {props.children}
+    </label>
+  );
+}
+
+export function QuoteChoicesFields(props: {
+  insurer: QuoteChoiceInsurer;
+  value: ClientQuoteChoices;
+  onChange: (value: ClientQuoteChoices) => void;
+}): React.JSX.Element {
+  const { insurer, value } = props;
+  const patch = <K extends QuoteChoiceInsurer>(key: K, change: Partial<Of<K>>) =>
+    props.onChange({ ...value, [key]: { ...(value[key] ?? {}), ...change } });
+  return (
+    <fieldset>
+      <legend>Quote choices</legend>
+      <p className="insurer-note">
+        What this insurer&rsquo;s quotes use besides the product: the quote screen asks only the
+        product and uses these. A choice left as it is uses the default shown.
+      </p>
+      {insurer === 'united-india' && (
+        <Check
+          checked={value['united-india']?.goodHealth}
+          onChange={(goodHealth) => patch('united-india', { goodHealth })}
+        >
+          Every member is in good health: no obesity, diabetes, hypertension or pre-existing
+          condition (United India&rsquo;s declaration for its health calculator).
+        </Check>
+      )}
+      {insurer === 'new-india' && (
+        <NewIndia value={value['new-india'] ?? {}} patch={(c) => patch('new-india', c)} />
+      )}
+      {insurer === 'niva-bupa' && (
+        <Niva value={value['niva-bupa'] ?? {}} patch={(c) => patch('niva-bupa', c)} />
+      )}
+      {insurer === 'hdfc-ergo' && (
+        <Hdfc value={value['hdfc-ergo'] ?? {}} patch={(c) => patch('hdfc-ergo', c)} />
+      )}
+      {insurer === 'icici-lombard' && (
+        <Icici value={value['icici-lombard'] ?? {}} patch={(c) => patch('icici-lombard', c)} />
+      )}
+    </fieldset>
+  );
+}
+
+function NewIndia(props: {
+  value: Of<'new-india'>;
+  patch: (c: Partial<Of<'new-india'>>) => void;
+}): React.JSX.Element {
+  const { value: c, patch } = props;
+  return (
+    <>
+      <h4>Health policies</h4>
+      <Check checked={c.goodHealth} onChange={(goodHealth) => patch({ goodHealth })}>
+        No member has diabetes, hypertension, a critical, chronic or recurring illness or an adverse
+        medical history (New India&rsquo;s questions).
+      </Check>
+      <h4>Personal accident (Sukshma, Janata)</h4>
+      <div className="form-grid">
+        <label>
+          Sum insured
+          <select
+            value={c.paSumInsured ?? QUOTE_DEFAULTS.paSumInsured}
+            onChange={(e) =>
+              patch({ paSumInsured: e.target.value as Of<'new-india'>['paSumInsured'] })
+            }
+          >
+            {NIA_PA_SUMS.map((s) => (
+              <option key={s} value={s}>
+                {rupees(Number(s))}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status of the insured
+          <select
+            value={c.paStatus ?? QUOTE_DEFAULTS.paStatus}
+            onChange={(e) => patch({ paStatus: e.target.value as Of<'new-india'>['paStatus'] })}
+          >
+            {Object.entries(NIA_PA_STATUSES).map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Years
+          <select
+            value={c.paTerm ?? QUOTE_DEFAULTS.paTerm}
+            onChange={(e) => patch({ paTerm: Number(e.target.value) })}
+          >
+            {YEARS.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Excess (Janata, %)
+          <select
+            value={c.paExcess ?? QUOTE_DEFAULTS.paExcess}
+            onChange={(e) => patch({ paExcess: e.target.value as Of<'new-india'>['paExcess'] })}
+          >
+            {NIA_PA_EXCESS.map((x) => (
+              <option key={x} value={x}>
+                {x}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <h4>Personal accident (Pension)</h4>
+      <div className="form-grid">
+        <label>
+          Monthly pension (₹)
+          <input
+            inputMode="numeric"
+            value={c.monthlyPensionRupees ?? ''}
+            onChange={(e) => {
+              const n = Number(e.target.value.replace(/\D/g, ''));
+              patch({ monthlyPensionRupees: n > 0 ? n : undefined });
+            }}
+          />
+        </label>
+        <label>
+          Organisation before retirement
+          <input
+            maxLength={30}
+            value={c.pensionOrganisation ?? ''}
+            onChange={(e) => patch({ pensionOrganisation: e.target.value || undefined })}
+          />
+        </label>
+      </div>
+      <Check checked={c.noClaims} onChange={(noClaims) => patch({ noClaims })}>
+        No claim in the previous three years (New India does not issue the policy online otherwise).
+      </Check>
+      <Check checked={c.noDisabilities} onChange={(noDisabilities) => patch({ noDisabilities })}>
+        The insured has no physical disabilities or defects.
+      </Check>
+    </>
+  );
+}
+
+function Niva(props: {
+  value: Of<'niva-bupa'>;
+  patch: (c: Partial<Of<'niva-bupa'>>) => void;
+}): React.JSX.Element {
+  const { value: c, patch } = props;
+  const addOns = c.addOns ?? [];
+  const known = addOns.filter((a) => (NIVA_KNOWN_ADD_ONS as readonly string[]).includes(a));
+  const [others, setOthers] = useState(
+    addOns.filter((a) => !(NIVA_KNOWN_ADD_ONS as readonly string[]).includes(a)).join(', '),
+  );
+  const setAddOns = (nextKnown: string[], nextOthers: string) => {
+    const typed = nextOthers
+      .split(',')
+      .map((a) => a.trim())
+      .filter((a) => a.length >= 2);
+    patch({ addOns: [...nextKnown, ...typed] });
+  };
+  return (
+    <>
+      <div className="form-grid">
+        <label>
+          Sum insured
+          <select
+            value={c.sumInsured ?? QUOTE_DEFAULTS.nivaSumInsured}
+            onChange={(e) => patch({ sumInsured: Number(e.target.value) })}
+          >
+            {NIVA_SUMS_INSURED.map((s) => (
+              <option key={s} value={s}>
+                {rupees(s)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Policy period
+          <select
+            value={c.years ?? QUOTE_DEFAULTS.nivaYears}
+            onChange={(e) => patch({ years: Number(e.target.value) as 1 | 2 | 3 })}
+          >
+            {YEARS.map((y) => (
+              <option key={y} value={y}>
+                {y} year{y > 1 ? 's' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <h4>Key Add-Ons</h4>
+      {NIVA_KNOWN_ADD_ONS.map((a) => (
+        <Check
+          key={a}
+          checked={known.includes(a)}
+          onChange={(on) => setAddOns(on ? [...known, a] : known.filter((k) => k !== a), others)}
+        >
+          {a}
+        </Check>
+      ))}
+      <label>
+        Others, as Niva Bupa names them (comma-separated)
+        <input
+          value={others}
+          onChange={(e) => {
+            setOthers(e.target.value);
+            setAddOns(known, e.target.value);
+          }}
+        />
+      </label>
+      <Check checked={c.tieredNetwork} onChange={(tieredNetwork) => patch({ tieredNetwork })}>
+        Tiered Network (Niva Bupa&rsquo;s discount with a co-pay)
+      </Check>
+      <Check
+        checked={c.medicalPractitioner}
+        onChange={(medicalPractitioner) => patch({ medicalPractitioner })}
+      >
+        An insured member is a medical practitioner
+      </Check>
+      <label>
+        Porting a current health policy: its end date (leave empty if not porting)
+        <input
+          type="date"
+          value={c.previousPolicyEndDate ?? ''}
+          onChange={(e) => patch({ previousPolicyEndDate: e.target.value || undefined })}
+        />
+      </label>
+    </>
+  );
+}
+
+function Hdfc(props: {
+  value: Of<'hdfc-ergo'>;
+  patch: (c: Partial<Of<'hdfc-ergo'>>) => void;
+}): React.JSX.Element {
+  const { value: c, patch } = props;
+  const [posp, setPosp] = useState(rememberedPosp);
+  const years = (v: number | undefined, key: 'years' | 'mstYears', fallback: number) => (
+    <select
+      value={v ?? fallback}
+      onChange={(e) => patch({ [key]: Number(e.target.value) as 1 | 2 | 3 })}
+    >
+      {YEARS.map((y) => (
+        <option key={y} value={y}>
+          {y} year{y > 1 ? 's' : ''}
+        </option>
+      ))}
+    </select>
+  );
+  return (
+    <>
+      <h4>MST (Medisure Super Top-up)</h4>
+      <div className="form-grid">
+        <label>
+          Cover
+          <select
+            value={c.mstCover ?? QUOTE_DEFAULTS.mstCover}
+            onChange={(e) => patch({ mstCover: e.target.value as Of<'hdfc-ergo'>['mstCover'] })}
+          >
+            <option value="family-floater">Family floater</option>
+            <option value="individual">Individual</option>
+          </select>
+        </label>
+        <label>
+          Term
+          {years(c.mstYears, 'mstYears', QUOTE_DEFAULTS.mstYears)}
+        </label>
+      </div>
+      <h4>Optima Secure, Optima Restore, Energy</h4>
+      <div className="form-grid">
+        <label>
+          Cover (Optima)
+          <select
+            value={c.cover ?? QUOTE_DEFAULTS.hdfcCover}
+            onChange={(e) => patch({ cover: e.target.value as Of<'hdfc-ergo'>['cover'] })}
+          >
+            <option value="individual">Individual</option>
+            <option value="family">Family</option>
+          </select>
+        </label>
+        <label>
+          Policy period
+          {years(c.years, 'years', QUOTE_DEFAULTS.hdfcYears)}
+        </label>
+        <label>
+          Sum insured (lakh, Optima)
+          <input
+            type="number"
+            min={1}
+            max={500}
+            value={c.sumInsuredLacs ?? QUOTE_DEFAULTS.hdfcSumInsuredLacs}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              patch({ sumInsuredLacs: n >= 1 && n <= 500 ? Math.round(n) : undefined });
+            }}
+          />
+        </label>
+        <label>
+          Optima Secure plan
+          <select
+            value={c.optimaSecurePlan ?? ''}
+            onChange={(e) => patch({ optimaSecurePlan: e.target.value || undefined })}
+          >
+            <option value="">(PIE&rsquo;s first)</option>
+            {HDFC_OPTIMA_SECURE_PLANS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Energy plan
+          <select
+            value={c.energyPlan ?? ''}
+            onChange={(e) => patch({ energyPlan: e.target.value || undefined })}
+          >
+            <option value="">(PIE&rsquo;s first)</option>
+            {HDFC_ENERGY_PLANS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          I stay in (Optima Restore, Energy)
+          <select
+            value={c.city ?? QUOTE_DEFAULTS.hdfcCity}
+            onChange={(e) => patch({ city: e.target.value as Of<'hdfc-ergo'>['city'] })}
+          >
+            {HDFC_CITIES.map((city) => (
+              <option key={city} value={city}>
+                {city}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Existing health insurance sum insured (₹, Energy, if any)
+          <input
+            inputMode="numeric"
+            value={c.existingSumInsured ?? ''}
+            onChange={(e) => {
+              const n = Number(e.target.value.replace(/\D/g, ''));
+              patch({ existingSumInsured: n > 0 ? n : undefined });
+            }}
+          />
+        </label>
+      </div>
+      <label>
+        Your SP/POSP name or code (yours, not the client&rsquo;s: kept on this computer for every
+        client)
+        <input
+          value={posp}
+          onChange={(e) => {
+            setPosp(e.target.value);
+            rememberPosp(e.target.value.trim());
+          }}
+        />
+      </label>
+    </>
+  );
+}
+
+function Icici(props: {
+  value: Of<'icici-lombard'>;
+  patch: (c: Partial<Of<'icici-lombard'>>) => void;
+}): React.JSX.Element {
+  const { value: c, patch } = props;
+  // Elevate's sums, then Activate Booster's others.
+  const sums = [...new Set([...ICICI_ELEVATE_SUMS, ...iciciSumsFor('activate-booster')])].sort(
+    (a, b) => a - b,
+  );
+  return (
+    <div className="form-grid">
+      <label>
+        Sum insured (Elevate: ₹5, 10 or 25 lakh)
+        <select
+          value={c.sumInsured ?? QUOTE_DEFAULTS.iciciSumInsured}
+          onChange={(e) => patch({ sumInsured: Number(e.target.value) })}
+        >
+          {sums.map((s) => (
+            <option key={s} value={s}>
+              {lakh(s)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Deductible (Activate Booster&rsquo;s base cover)
+        <select
+          value={c.deductible ?? QUOTE_DEFAULTS.iciciDeductible}
+          onChange={(e) => patch({ deductible: Number(e.target.value) })}
+        >
+          {ICICI_BOOSTER_DEDUCTIBLES.map((d) => (
+            <option key={d} value={d}>
+              {lakh(d)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Term
+        <select
+          value={c.tenure ?? QUOTE_DEFAULTS.iciciTenure}
+          onChange={(e) => patch({ tenure: Number(e.target.value) })}
+        >
+          {[1, 2, 3, 4, 5].map((y) => (
+            <option key={y} value={y}>
+              {y} year{y > 1 ? 's' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Payment
+        <select
+          value={c.paymentOption ?? QUOTE_DEFAULTS.iciciPayment}
+          onChange={(e) =>
+            patch({ paymentOption: e.target.value as Of<'icici-lombard'>['paymentOption'] })
+          }
+        >
+          <option value="annual">Annual</option>
+          <option value="monthly">Monthly</option>
+          <option value="quarterly">Quarterly</option>
+        </select>
+      </label>
+      <label>
+        Any member with a pre-existing disease?
+        <select
+          value={c.preExistingDisease === undefined ? '' : c.preExistingDisease ? 'yes' : 'no'}
+          onChange={(e) =>
+            patch({
+              preExistingDisease: e.target.value === '' ? undefined : e.target.value === 'yes',
+            })
+          }
+        >
+          <option value="">Not asked yet</option>
+          <option value="no">No</option>
+          <option value="yes">Yes</option>
+        </select>
+      </label>
+    </div>
+  );
+}

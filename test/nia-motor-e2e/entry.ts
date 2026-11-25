@@ -12,6 +12,7 @@ import { runNiaPaQuote } from '../../src/main/quotes/run-nia-pa';
 import { runNiaRuralQuote } from '../../src/main/quotes/run-nia-rural';
 import { runNiaTravelQuote } from '../../src/main/quotes/run-nia-travel';
 import { runNivaHealthQuote } from '../../src/main/quotes/run-niva-health';
+import { exec } from '../../src/main/quotes/run-uiic-health';
 import {
   runHdfcMotorQuote,
   runHdfcMstQuote,
@@ -25,6 +26,7 @@ import {
 
 export {
   createLogger,
+  exec,
   formRecorderAgent,
   installNavigationPolicy,
   keepAliveAgent,

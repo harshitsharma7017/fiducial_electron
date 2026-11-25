@@ -1,0 +1,123 @@
+<!doctype html>
+<!--
+  A local copy of HDFC ERGO's 1up home page as the run meets it, drawn from the recording
+  hdfc-ergo-2026-11-05T11-37-58-944Z: a Flutter page (flutter-view, drawn on a canvas) whose only
+  element is Flutter's "Enable accessibility" placeholder. Pressing the placeholder turns Flutter's
+  semantics on: labelled flt-semantics elements laid over the canvas. Like Flutter, a semantics
+  element acts on a click only when no pointer press came just before (else Flutter takes the press
+  as a tap on the canvas: window.__canvasTaps counts those). Issue Quotes & Policy shows the
+  products (and a saved quote also reading Private Car); Private Car sends the tab to PIE's
+  redirect page (the same port on 127.0.0.1, PIE's copy). ?popup=1: a message covers the page,
+  showing only Close.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>HDFC ERGO</title>
+    <style>
+      body {
+        margin: 0;
+        font: 14px sans-serif;
+      }
+      flutter-view {
+        position: relative;
+        display: block;
+        width: 800px;
+        height: 600px;
+      }
+      canvas {
+        width: 800px;
+        height: 600px;
+        background: #eef;
+      }
+      flt-semantics-host {
+        position: absolute;
+        inset: 0;
+      }
+      flt-semantics {
+        position: absolute;
+        display: block;
+        width: 200px;
+        height: 40px;
+        color: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <flt-semantics-placeholder
+      role="button"
+      aria-live="polite"
+      aria-label="Enable accessibility"
+      tabindex="0"
+      style="position: absolute; left: -1px; top: -1px; width: 1px; height: 1px"
+    ></flt-semantics-placeholder>
+    <flutter-view><canvas></canvas></flutter-view>
+    <script>
+      window.__canvasTaps = 0;
+      window.__tapped = [];
+      let lastPress = 0;
+      const view = document.querySelector('flutter-view');
+      view.addEventListener('pointerdown', (e) => {
+        lastPress = Date.now();
+        if (!e.target.closest('flt-semantics')) window.__canvasTaps += 1;
+      });
+      const popup = new URLSearchParams(location.search).get('popup') === '1';
+      let host = null;
+      const node = (label, top, action) => {
+        const el = document.createElement('flt-semantics');
+        el.setAttribute('aria-label', label);
+        el.style.top = `${top}px`;
+        el.style.left = '20px';
+        if (action) {
+          el.setAttribute('role', 'button');
+          el.addEventListener('click', () => {
+            // Flutter: a click right after a pointer press is the canvas's, not the button's.
+            if (Date.now() - lastPress < 1000) return;
+            window.__tapped.push(label);
+            action();
+          });
+        }
+        return el;
+      };
+      const show = (nodes) => {
+        host.replaceChildren(...nodes);
+      };
+      const toPie = () => {
+        const pie = location.origin.replace('localhost', '127.0.0.1');
+        setTimeout(() => {
+          // For the harness (this page is gone once PIE shows): what was tapped, and canvas taps.
+          const tapped = encodeURIComponent(window.__tapped.join('|'));
+          location.href = `${pie}/WrapperApi/RedirectToDashboardGet?data=synthetic&tapped=${tapped}&canvasTaps=${window.__canvasTaps}`;
+        }, 300);
+      };
+      const products = () =>
+        show([
+          node('Motor', 20),
+          node('Private Car', 70, toPie),
+          node('Two Wheeler', 120, () => {}),
+          // A saved quote: its label starts with the product's, so only the exact one is right.
+          node('Private Car Synthetic Insured 12/11/2026', 170, () => {}),
+        ]);
+      const home = () =>
+        show(
+          popup
+            ? [node('Close', 20, () => {})]
+            : [
+                node('View Quotes & Policy', 20, () => {}),
+                // Flutter merges a tile's title and caption into one label.
+                node('Issue Quotes & Policy\nNew business and renewals', 70, () =>
+                  setTimeout(products, 400),
+                ),
+                node('Renewals', 120, () => {}),
+              ],
+        );
+      document.querySelector('flt-semantics-placeholder').addEventListener('click', (e) => {
+        if (host) return;
+        host = document.createElement('flt-semantics-host');
+        view.appendChild(host);
+        e.target.remove();
+        setTimeout(home, 500);
+      });
+    </script>
+  </body>
+</html>

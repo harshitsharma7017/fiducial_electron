@@ -165,10 +165,13 @@ export class FillProgress {
     return index >= this.finishAt;
   }
 
-  /** A failed step: true if it is left for the advisor and the run goes on. */
-  skip(step: PlanStep, index: number, result: PageOpResult): boolean {
+  /**
+   * A failed step: true if it is left for the advisor and the run goes on. `why` is the run's own
+   * words for it (what the insurer offers instead), in place of the general one.
+   */
+  skip(step: PlanStep, index: number, result: PageOpResult, why?: string): boolean {
     if (this.isFinish(index) || !isFillOp(step.op)) return false;
-    const item = leftItem(step, result.detail);
+    const item = why ?? leftItem(step, result.detail);
     if (!this.left.includes(item)) this.left.push(item);
     return true;
   }

@@ -55,6 +55,8 @@ export type PageOp =
       timeoutMs: number;
       /** The last box shown that matches (Niva Bupa's city, after any other suggesting box). */
       last?: boolean;
+      /** The first box after a shown caption reading one of these (as for pickOption). */
+      after?: string[];
     }
   /**
    * Sets a counter drawn as "-" [n] "+" (Niva Bupa's Adult and Child counts) to `count`: the
@@ -102,7 +104,18 @@ export type PageOp =
       timeoutMs: number;
     }
   /** Returns what is written beside the chosen radio of a group (a policy period and premium). */
-  | { op: 'ionRadioRead'; group: { selector: string }; timeoutMs: number }
+  | {
+      op: 'ionRadioRead';
+      group: { selector: string };
+      timeoutMs: number;
+      /**
+       * Read only once the page shows these (else nothing is read): a dropdown (ion-select)
+       * showing `select` (its digits: "₹ 2,000,000"), and a chosen radio starting with `label`
+       * ("2 Year"). Niva Bupa shows a premium for its recommended sum insured first: a handed-over
+       * form is read only once the advisor has chosen the client's.
+       */
+      requires?: { select?: string; label?: string };
+    }
   /**
    * Adds a listed add-on: in the row naming it, presses "+ Add" and checks it is gone. A row
    * without "+ Add" but with Remove (or Added) is already added.
@@ -124,8 +137,21 @@ export type PageOp =
       options: string[];
       timeoutMs: number;
       last?: boolean;
+      /**
+       * The box is the first one matching `selector` after a shown caption reading one of these
+       * (ignoring case and spacing): Niva Bupa's "Select Plan", never its City box. Waits for the
+       * caption to appear.
+       */
+      after?: string[];
       /** A suggestion that starts with an option will do (PIE's "ABOHAR - PUNJAB" for "Abohar"). */
       startsWith?: boolean;
+      /** How long to wait for the suggestions once typed; 4 seconds if absent. */
+      suggestMs?: number;
+      /**
+       * Names the box used (data-fqf-box), so later steps can leave it alone: Niva Bupa's plan box,
+       * which its page code puts after the City box.
+       */
+      markAs?: string;
     }
   /**
    * Presses the first shown element matching `selector` (and, if given, whose text reads `text`,
@@ -258,6 +284,29 @@ export type PageOp =
       waitMs?: number;
     }
   | { op: 'errors' }
+  /**
+   * What the page marks on its form, outside pop-ups: the visible validation messages written by
+   * the fields or the buttons ("Please fill all details", a Material error) and the captions of
+   * the boxes it marks invalid. Reads captions and messages only, never a box's value. Always
+   * `ok: true`; `value` is empty when nothing is marked.
+   */
+  | { op: 'fieldErrors' }
+  /**
+   * Marks the shown boxes matching `selector` that are on the page now (data-fqf-before), so a later
+   * step can take the one that appears afterwards (`:not([data-fqf-before])`): Niva Bupa's plan box,
+   * drawn only once "I Know My Plan" is pressed, never its City box, there from the start. Marks
+   * nothing while an element reading `unlessText` is shown (the boxes are all drawn already).
+   */
+  | { op: 'markPresent'; selector: string; unlessText?: string }
+  /**
+   * Taps an element of a Flutter page (HDFC ERGO's 1up, drawn on a canvas) by its label: turns
+   * Flutter's semantics on (its "Enable accessibility" placeholder, as a screen reader would), which
+   * lays labelled elements over the canvas, then clicks the one reading `labels` (any of them,
+   * ignoring case and spacing; exactly, else the shortest starting with it). Only a click event is
+   * sent, never a pointer press (Flutter would take that for a tap on the canvas at its corner).
+   * Fails `not-found` (with the count of labelled elements shown) when none reads so in time.
+   */
+  | { op: 'flutterTap'; labels: string[]; timeoutMs: number }
   /** The text of any visible pop-up (dialog), whatever it says: `ok: false` with `errors`. */
   | { op: 'popup' }
   /**
@@ -465,6 +514,37 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
     return found;
   };
 
+  /**
+   * The first of `boxes` after a shown caption reading one of `captions` (ignoring case and
+   * spacing; the innermost element so reading), or null while no such caption is shown.
+   */
+  const boxAfter = (boxes: Element[], captions: string[]): Element | null => {
+    // "City *": a required field's mark is not part of the caption.
+    const squash = (t: string) =>
+      t
+        .replace(/\s+/g, ' ')
+        .replace(/\s*\*$/, '')
+        .trim()
+        .toLowerCase();
+    const wants = captions.map(squash);
+    const reading = Array.from(document.body.querySelectorAll('*')).filter(
+      (el) =>
+        el.childElementCount === 0 ||
+        !Array.from(el.children).some((c) => wants.includes(squash(text(c)))),
+    );
+    const caption = reading.find(
+      (el) => visible(el) && wants.includes(squash(text(el))) && !el.closest(DIALOGS),
+    );
+    if (!caption) return null;
+    return (
+      boxes.find(
+        (box) =>
+          !caption.contains(box) &&
+          (caption.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+      ) ?? null
+    );
+  };
+
   switch (command.op) {
     case 'waitFor': {
       const found = await until(() => {
@@ -556,10 +636,15 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
     case 'typeahead': {
       const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
       const pick = (): HTMLElement | null =>
-        command.last
-          ? ((Array.from(document.querySelectorAll(command.selector)).filter(visible).at(-1) as
-              HTMLElement | undefined) ?? null)
-          : first(document, command.selector);
+        command.after
+          ? (boxAfter(
+              Array.from(document.querySelectorAll(command.selector)).filter(visible),
+              command.after,
+            ) as HTMLElement | null)
+          : command.last
+            ? ((Array.from(document.querySelectorAll(command.selector)).filter(visible).at(-1) as
+                HTMLElement | undefined) ?? null)
+            : first(document, command.selector);
       const box = await until(() => {
         const el = pick();
         return el instanceof HTMLInputElement && !el.disabled && !el.readOnly ? el : null;
@@ -567,6 +652,16 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       if (!box) {
         const el = pick() as HTMLInputElement | null;
         return { ok: false, detail: el ? 'still-disabled' : 'not-found' };
+      }
+      // Another box's list left open (Niva Bupa's plan dropdown, in the same overlay as the City
+      // list) is closed first, as a person would press Escape, so it cannot be taken for this one.
+      const other = document.activeElement;
+      if (other instanceof HTMLElement && other !== box && other !== document.body) {
+        other.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }),
+        );
+        other.blur();
+        await sleep(200);
       }
       box.focus();
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
@@ -602,13 +697,23 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           ).flatMap((list) => shownItems(list));
           if (items.length > 0) return items;
         }
-        // jQuery UI (appended to the page's end), or Angular Material's overlay (likewise).
+        // jQuery UI (appended to the page's end), or Angular Material's overlay (likewise), but
+        // never a list another box names as its own (the plan dropdown's, in the same overlay).
+        const othersLists = new Set(
+          Array.from(document.querySelectorAll('[aria-owns], [aria-controls]'))
+            .filter((el) => el !== box)
+            .flatMap((el) =>
+              ['aria-owns', 'aria-controls'].flatMap((a) =>
+                (el.getAttribute(a) ?? '').split(/\s+/).filter(Boolean),
+              ),
+            ),
+        );
         return Array.from(
           document.querySelectorAll<HTMLElement>(
             '.ui-autocomplete, .cdk-overlay-container [role="listbox"]',
           ),
         )
-          .filter(visible)
+          .filter((list) => visible(list) && !othersLists.has(list.id))
           .flatMap((list) => shownItems(list));
       };
       // No list: the page has nothing by that name. Typed text it did not offer would be left in
@@ -1230,6 +1335,113 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       );
       return box ? { ok: false, errors: text(box).slice(0, 400) } : { ok: true };
     }
+    case 'flutterTap': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const wants = command.labels.map(loose);
+      /** Every element matching `selector`, in the document and in open shadow roots. */
+      const deep = (root: ParentNode, selector: string, out: Element[] = []): Element[] => {
+        out.push(...Array.from(root.querySelectorAll(selector)));
+        for (const el of Array.from(root.querySelectorAll('*'))) {
+          if (el.shadowRoot) deep(el.shadowRoot, selector, out);
+        }
+        return out;
+      };
+      const NODES =
+        'flt-semantics, [role="button"], [role="link"], [role="tab"], [role="menuitem"]';
+      const nameOf = (el: Element): string =>
+        loose(el.getAttribute('aria-label') || (el as HTMLElement).innerText || '');
+      const enable = () => {
+        if (deep(document, 'flt-semantics').length > 0) return;
+        const placeholder = deep(document, 'flt-semantics-placeholder')[0];
+        if (placeholder) (placeholder as HTMLElement).click();
+      };
+      let seen = 0;
+      const target = await until(() => {
+        enable();
+        const nodes = deep(document, NODES).filter(visible);
+        seen = nodes.length;
+        const named = nodes.map((el) => ({ el, name: nameOf(el) })).filter((n) => n.name);
+        const exact = named.find((n) => wants.includes(n.name));
+        if (exact) return exact.el;
+        const starts = named
+          .filter((n) => wants.some((w) => n.name.startsWith(`${w} `)))
+          .sort((a, b) => a.name.length - b.name.length);
+        return starts[0]?.el ?? null;
+      }, command.timeoutMs);
+      if (!target) return { ok: false, detail: `not-found (${seen} labelled shown)` };
+      (target as HTMLElement).click();
+      return { ok: true };
+    }
+    case 'markPresent': {
+      const squash = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const already =
+        command.unlessText !== undefined &&
+        Array.from(document.body.querySelectorAll('*')).some(
+          (el) =>
+            el.childElementCount === 0 &&
+            visible(el) &&
+            squash(text(el)) === squash(command.unlessText!),
+        );
+      // An earlier run's marks are cleared first (the page may still carry them).
+      for (const el of Array.from(document.querySelectorAll('[data-fqf-before], [data-fqf-box]'))) {
+        el.removeAttribute('data-fqf-before');
+        el.removeAttribute('data-fqf-box');
+      }
+      if (already) return { ok: true, detail: 'already-shown' };
+      // Shown boxes only: a box drawn but hidden until later is not "there before".
+      const boxes = Array.from(document.querySelectorAll(command.selector)).filter(visible);
+      for (const box of boxes) box.setAttribute('data-fqf-before', '');
+      return { ok: true, value: String(boxes.length) };
+    }
+    case 'fieldErrors': {
+      const said: string[] = [];
+      const note = (t: string) => {
+        const clean = t.replace(/\s+/g, ' ').trim();
+        if (clean && clean.length <= 160 && !said.includes(clean)) said.push(clean);
+      };
+      // Messages: Material and Ionic errors, and any short element named as an error.
+      const MESSAGES =
+        'mat-error, .mat-error, .mat-mdc-form-field-error, ion-note[slot="error"], .error-text, ' +
+        '.invalid-feedback, .text-danger, [role="alert"], [class*="error" i], [id*="error" i]';
+      for (const el of Array.from(document.querySelectorAll(MESSAGES))) {
+        if (!visible(el) || el.closest(DIALOGS)) continue;
+        // The innermost message only (a container named "error-box" holds the message itself).
+        if (Array.from(el.querySelectorAll(MESSAGES)).some((inner) => visible(inner))) continue;
+        // A field's own box ("mat-form-field-invalid") is not a message.
+        const BOXES = 'input, select, textarea, button, ion-input, ion-select, mat-select';
+        if (el.matches(BOXES) || el.querySelector(BOXES)) continue;
+        note(text(el));
+      }
+      // Boxes marked invalid (Angular's classes), by their caption.
+      const caption = (el: Element): string => {
+        const field = el.closest('mat-form-field, .mat-mdc-form-field, ion-item');
+        const label = field?.querySelector('mat-label, label, ion-label');
+        const byFor = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null;
+        const named =
+          (label && text(label)) ||
+          (byFor && text(byFor)) ||
+          el.getAttribute('aria-label') ||
+          el.getAttribute('placeholder') ||
+          (el.getAttribute('formcontrolname') ?? '').replace(/([a-z])([A-Z])/g, '$1 $2');
+        return named.replace(/\s*\*\s*$/, '').trim();
+      };
+      const INVALID =
+        'input.ng-invalid, textarea.ng-invalid, select.ng-invalid, mat-select.ng-invalid, ' +
+        'ion-input.ng-invalid, ion-select.ng-invalid, ion-radio-group.ng-invalid';
+      const marked: string[] = [];
+      for (const el of Array.from(document.querySelectorAll(INVALID))) {
+        if (el.closest(DIALOGS) || (el as HTMLInputElement).disabled) continue;
+        const shown = visible(el) || (el.parentElement !== null && visible(el.parentElement));
+        if (!shown || el.parentElement?.closest('.ng-invalid:is(ion-input, ion-select)')) continue;
+        const name = caption(el);
+        if (name && name.length <= 80 && !marked.includes(name)) marked.push(name);
+      }
+      const parts = [
+        ...said.slice(0, 5),
+        ...(marked.length > 0 ? [`marked: ${marked.slice(0, 8).join(', ')}`] : []),
+      ];
+      return { ok: true, value: parts.join('; ').slice(0, 500) };
+    }
     case 'clickText': {
       const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
       const want = loose(command.text);
@@ -1666,9 +1878,34 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
             )
           : undefined;
         if (!radio) return null;
+        const need = command.requires;
+        if (need?.select !== undefined) {
+          const digits = (t: string) => t.replace(/\D/g, '');
+          const want = digits(need.select);
+          const shows = (el: Element): string => {
+            const shadow = el.shadowRoot?.querySelector('.select-text')?.textContent;
+            if (shadow) return shadow;
+            const value = (el as HTMLElement & { value?: unknown }).value;
+            return typeof value === 'string' || typeof value === 'number'
+              ? String(value)
+              : text(el);
+          };
+          const ok = Array.from(document.querySelectorAll('ion-select')).some(
+            (el) => visible(el) && digits(shows(el)) === want,
+          );
+          if (!ok) return null;
+        }
         for (let n: Element | null = radio, up = 0; n && up < 4; n = n.parentElement, up += 1) {
           if (n.querySelectorAll('ion-radio').length > 1) break;
-          if (text(n)) return text(n);
+          const label = text(n);
+          if (!label) continue;
+          if (
+            need?.label !== undefined &&
+            !label.replace(/\s+/g, ' ').toLowerCase().startsWith(need.label.toLowerCase())
+          ) {
+            return null;
+          }
+          return label;
         }
         return null;
       };
@@ -1741,7 +1978,13 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         command.timeoutMs,
       );
       if (!el) return { ok: false, detail: 'not-found' };
+      // A page that acts on scrolling (Niva Bupa's footer turns to Calculate Premium) must see a
+      // scroll even when the element is already in view: nudge first, then scroll to it.
+      window.scrollBy(0, window.scrollY > 0 ? -1 : 1);
+      await sleep(100);
       el.scrollIntoView({ block: 'start' });
+      window.dispatchEvent(new Event('scroll'));
+      document.dispatchEvent(new Event('scroll'));
       await sleep(800);
       return { ok: true };
     }
@@ -1749,18 +1992,16 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       const loose = (t: string) => t.replace(/\s+/g, '').toLowerCase();
       const find = (): HTMLInputElement | null => {
         const all = Array.from(document.querySelectorAll(command.selector)).filter(visible);
-        const el = command.last ? all.at(-1) : all[0];
+        const el = command.after
+          ? boxAfter(all, command.after)
+          : command.last
+            ? all.at(-1)
+            : all[0];
         return el instanceof HTMLInputElement && !el.disabled ? el : null;
       };
       const box = await until(find, command.timeoutMs);
       if (!box) return { ok: false, detail: 'not-found' };
-      box.focus();
-      pressEl(box);
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-      if (setter?.set) setter.set.call(box, command.type);
-      else box.value = command.type;
-      fire(box, 'input');
-      fire(box, 'keyup');
+      if (command.markAs) box.setAttribute('data-fqf-box', command.markAs);
       const items = (): HTMLElement[] => {
         const owned = ['aria-controls', 'aria-owns']
           .map((a) => box.getAttribute(a))
@@ -1779,7 +2020,33 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
           )
           .filter((o) => visible(o) && text(o) !== '');
       };
-      const shown = await until(() => (items().length > 0 ? true : null), 4000);
+      /** Waits for the list, opening the box again every `every` ms as a person would click it. */
+      const listed = (ms: number, every: number, again: () => void): Promise<true | null> => {
+        let asked = Date.now();
+        return until(() => {
+          if (items().length > 0) return true;
+          if (Date.now() - asked >= every) {
+            asked = Date.now();
+            again();
+          }
+          return null;
+        }, ms);
+      };
+      box.focus();
+      pressEl(box);
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      if (setter?.set) setter.set.call(box, command.type);
+      else box.value = command.type;
+      fire(box, 'input');
+      fire(box, 'keyup');
+      // A list loaded from the insurer may come late: while none is shown, the box is asked again
+      // every 1.5 seconds, as a person would click it again.
+      const shown = await listed(command.suggestMs ?? 4000, 1500, () => {
+        box.focus();
+        pressEl(box);
+        fire(box, 'input');
+        fire(box, 'keyup');
+      });
       if (!shown) return { ok: false, detail: 'no-match (no suggestions)' };
       let match: HTMLElement | undefined;
       for (const option of command.options) {

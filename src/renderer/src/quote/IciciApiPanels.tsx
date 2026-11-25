@@ -3,14 +3,18 @@
 // portal: the app asks ICICI's API in the environment chosen on the Insurer portals screen
 // (Partner API), shows the premium and how ICICI made it up, and saves the PDF.
 import { useEffect, useState } from 'react';
+import { iciciHealthFromChoices, QUOTE_DEFAULTS } from '../../../shared/contracts/client-quote';
+import {
+  missingMessage,
+  readChoices,
+  SavedChoicesNote,
+  useSavedChoices,
+} from '../clients/saved-choices';
 import type { VehicleSummary } from '../../../shared/contracts/vehicle';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
 import {
-  ICICI_BOOSTER_DEDUCTIBLES,
-  ICICI_ELEVATE_SUMS,
   ICICI_HEALTH_NAMES,
   ICICI_MOTOR_ADDONS,
-  type IciciApiHealthRun,
   type IciciApiMotorRun,
   type IciciHealthProduct,
 } from '../../../shared/insurers/icici-api';
@@ -313,36 +317,53 @@ export function IciciApiMotorSection(props: { vehicle: VehicleSummary }): React.
   );
 }
 
+/**
+ * Elevate and Activate Booster for a health client: the plan is chosen here, the rest is the
+ * client's details (Additional details, ICICI Lombard).
+ */
 export function IciciApiHealthPanel(props: { clientId: string }): React.JSX.Element {
   const [product, setProduct] = useState<IciciHealthProduct>('elevate');
-  const [sumInsured, setSumInsured] = useState<number>(500000);
-  const [deductible, setDeductible] = useState<number>(500000);
-  const [tenure, setTenure] = useState(1);
-  const [ped, setPed] = useState<'' | 'no' | 'yes'>('');
-  const [paymentOption, setPaymentOption] = useState<IciciApiHealthRun['paymentOption']>('annual');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result>(null);
+  const saved = useSavedChoices(props.clientId);
+  const c = saved?.['icici-lombard'] ?? {};
+  const lines = [
+    `sum insured ${lakh(c.sumInsured ?? QUOTE_DEFAULTS.iciciSumInsured)}`,
+    ...(product === 'activate-booster'
+      ? [`deductible ${lakh(c.deductible ?? QUOTE_DEFAULTS.iciciDeductible)}`]
+      : []),
+    `${c.tenure ?? QUOTE_DEFAULTS.iciciTenure} year${(c.tenure ?? 1) > 1 ? 's' : ''}`,
+    `${c.paymentOption ?? QUOTE_DEFAULTS.iciciPayment} payment`,
+    c.preExistingDisease === undefined
+      ? 'pre-existing disease not answered yet'
+      : c.preExistingDisease
+        ? 'a member has a pre-existing disease'
+        : 'no pre-existing disease',
+  ];
   const run = async () => {
     setBusy(true);
     setResult(null);
+    const read = await readChoices(props.clientId);
+    if ('error' in read) {
+      setBusy(false);
+      setResult(read);
+      return;
+    }
+    const built = iciciHealthFromChoices(product, read.choices);
+    if (!built.ok) {
+      setBusy(false);
+      setResult({ error: missingMessage(built.missing) });
+      return;
+    }
     const r = await runQuote({
       product: 'icici-api-health',
       clientId: props.clientId,
       insurerId: 'icici-lombard',
-      run: {
-        product,
-        sumInsured,
-        tenure,
-        ...(product === 'activate-booster' ? { deductible } : {}),
-        preExistingDisease: ped === 'yes',
-        paymentOption,
-      },
+      run: built.value,
     }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
   };
-  const sums =
-    product === 'elevate' ? [...ICICI_ELEVATE_SUMS] : [500000, 1000000, 2000000, 2500000, 5000000];
   return (
     <div className="quote-panel">
       <p className="insurer-note">
@@ -350,75 +371,16 @@ export function IciciApiHealthPanel(props: { clientId: string }): React.JSX.Elem
         premium out for the client&rsquo;s members (dates of birth and genders are needed).{' '}
         {SETUP_NOTE}
       </p>
-      <div className="form-grid">
-        <label>
-          Plan{' '}
-          <select
-            value={product}
-            onChange={(e) => {
-              const next = e.target.value as IciciHealthProduct;
-              setProduct(next);
-              if (next === 'elevate') setSumInsured(500000);
-            }}
-          >
-            <option value="elevate">{ICICI_HEALTH_NAMES.elevate}</option>
-            <option value="activate-booster">{ICICI_HEALTH_NAMES['activate-booster']}</option>
-          </select>
-        </label>
-        <label>
-          Sum insured{' '}
-          <select value={sumInsured} onChange={(e) => setSumInsured(Number(e.target.value))}>
-            {sums.map((s) => (
-              <option key={s} value={s}>
-                {lakh(s)}
-              </option>
-            ))}
-          </select>
-        </label>
-        {product === 'activate-booster' && (
-          <label>
-            Deductible (base cover){' '}
-            <select value={deductible} onChange={(e) => setDeductible(Number(e.target.value))}>
-              {ICICI_BOOSTER_DEDUCTIBLES.map((d) => (
-                <option key={d} value={d}>
-                  {lakh(d)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label>
-          Term{' '}
-          <select value={tenure} onChange={(e) => setTenure(Number(e.target.value))}>
-            {[1, 2, 3, 4, 5].map((y) => (
-              <option key={y} value={y}>
-                {y} year{y > 1 ? 's' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Payment{' '}
-          <select
-            value={paymentOption}
-            onChange={(e) => setPaymentOption(e.target.value as IciciApiHealthRun['paymentOption'])}
-          >
-            <option value="annual">Annual</option>
-            <option value="monthly">Monthly</option>
-            <option value="quarterly">Quarterly</option>
-          </select>
-        </label>
-        <label>
-          Any member with a pre-existing disease?{' '}
-          <select value={ped} onChange={(e) => setPed(e.target.value as '' | 'no' | 'yes')}>
-            <option value="">Ask the client</option>
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
-        </label>
-      </div>
+      <label>
+        Plan{' '}
+        <select value={product} onChange={(e) => setProduct(e.target.value as IciciHealthProduct)}>
+          <option value="elevate">{ICICI_HEALTH_NAMES.elevate}</option>
+          <option value="activate-booster">{ICICI_HEALTH_NAMES['activate-booster']}</option>
+        </select>
+      </label>
+      <SavedChoicesNote insurer="icici-lombard" lines={lines} />
       <div className="insurer-actions">
-        <button type="button" disabled={busy || ped === ''} onClick={() => void run()}>
+        <button type="button" disabled={busy} onClick={() => void run()}>
           {busy ? 'Asking ICICI Lombard…' : 'Get ICICI Lombard premium (API)'}
         </button>
       </div>

@@ -64,7 +64,7 @@ import type { StoreProblem } from './store-problems';
 
 const KEY_ENTRY = 'database-key';
 const KEY_HEX = /^[0-9a-f]{64}$/;
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 /** Why the store could not be used. `code` is safe to show; `reason` is for logs and support. */
 export class ClientStoreError extends Error {
@@ -333,6 +333,18 @@ function migrate(
       d.pragma('user_version = 9');
     });
   }
+  // Version 10 (24 November 2026): a health client's additional details per insurer and its quote
+  // choices (validated JSON). Existing clients keep their one set of details (proposal_json),
+  // read as United India's until saved again.
+  if (version < 10) {
+    store.commit((d) => {
+      d.exec(`
+        ALTER TABLE client ADD COLUMN insurer_details_json TEXT;
+        ALTER TABLE client ADD COLUMN quote_choices_json TEXT;
+      `);
+      d.pragma('user_version = 10');
+    });
+  }
   return removed;
 }
 
@@ -345,6 +357,8 @@ interface ClientRow {
   pincode: string;
   proposer_marital_status: string | null;
   proposal_json: string | null;
+  insurer_details_json: string | null;
+  quote_choices_json: string | null;
   cover_type: string | null;
   sum_insured_paise: number | null;
   tenure_years: number | null;
@@ -456,6 +470,12 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
         ? { proposerMaritalStatus: row.proposer_marital_status as MaritalStatus }
         : {}),
       ...(row.proposal_json !== null ? { proposal: JSON.parse(row.proposal_json) as unknown } : {}),
+      ...(row.insurer_details_json !== null
+        ? { insurerDetails: JSON.parse(row.insurer_details_json) as unknown }
+        : {}),
+      ...(row.quote_choices_json !== null
+        ? { quoteChoices: JSON.parse(row.quote_choices_json) as unknown }
+        : {}),
       ...(row.cover_type !== null && row.sum_insured_paise !== null && row.tenure_years !== null
         ? {
             preferences: {
@@ -582,6 +602,8 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
           pincode: input.pincode,
           proposer_marital_status: input.proposerMaritalStatus ?? null,
           proposal_json: input.proposal ? JSON.stringify(input.proposal) : null,
+          insurer_details_json: input.insurerDetails ? JSON.stringify(input.insurerDetails) : null,
+          quote_choices_json: input.quoteChoices ? JSON.stringify(input.quoteChoices) : null,
           cover_type: p?.coverType ?? null,
           sum_insured_paise: p?.sumInsuredPaise ?? null,
           tenure_years: p?.tenureYears ?? null,
@@ -592,7 +614,8 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
           d.prepare(
             `UPDATE client SET name = @name, phone = @phone, email = @email, notes = @notes,
                pincode = @pincode, proposer_marital_status = @proposer_marital_status,
-               proposal_json = @proposal_json,
+               proposal_json = @proposal_json, insurer_details_json = @insurer_details_json,
+               quote_choices_json = @quote_choices_json,
                cover_type = @cover_type, sum_insured_paise = @sum_insured_paise,
                tenure_years = @tenure_years, updated_at = @updated_at WHERE id = @id`,
           ).run(values);
@@ -600,11 +623,11 @@ export async function openClientStore(options: ClientStoreOptions): Promise<Clie
         } else {
           d.prepare(
             `INSERT INTO client (id, name, phone, email, notes, pincode, proposer_marital_status,
-               proposal_json, cover_type, sum_insured_paise, tenure_years, created_at,
-               updated_at)
+               proposal_json, insurer_details_json, quote_choices_json, cover_type,
+               sum_insured_paise, tenure_years, created_at, updated_at)
              VALUES (@id, @name, @phone, @email, @notes, @pincode, @proposer_marital_status,
-               @proposal_json, @cover_type, @sum_insured_paise, @tenure_years, @created_at,
-               @updated_at)`,
+               @proposal_json, @insurer_details_json, @quote_choices_json, @cover_type,
+               @sum_insured_paise, @tenure_years, @created_at, @updated_at)`,
           ).run(values);
         }
         const member = d.prepare(

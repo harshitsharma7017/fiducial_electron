@@ -1,8 +1,10 @@
 // Runs the HDFC ERGO PIE automation (bundled real code, src/main/quotes/run-hdfc.ts) against the
 // local copy of PIE's Private Car, Two Wheeler, MST, Optima Secure and Retail Travel forms (pie-page.html), and checks what is
 // filled, that Calculate Premium is pressed and the premium read is the one shown, PIE's own
-// complaint (IDV out of range) stops the run with its words, a tab not signed in to PIE is
-// refused, and Generate Quote is never pressed. Contacts no insurer: served from 127.0.0.1.
+// complaint (IDV out of range) stops the run with its words, a tab on 1up's home page (oneup-page.html,
+// served from localhost: another origin) is taken to PIE by Issue Quotes & Policy and Private Car,
+// without a tap on the canvas, a tab on neither is refused, and Generate Quote is never pressed.
+// Contacts no insurer: served from 127.0.0.1 and localhost.
 // Started by run.mjs pie (npm run test:nia -- pie).
 const http = require('node:http');
 const { app, BrowserWindow, session } = require('electron');
@@ -27,7 +29,7 @@ for (const event of ['unhandledRejection', 'uncaughtException']) {
 setTimeout(() => {
   console.log('FAIL  harness timed out');
   app.exit(1);
-}, 240_000).unref();
+}, 360_000).unref();
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   const render = FIXTURES[url.pathname];
@@ -161,12 +163,12 @@ const CASES = [
     },
   },
   {
-    name: "an IDV out of PIE's range: stopped with PIE's own words",
+    name: "an IDV out of PIE's range: handed over with PIE's own words",
     start: '/PrivateCar/CreateQuote',
     kind: 'motor',
     vehicle: { ...CAR, idvRupees: 2000000 },
     run: RUN,
-    outcome: 'failed',
+    outcome: 'handed-over',
     message: 'PIE says: User Idv should be in between 700000 - 1300000',
     read: READ_MOTOR,
     expect: { total: '', saved: false },
@@ -189,13 +191,38 @@ const CASES = [
     },
   },
   {
-    name: 'no tab signed in to PIE: refused, told to open a product from 1up',
+    name: "on 1up's home page: Issue Quotes & Policy, Private Car, PIE, then the form and premium",
+    start: '/dashBoardScreen',
+    on1up: true,
+    kind: 'motor',
+    vehicle: CAR,
+    run: RUN,
+    outcome: 'ready',
+    amount: '24072',
+    read: READ_MOTOR,
+    // Tapped by their labels (not the saved quote also reading Private Car), never on the canvas.
+    redirect:
+      'tapped=Issue%20Quotes%20%26%20Policy%0ANew%20business%20and%20renewals%7CPrivate%20Car&canvasTaps=0',
+    expect: { path: '/PrivateCar/CreateQuote', make: 'MARUTI', calculated: 1, saved: false },
+  },
+  {
+    name: '1up covered by a message: Issue Quotes & Policy not found, told to open PIE by hand',
+    start: '/dashBoardScreen?popup=1',
+    on1up: true,
+    kind: 'motor',
+    vehicle: CAR,
+    run: RUN,
+    outcome: 'refused',
+    message: 'The app could not open PIE from 1up: 1up\'s "Issue Quotes & Policy" was not found',
+  },
+  {
+    name: 'no tab on 1up or PIE: refused, told to sign in to 1up',
     start: null,
     kind: 'motor',
     vehicle: CAR,
     run: RUN,
     outcome: 'refused',
-    message: "Open any product from HDFC's 1up",
+    message: "Sign in to HDFC ERGO's 1up first",
   },
   {
     name: 'MST family floater, 2 years: members adults first, Cover Detail, premium read',
@@ -287,16 +314,23 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 app.whenReady().then(async () => {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
+  // 1up's copy, on another origin than PIE's (as 1up.hdfcergo.com and pie.hdfcergo.com are).
+  const oneUpOrigin = `http://localhost:${server.address().port}`;
   installNavigationPolicy(createLogger([]));
   let failures = 0;
   for (const c of CASES) {
     const ses = session.fromPartition(`pie-${Math.random()}`);
-    setSessionPolicy(ses, { navigate: (url) => url.startsWith(origin + '/'), popup: () => null });
+    setSessionPolicy(ses, {
+      navigate: (url) => url.startsWith(origin + '/') || url.startsWith(oneUpOrigin + '/'),
+      popup: () => null,
+    });
     const win = new BrowserWindow({
       show: true,
       webPreferences: { session: ses, sandbox: true, contextIsolation: true },
     });
-    if (c.start) await win.loadURL(origin + c.start);
+    const visited = [];
+    win.webContents.on('did-navigate', (_e, url) => visited.push(url));
+    if (c.start) await win.loadURL((c.on1up ? oneUpOrigin : origin) + c.start);
     const windows = () => [win];
     const today = new Date(2026, 10, 5);
     const result =
@@ -312,7 +346,13 @@ app.whenReady().then(async () => {
                 today,
                 origin,
               })
-            : await runHdfcMotorQuote({ windows, vehicle: c.vehicle, run: c.run, origin });
+            : await runHdfcMotorQuote({
+                windows,
+                vehicle: c.vehicle,
+                run: c.run,
+                origin,
+                oneUpOrigin,
+              });
     const state = c.read
       ? await win.webContents.executeJavaScript(c.read).catch((e) => ({ error: e.message }))
       : {};
@@ -325,6 +365,8 @@ app.whenReady().then(async () => {
       problems.push(`message "${result.message}" lacks "${c.message}"`);
     if (c.amount && result.premium?.amount !== c.amount)
       problems.push(`premium ${JSON.stringify(result.premium)} (expected ${c.amount})`);
+    if (c.redirect && !visited.some((u) => u.includes('/WrapperApi/') && u.includes(c.redirect)))
+      problems.push(`no PIE redirect with ${c.redirect}: ${JSON.stringify(visited)}`);
     for (const [k, v] of Object.entries(c.expect ?? {}))
       if (!same(state[k], v))
         problems.push(`${k}: ${JSON.stringify(state[k])} (expected ${JSON.stringify(v)})`);

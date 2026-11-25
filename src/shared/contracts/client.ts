@@ -20,6 +20,7 @@ import { positivePaiseSchema } from '../money';
 import { entityIdSchema, isoDateTimeSchema, singleLineText } from './common';
 import { coverTypeSchema, tenureYearsSchema } from './coverage';
 import { customerSchema, memberSchema, type Member } from './customer';
+import { clientQuoteChoicesSchema } from './client-quote';
 import { MAX_CONTRACT_MEMBERS, pincodeSchema, type QuoteRequest } from './quote';
 
 /** What the advisor usually quotes for this client. */
@@ -225,6 +226,87 @@ export const proposalDetailsSchema = z.strictObject({
 });
 export type ProposalDetails = z.infer<typeof proposalDetailsSchema>;
 
+// Additional details, per insurer (request of 24 November 2026): a client's details beyond the
+// basic ones are kept separately for each insurer whose forms ask them, so each can hold what that
+// insurer's form takes (its own occupation list, for example) and a run reads only its insurer's.
+// Each insurer's are filled in on their own: nothing is copied from one insurer to another.
+// HDFC ERGO's and ICICI Lombard's forms use the basic details only.
+
+/** The insurers whose forms ask details beyond the basic ones, in the order they are shown. */
+export const CLIENT_DETAIL_INSURERS = ['united-india', 'new-india', 'niva-bupa'] as const;
+export type ClientDetailInsurer = (typeof CLIENT_DETAIL_INSURERS)[number];
+export const CLIENT_DETAIL_INSURER_NAMES: Record<ClientDetailInsurer, string> = {
+  'united-india': 'United India',
+  'new-india': 'New India',
+  'niva-bupa': 'Niva Bupa',
+};
+
+/** New India's PA (Janata) forms' occupation list, "Gramin" (matched by name). */
+export const NIA_GRAMIN_OCCUPATIONS = [
+  'Agriculturalist',
+  'Business',
+  'Driver',
+  'Housewife',
+  'Others',
+  'Professional',
+  'Retired',
+  'Service',
+  'Student',
+] as const;
+
+/** The details each insurer's automated forms use (the others are not asked for it). */
+export const INSURER_DETAIL_FIELDS: Record<
+  ClientDetailInsurer,
+  readonly (keyof ProposalDetails)[]
+> = {
+  // Health e-proposals, sections I, II and XI.
+  'united-india': Object.keys(proposalDetailsSchema.shape) as (keyof ProposalDetails)[],
+  // The PA forms (Sukshma, Janata, Pension).
+  'new-india': [
+    'address',
+    'occupation',
+    'landlineStdCode',
+    'landlineNumber',
+    'eInsuranceAccountNumber',
+    'nomineeName',
+    'nomineeRelationship',
+    'nomineeAddress',
+  ],
+  // The premium calculator's city.
+  'niva-bupa': ['city'],
+};
+
+export const insurerDetailsSchema = z.strictObject({
+  'united-india': proposalDetailsSchema.optional(),
+  'new-india': proposalDetailsSchema.optional(),
+  'niva-bupa': proposalDetailsSchema.optional(),
+});
+export type InsurerDetails = z.infer<typeof insurerDetailsSchema>;
+
+/**
+ * The client's additional details per insurer. A record saved before 24 November 2026 has one set
+ * (`proposal`), drawn from United India's e-proposal: it is United India's. The other insurers have
+ * none until they are filled in (nothing is copied to them).
+ */
+export function insurerDetailsOf(client: {
+  insurerDetails?: InsurerDetails;
+  proposal?: ProposalDetails;
+}): InsurerDetails {
+  if (client.insurerDetails) return client.insurerDetails;
+  return client.proposal ? { 'united-india': client.proposal } : {};
+}
+
+/** One insurer's additional details for a client, if any. */
+export function detailsFor(
+  client: { insurerDetails?: InsurerDetails; proposal?: ProposalDetails },
+  insurer: string,
+): ProposalDetails | undefined {
+  const all = insurerDetailsOf(client);
+  return (CLIENT_DETAIL_INSURERS as readonly string[]).includes(insurer)
+    ? all[insurer as ClientDetailInsurer]
+    : undefined;
+}
+
 // Vehicles are not part of a client (decision of 3 November 2026): they are kept on their own, see
 // ./vehicle.ts.
 export const clientInputSchema = z.strictObject({
@@ -235,8 +317,15 @@ export const clientInputSchema = z.strictObject({
   /** The proposer's ("self") marital status. */
   proposerMaritalStatus: maritalStatusSchema.optional(),
   preferences: quotePreferencesSchema.optional(),
-  /** Proposal details, for e-proposal forms. */
+  /**
+   * Before 24 November 2026: one set of additional details for every insurer. Still read (as each
+   * insurer's, see insurerDetailsOf) until the client is saved with `insurerDetails`.
+   */
   proposal: proposalDetailsSchema.optional(),
+  /** Additional details, per insurer. */
+  insurerDetails: insurerDetailsSchema.optional(),
+  /** What each insurer's quotes use besides the product (client-quote.ts). */
+  quoteChoices: clientQuoteChoicesSchema.optional(),
 });
 
 export type ClientInputRaw = z.input<typeof clientInputSchema>;
@@ -262,6 +351,24 @@ export const clientSummarySchema = z.strictObject({
 });
 
 export type ClientSummary = z.infer<typeof clientSummarySchema>;
+
+/**
+ * The client as one insurer's run sees it: that insurer's additional details as `proposal` (the
+ * field the runs read), no other insurer's.
+ */
+export function clientForInsurer(client: ClientInput, insurer: string): ClientInput {
+  const details = detailsFor(client, insurer);
+  const view: ClientInput = {
+    customer: client.customer,
+    pincode: client.pincode,
+    members: client.members,
+  };
+  if (client.proposerMaritalStatus) view.proposerMaritalStatus = client.proposerMaritalStatus;
+  if (client.preferences) view.preferences = client.preferences;
+  if (client.quoteChoices) view.quoteChoices = client.quoteChoices;
+  if (details) view.proposal = details;
+  return view;
+}
 
 /** The quote request a saved client stands for, or null until its preferences are filled in. */
 export function quoteRequestFor(client: ClientInput): QuoteRequest | null {

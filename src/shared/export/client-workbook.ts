@@ -3,7 +3,7 @@
 // be edited and imported back), and rural, marine and property clients in columns of their own.
 // The Aadhaar and passport numbers are never exported: they stay in the encrypted vault. Pure.
 import { compareText } from '../comparison/comparability';
-import type { ClientRecord } from '../contracts/client';
+import { detailsFor, type ClientRecord } from '../contracts/client';
 import type { MarineClient, MarineRecord } from '../contracts/marine';
 import type { PropertyRecord, RiskAnswers } from '../contracts/property';
 import type { RuralRecord } from '../contracts/rural';
@@ -137,8 +137,9 @@ export function healthClientCells(record: ClientRecord): Record<string, Cell> {
     coverType: name(COVER_CHOICES, c.preferences?.coverType),
     sumInsured: c.preferences ? c.preferences.sumInsuredPaise / PAISE_PER_RUPEE : null,
     tenureYears: or(c.preferences?.tenureYears),
-    occupation: or(c.proposal?.occupation),
-    ...proposalCells(c.proposal),
+    // United India's additional details (its e-proposals ask them all).
+    occupation: or(detailsFor(c, 'united-india')?.occupation),
+    ...proposalCells(detailsFor(c, 'united-india')),
   };
   c.members.forEach((m, i) => {
     const n = i + 1;

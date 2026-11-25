@@ -559,13 +559,22 @@ and radios as custom elements with shadow roots (`npm run test:nia -- niva`). Ch
 ## HDFC ERGO: PIE motor, health and travel forms, new business (premium worked out, never saved)
 
 Built from the recordings of 5 November 2026 (`hdfc-ergo-2026-11-05T11-37-58-944Z`, motor;
-`hdfc-ergo-2026-11-05T11-50-09-251Z`, health). HDFC's 1up portal draws its tiles on a canvas, which
-the app cannot press. A tile signs the tab in to **PIE** (`pie.hdfcergo.com`), where the quote
-forms are ordinary AngularJS forms.
+`hdfc-ergo-2026-11-05T11-50-09-251Z`, health). HDFC's 1up portal is a Flutter app drawn on a
+canvas. A product tile signs the tab in to **PIE** (`pie.hdfcergo.com`), where the quote forms are
+ordinary AngularJS forms.
 
-**Opening a form:** the advisor opens any product from 1up once (Issue Quotes & Policy). The app then
-opens the form it needs by its PIE address in that tab, for example `/PrivateCar/CreateQuote`. A tab
-not on PIE is refused with that instruction.
+**Opening a form** (request of 24 November 2026):
+- **From 1up's home page,** the app opens PIE itself, as the advisor does: **Issue Quotes & Policy**,
+  then **Private Car** (any product signs the tab in). It turns on Flutter's semantics (the page's
+  "Enable accessibility" placeholder, as a screen reader would), which lays labelled elements over
+  the canvas, and clicks the tiles by their labels. Only click events are sent, never a pointer
+  press, which Flutter would take for a tap on the canvas. It then waits up to 45 seconds for PIE's
+  redirect (`/WrapperApi/RedirectToDashboardGet`) to load.
+- **On PIE,** the app opens the form it needs by its PIE address in that tab, for example
+  `/PrivateCar/CreateQuote`.
+- **When a tile is not found** (1up on another page, or a message covering it), the run is refused
+  and the advisor opens a product from 1up by hand. A tab on neither 1up nor PIE is told to sign in
+  to 1up first.
 
 **Motor**, for a saved vehicle (its HDFC section in the vehicle's quote panel):
 - **Forms:** Private Car, Two Wheeler (PIE's Blaze form; `/TwoWheeler/CreateQuote` answers "404 Page

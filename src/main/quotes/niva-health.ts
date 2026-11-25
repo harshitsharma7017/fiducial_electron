@@ -18,6 +18,9 @@
 //      to opt in). The footer reads Continue at the top and Calculate Premium once Key Add-Ons is
 //      scrolled to. Calculate Premium works the premium out again and shows it by the policy
 //      period; Continue then leads to a summary asking the customer's name, email and phone.
+// (Recording niva-bupa-2026-11-24T07-46-11-920Z: the plan list loads about 5 seconds after the page
+// opens; the "Only for Child Policy" question is not always asked; with no add-ons, the premium
+// shows by the period as soon as the sum insured is chosen, and Plan Summary shows the same.)
 // The run does all of that up to Calculate Premium, presses it (the calculator's own sum, nothing
 // is saved or sent to the customer) and reads the premium. It never presses the Continue after it.
 // Acute Care, Room Category and Deductable stay as Niva Bupa sets them. Health Recharge's own
@@ -42,6 +45,23 @@ export const NIVA_CALCULATOR_ROUTE = '#/new-premiumcalculator';
 export const NIVA_PREMIUM_GROUP = 'ion-radio-group[formcontrolname="premium"]';
 const SUGGESTING_BOX =
   'input[aria-autocomplete="list"], input.mat-autocomplete-trigger, input.mat-mdc-autocomplete-trigger';
+/**
+ * The typing boxes on the page before "I Know My Plan" (marked then): the autocomplete ones, and
+ * any Angular Material text box (the City box, mat-input-11 in the recording of 24 November 2026).
+ */
+const BOXES_BEFORE = `${SUGGESTING_BOX}, input[id^="mat-input-"]`;
+/**
+ * The City box: a Material text box there before "I Know My Plan", not a date of birth, not
+ * read-only, never the plan box.
+ */
+const CITY_BOX =
+  'input[id^="mat-input-"][data-fqf-before]:not([data-fqf-box="plan"]):not([readonly]):not([placeholder="DD/MM/YYYY"]):not([type="hidden"])';
+/** The plan box, once the Plan step has named it. */
+const PLAN_BOX = 'input[data-fqf-box="plan"]';
+/** A suggesting box not on the page before "I Know My Plan" (markPresent). */
+const NOT_MARKED_SUGGESTING_BOX = SUGGESTING_BOX.split(',')
+  .map((s) => `${s.trim()}:not([data-fqf-before])`)
+  .join(', ');
 
 export interface NivaHealthStep extends PlanStep {
   /** After this step, a Niva Bupa message (an alert) stops the run. */
@@ -113,26 +133,67 @@ export function planNivaHealthQuote(
   const members = adults.length + children.length;
   const optional = (ifMissed: string): Partial<NivaHealthStep> => ({ optional: true, ifMissed });
 
-  // 1. Basic Details.
+  // 1. Basic Details. A tab left in "Plan Recommendation" mode (an earlier run) is set back first,
+  // so "I Know My Plan" is pressed afresh and the plan dropdown loads again.
+  add(
+    'I Know My Plan',
+    {
+      op: 'ensureShown',
+      shown: { text: 'I Know My Plan' },
+      open: { text: 'Plan Recommendation' },
+      timeoutMs: 5000,
+    },
+    { optional: true },
+  );
+  // The boxes on the page before "I Know My Plan" (the City box) are marked: the
+  // plan box is the one that appears after it (recording of 24 November 2026: mat-input-11, the
+  // city, is there from the start; mat-input-12, the plan, appears once it is pressed).
+  add('I Know My Plan', {
+    op: 'markPresent',
+    selector: BOXES_BEFORE,
+    unlessText: 'Plan Recommendation',
+  });
   add('I Know My Plan', {
     op: 'ensureShown',
     shown: { text: 'Plan Recommendation' },
     open: { text: 'I Know My Plan' },
     timeoutMs: 8000,
   });
+  // First the plan dropdown must have appeared (it takes a moment), then 2 seconds before anything
+  // is filled (request of 24 November 2026); nothing goes on without it.
+  add('Plan', { op: 'waitFor', selector: NOT_MARKED_SUGGESTING_BOX, timeoutMs: 20000 });
+  add('Plan', { op: 'pause', ms: 2000 });
+  // The plan box is the suggesting box that appears once "I Know My Plan" is pressed (under "Select
+  // Plan"): the run waits for it, and never takes the City box for it (both suggest as you type).
+  // When the page was already in this mode (nothing marked), it is the first suggesting box.
   add(
     'Plan',
     {
       op: 'pickOption',
-      selector: SUGGESTING_BOX,
+      selector: NOT_MARKED_SUGGESTING_BOX,
       type: NIVA_HEALTH_PLAN_OPTION[run.plan],
       options: nivaPlanOptions(run, members),
-      timeoutMs: 10000,
+      timeoutMs: 15000,
+      // Niva Bupa loads its plans after the page opens (about 5 seconds in the recording of 24
+      // November 2026), and fills its list only once something is typed: the plan is typed, and
+      // typed again every 1.5 seconds, until the list shows (up to 20 seconds).
+      suggestMs: 20000,
+      // Named, so the City step never takes it.
+      markAs: 'plan',
     },
     { keep: 'plan' },
   );
-  // Choosing the plan draws the members' boxes again (the date box's caption changes).
-  add('Plan', { op: 'pause', ms: 1500 });
+  // Before the client's details, the plan dropdown is checked again: still shown, and showing the
+  // plan picked (not just the name typed); then 2 seconds before anything else is filled (choosing
+  // the plan draws the members' boxes again: the date box's caption changes).
+  add('Plan', { op: 'waitFor', selector: PLAN_BOX, timeoutMs: 10000 });
+  add('Plan', {
+    op: 'waitForValue',
+    selector: PLAN_BOX,
+    rejectValues: [NIVA_HEALTH_PLAN_OPTION[run.plan]],
+    timeoutMs: 5000,
+  });
+  add('Plan', { op: 'pause', ms: 2000 });
   add('Adults', { op: 'stepper', index: 0, count: adults.length, timeoutMs: 15000 });
   add('Children', { op: 'stepper', index: 1, count: children.length, timeoutMs: 5000 });
   // Eldest first: a family floater asks only the eldest member's date of birth (its first box).
@@ -154,9 +215,26 @@ export function planNivaHealthQuote(
   if (city) {
     add(
       'City',
-      { op: 'typeahead', selector: SUGGESTING_BOX, value: city, timeoutMs: 8000, last: true },
+      {
+        op: 'typeahead',
+        // The City box: a typing box there before "I Know My Plan" (the recording's mat-input-11),
+        // whatever its markings, never the plan box (named, and new since). Not found by "the
+        // suggesting box that is not the plan box": the City box may not carry the autocomplete
+        // markings, which left the plan box the only match.
+        selector: CITY_BOX,
+        value: city,
+        timeoutMs: 8000,
+      },
       optional(`city (Niva Bupa does not list "${city}" as written)`),
     );
+    // The plan dropdown must still show the plan picked (the city was not typed into it): a
+    // "Plan" step, so the run stops rather than go on with the plan changed.
+    add('Plan', {
+      op: 'waitForValue',
+      selector: PLAN_BOX,
+      rejectValues: [NIVA_HEALTH_PLAN_OPTION[run.plan], city],
+      timeoutMs: 3000,
+    });
   } else {
     byHand.push('city (the client record has none), then run again');
   }
@@ -189,7 +267,19 @@ export function planNivaHealthQuote(
     });
   }
   answer('Medical practitioner', 'medical practitioner', run.medicalPractitioner);
-  answer('Only for Child Policy', 'Only for Child Policy', false);
+  // Not always asked (the recording of 24 November 2026 shows it for some plans only): left alone
+  // when not shown, and not listed for the advisor.
+  add(
+    'Only for Child Policy',
+    {
+      op: 'ionRadio',
+      group: { question: 'Only for Child Policy' },
+      label: 'NO',
+      match: 'exact',
+      timeoutMs: 3000,
+    },
+    { optional: true },
+  );
   // The calculator's own next step: nothing is saved.
   add('Continue', { op: 'clickButton', text: 'Continue', timeoutMs: 5000 }, { popupAfter: true });
 
@@ -211,48 +301,68 @@ export function planNivaHealthQuote(
     label: `${run.years} Year`,
     timeoutMs: 10000,
   });
-  add(
-    'Key Add-Ons',
-    { op: 'scrollTo', text: 'Key Add-Ons', timeoutMs: 5000 },
-    optional('Key Add-Ons (scroll to it)'),
-  );
-  for (const name of run.addOns) {
+  // Choosing the sum insured and the period makes Niva Bupa work the premium out (the recording of
+  // 24 November 2026 shows it by the period, with nothing more pressed). Add-ons and the Tiered
+  // Network change it only once Calculate Premium is pressed: only then is it pressed.
+  const extras = run.addOns.length > 0 || run.tieredNetwork;
+  if (extras) {
     add(
-      `Add-on "${name}"`,
-      { op: 'addOn', name, timeoutMs: 5000 },
-      optional(`add-on "${name}" (not found on Niva Bupa's list as written)`),
+      'Key Add-Ons',
+      { op: 'scrollTo', text: 'Key Add-Ons', timeoutMs: 5000 },
+      optional('Key Add-Ons (scroll to it)'),
+    );
+    for (const name of run.addOns) {
+      add(
+        `Add-on "${name}"`,
+        { op: 'addOn', name, timeoutMs: 5000 },
+        optional(`add-on "${name}" (not found on Niva Bupa's list as written)`),
+      );
+    }
+    if (run.tieredNetwork) {
+      const tiered = optional('Tiered Network (Show more, then choose the tiered list)');
+      add(
+        'Tiered Network',
+        { op: 'clickInRow', row: 'Tiered Network', text: 'Show more', timeoutMs: 5000 },
+        tiered,
+      );
+      add(
+        'Tiered Network',
+        {
+          op: 'ionRadio',
+          group: { selector: 'app-tier-network ion-radio-group' },
+          label: 'Tiered List',
+          match: 'contains',
+          timeoutMs: 8000,
+        },
+        tiered,
+      );
+      add('Tiered Network', { op: 'pause', ms: 1500 });
+    }
+    // The footer reads Calculate Premium only while Key Add-Ons is scrolled to: scroll there again
+    // (the add-ons and the Tiered Network list may have moved the page).
+    add(
+      'Calculate Premium',
+      { op: 'scrollTo', text: 'Key Add-Ons', timeoutMs: 5000 },
+      optional('Key Add-Ons (scroll to it, so Calculate Premium shows)'),
+    );
+    add(
+      'Calculate Premium',
+      { op: 'clickButton', text: 'Calculate Premium', timeoutMs: 10000 },
+      { popupAfter: true },
     );
   }
-  if (run.tieredNetwork) {
-    const tiered = optional('Tiered Network (Show more, then choose the tiered list)');
-    add(
-      'Tiered Network',
-      { op: 'clickInRow', row: 'Tiered Network', text: 'Show more', timeoutMs: 5000 },
-      tiered,
-    );
-    add(
-      'Tiered Network',
-      {
-        op: 'ionRadio',
-        group: { selector: 'app-tier-network ion-radio-group' },
-        label: 'Tiered List',
-        match: 'contains',
-        timeoutMs: 8000,
-      },
-      tiered,
-    );
-    add('Tiered Network', { op: 'pause', ms: 1500 });
-  }
-  add(
-    'Calculate Premium',
-    { op: 'clickButton', text: 'Calculate Premium', timeoutMs: 10000 },
-    { popupAfter: true },
-  );
-  // Niva Bupa works the premium out again and shows it by the policy period.
+  // Niva Bupa works the premium out (again) and shows it by the policy period.
   add('Premium', { op: 'pause', ms: 3000 });
   add(
     'Premium',
-    { op: 'ionRadioRead', group: { selector: NIVA_PREMIUM_GROUP }, timeoutMs: 20000 },
+    {
+      op: 'ionRadioRead',
+      group: { selector: NIVA_PREMIUM_GROUP },
+      timeoutMs: 20000,
+      // The client's sum insured and period, not Niva Bupa's recommended ones (a handed-over form
+      // is read only once the advisor has chosen them).
+      requires: { select: nivaRupees(run.sumInsured), label: `${run.years} Year` },
+    },
     { keep: 'premium' },
   );
   byHand.push(

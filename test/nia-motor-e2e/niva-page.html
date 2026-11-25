@@ -5,7 +5,9 @@
   the same day:
   - #/landing-page: UNO's home page, its Premium Calculator tile;
   - #/new-premiumcalculator: the "I Know My Plan" toggle (then reading "Plan Recommendation"), the
-    plan box suggesting plans, Adult and Child counters, read-only date boxes with Material
+    plan box under "Select Plan", suggesting plans (shown 1.5 seconds after the toggle, above the
+    City box, which suggests too; the plans load 4.5 seconds later, and the box offers them only
+    when asked again), Adult and Child counters, read-only date boxes with Material
     calendars (one per member for an Individual plan, one "Eldest Member DOB" for a Family
     Floater), the city box, "Phone no. (optional)", three NO/YES Ionic radio questions (a transfer
     shows "Previous Policy End Date"), Continue;
@@ -144,8 +146,15 @@
           </div></ion-toolbar
         >
         <ion-content>
+          <!-- As in the recording of 24 November 2026: the plan box in its own form above the
+               members (shown once "I Know My Plan" is pressed, mat-input-12 there), the City box in
+               the Customer's details form (mat-input-11 there, on the page from the start). The City
+               box is a plain Material text box: it carries no autocomplete markings and does not
+               name its list, and both lists open in the same overlay. -->
           <form onsubmit="return false;">
             <div id="plan-field" class="hidden">
+              <!-- As in older Angular Material: the caption comes after the box in the page's code
+                   (drawn above it), so the run cannot find the box by a caption before it. -->
               <mat-form-field
                 ><input
                   id="mat-input-7"
@@ -153,21 +162,20 @@
                   class="mat-mdc-autocomplete-trigger"
                   aria-autocomplete="list"
                   role="combobox"
-              /></mat-form-field>
+                /><span class="mat-form-field-label-wrapper"
+                  ><label for="mat-input-7">Select Plan</label></span
+                ></mat-form-field
+              >
             </div>
+          </form>
+          <form onsubmit="return false;">
             <h3>Who would you like to insure today?</h3>
             <div id="members"></div>
             <h3>Customer's details</h3>
             <p>City</p>
-            <div>
-              <input
-                id="mat-input-6"
-                type="text"
-                class="mat-mdc-autocomplete-trigger"
-                aria-autocomplete="list"
-                role="combobox"
-              />
-            </div>
+            <mat-form-field>
+              <input id="mat-input-6" type="text" class="mat-input-element" />
+            </mat-form-field>
             <p>Phone no. (optional)</p>
             <ion-input
               ><input
@@ -292,7 +300,19 @@
       $('#mode').addEventListener('click', () => {
         const knowing = $('#mode').textContent === 'I Know My Plan';
         $('#mode').textContent = knowing ? 'Plan Recommendation' : 'I Know My Plan';
-        $('#plan-field').classList.toggle('hidden', !knowing);
+        // As on Niva Bupa: the Select Plan box shows a moment after the toggle (the run must wait
+        // for it, and never take the City box for it).
+        if (knowing) {
+          // ?noplan=1: the dropdown never shows (the run must stop, not go on without it).
+          if (new URLSearchParams(location.search).get('noplan') !== '1') {
+            setTimeout(() => $('#plan-field').classList.remove('hidden'), 1500);
+          }
+          // As on Niva Bupa (recording of 24 November 2026): the plans load about 5 seconds later.
+          // Until then the box suggests nothing, and it does not offer them by itself once loaded.
+          setTimeout(() => {
+            window.__plansLoaded = true;
+          }, 6000);
+        } else $('#plan-field').classList.add('hidden');
       });
 
       // --- counters and date boxes ------------------------------------------------------------
@@ -466,40 +486,55 @@
         'HealthRechargeV2 Family Floater',
       ];
       const CITIES = ['Agra', 'Ahmedabad', 'Ahmednagar', 'Bengaluru', 'Mumbai', 'Pune'];
-      const suggesting = (box, list, chosen) => {
-        const show = () => {
+      const suggesting = (box, list, chosen, typedOnly = false) => {
+        // typedOnly (the plan box): the list is worked out when something is typed, as Angular's
+        // filter on the value's changes does; opening the box shows the last one worked out (empty
+        // until the plans have loaded and something is typed after that).
+        let last = [];
+        const show = (typing) => {
+          if (typedOnly && !typing) return render(last);
+          const typed = box.value.trim().toLowerCase();
+          last = (box.id === 'mat-input-7' && !window.__plansLoaded ? [] : list).filter((c) =>
+            c.toLowerCase().includes(typed),
+          );
+          render(last);
+        };
+        const render = (shown) => {
           const panel = document.createElement('div');
           panel.setAttribute('role', 'listbox');
           panel.id = `panel-${box.id}`;
-          const typed = box.value.trim().toLowerCase();
-          list
-            .filter((c) => c.toLowerCase().includes(typed))
-            .forEach((c, i) => {
-              const o = document.createElement('mat-option');
-              o.setAttribute('role', 'option');
-              o.id = `mat-option-${box.id}-${i}`;
-              o.textContent = c;
-              o.style.display = 'block';
-              o.addEventListener('click', () => {
-                box.value = c;
-                chosen(c);
-                $('#overlay').replaceChildren();
-                box.removeAttribute('aria-controls');
-              });
-              panel.appendChild(o);
+          shown.forEach((c, i) => {
+            const o = document.createElement('mat-option');
+            o.setAttribute('role', 'option');
+            o.id = `mat-option-${box.id}-${i}`;
+            o.textContent = c;
+            o.style.display = 'block';
+            o.addEventListener('click', () => {
+              box.value = c;
+              chosen(c);
+              $('#overlay').replaceChildren();
+              box.removeAttribute('aria-controls');
             });
+            panel.appendChild(o);
+          });
           $('#overlay').replaceChildren(panel);
-          box.setAttribute('aria-controls', panel.id);
+          // The plan box names its list; the City box does not (both open in this one overlay).
+          if (typedOnly) box.setAttribute('aria-controls', panel.id);
         };
-        box.addEventListener('focus', show);
-        box.addEventListener('click', show);
-        box.addEventListener('input', show);
+        box.addEventListener('focus', () => show(false));
+        box.addEventListener('click', () => show(false));
+        box.addEventListener('input', () => show(true));
       };
-      suggesting($('#mat-input-7'), PLANS, (p) => {
-        window.__plan = p;
-        // Choosing the plan draws the members' boxes again.
-        setTimeout(drawRows, 600);
-      });
+      suggesting(
+        $('#mat-input-7'),
+        PLANS,
+        (p) => {
+          window.__plan = p;
+          // Choosing the plan draws the members' boxes again.
+          setTimeout(drawRows, 600);
+        },
+        true,
+      );
       suggesting($('#mat-input-6'), CITIES, (c) => {
         window.__city = c;
       });

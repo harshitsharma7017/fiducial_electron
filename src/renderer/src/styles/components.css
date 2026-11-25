@@ -2017,3 +2017,46 @@ label.check input {
   grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
   gap: var(--space-2);
 }
+
+/* Tabs inside a form (the client form's Basic and Additional details, and the insurers within
+   Additional details): a row of buttons, the current one marked by aria-selected. */
+.form-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.form-tabs button {
+  margin-bottom: -1px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.form-tabs button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.form-tabs button[aria-selected='true'] {
+  color: var(--primary);
+  background: var(--surface);
+  border-color: var(--border) var(--border) var(--surface);
+}
+
+.form-tabs.small button {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.form-tabs button .tab-mark {
+  margin-left: var(--space-1);
+  color: var(--text-3);
+}
