@@ -41,6 +41,8 @@ export const NIVA_CALCULATOR_TILE = 'Premium Calculator';
 export const NIVA_HOME_ROUTE = '#/landing-page';
 /** The calculator's first step, as its address ends. */
 export const NIVA_CALCULATOR_ROUTE = '#/new-premiumcalculator';
+/** Plan Summary, after Customize Your Plan's Continue (recording of 24 November 2026). */
+export const NIVA_SUMMARY_ROUTE = '#/new-premiumcalculator/plan-summary';
 /** The policy period radios, which show the premium. */
 export const NIVA_PREMIUM_GROUP = 'ion-radio-group[formcontrolname="premium"]';
 const SUGGESTING_BOX =
@@ -56,6 +58,10 @@ const BOXES_BEFORE = `${SUGGESTING_BOX}, input[id^="mat-input-"]`;
  */
 const CITY_BOX =
   'input[id^="mat-input-"][data-fqf-before]:not([data-fqf-box="plan"]):not([readonly]):not([placeholder="DD/MM/YYYY"]):not([type="hidden"])';
+/** A box one types into (the plan and City boxes): not a date of birth, not read-only. */
+const TYPING_BOX = [...SUGGESTING_BOX.split(',').map((x) => x.trim()), 'input[id^="mat-input-"]']
+  .map((x) => `${x}:not([readonly]):not([placeholder="DD/MM/YYYY"])`)
+  .join(', ');
 /** The plan box, once the Plan step has named it. */
 const PLAN_BOX = 'input[data-fqf-box="plan"]';
 /** A suggesting box not on the page before "I Know My Plan" (markPresent). */
@@ -161,7 +167,19 @@ export function planNivaHealthQuote(
   });
   // First the plan dropdown must have appeared (it takes a moment), then 2 seconds before anything
   // is filled (request of 24 November 2026); nothing goes on without it.
-  add('Plan', { op: 'waitFor', selector: NOT_MARKED_SUGGESTING_BOX, timeoutMs: 20000 });
+  // The plan box is recognised by its caption ("Select Plan", not "City"), and named: Niva Bupa's
+  // plan and City boxes suggest alike, and which one is drawn first cannot be relied on. Only when
+  // no caption is found does the box that appeared after "I Know My Plan" do.
+  add('Plan', {
+    op: 'nameBox',
+    name: 'plan',
+    selector: TYPING_BOX,
+    near: 'Select Plan',
+    avoid: 'City',
+    fallback: NOT_MARKED_SUGGESTING_BOX,
+    fallbackAfterMs: 5000,
+    timeoutMs: 20000,
+  });
   add('Plan', { op: 'pause', ms: 2000 });
   // The plan box is the suggesting box that appears once "I Know My Plan" is pressed (under "Select
   // Plan"): the run waits for it, and never takes the City box for it (both suggest as you type).
@@ -170,7 +188,7 @@ export function planNivaHealthQuote(
     'Plan',
     {
       op: 'pickOption',
-      selector: NOT_MARKED_SUGGESTING_BOX,
+      selector: PLAN_BOX,
       type: NIVA_HEALTH_PLAN_OPTION[run.plan],
       options: nivaPlanOptions(run, members),
       timeoutMs: 15000,
@@ -213,15 +231,30 @@ export function planNivaHealthQuote(
   );
   const city = client.proposal?.city;
   if (city) {
+    // The City box: by its caption ("City", not "Select Plan"), never the plan box; else a box
+    // there before "I Know My Plan".
+    add(
+      'City',
+      {
+        op: 'nameBox',
+        name: 'city',
+        selector: `${TYPING_BOX.split(',')
+          .map((x) => `${x.trim()}:not([data-fqf-box="plan"])`)
+          .join(', ')}`,
+        near: 'City',
+        avoid: 'Select Plan',
+        fallback: CITY_BOX,
+        fallbackAfterMs: 2000,
+        timeoutMs: 8000,
+      },
+      optional('city (the City box was not found)'),
+    );
     add(
       'City',
       {
         op: 'typeahead',
-        // The City box: a typing box there before "I Know My Plan" (the recording's mat-input-11),
-        // whatever its markings, never the plan box (named, and new since). Not found by "the
-        // suggesting box that is not the plan box": the City box may not carry the autocomplete
-        // markings, which left the plan box the only match.
-        selector: CITY_BOX,
+        // The City box named above (never the plan box).
+        selector: 'input[data-fqf-box="city"]',
         value: city,
         timeoutMs: 8000,
       },
@@ -338,16 +371,12 @@ export function planNivaHealthQuote(
       );
       add('Tiered Network', { op: 'pause', ms: 1500 });
     }
-    // The footer reads Calculate Premium only while Key Add-Ons is scrolled to: scroll there again
-    // (the add-ons and the Tiered Network list may have moved the page).
+    // The footer reads Calculate Premium only once Key Add-Ons is scrolled to, and Niva Bupa's page
+    // scrolls inside its own panel (Ionic's ion-content), not the window: the panel is scrolled
+    // there (then through, a step at a time) until the button shows, and it is pressed.
     add(
       'Calculate Premium',
-      { op: 'scrollTo', text: 'Key Add-Ons', timeoutMs: 5000 },
-      optional('Key Add-Ons (scroll to it, so Calculate Premium shows)'),
-    );
-    add(
-      'Calculate Premium',
-      { op: 'clickButton', text: 'Calculate Premium', timeoutMs: 10000 },
+      { op: 'revealButton', text: 'Calculate Premium', near: 'Key Add-Ons', timeoutMs: 20000 },
       { popupAfter: true },
     );
   }

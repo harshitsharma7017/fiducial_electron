@@ -292,6 +292,32 @@ export type PageOp =
    */
   | { op: 'fieldErrors' }
   /**
+   * Finds a box by what surrounds it and names it (data-fqf-box = `name`), for later steps: the
+   * shown box matching `selector` whose nearest surrounding element reading `near` (a word, any
+   * case) does not also read `avoid`; the closest such box wins. Niva Bupa's plan box ("Select
+   * Plan") and City box suggest alike, and their order on the page cannot be relied on. When no box
+   * is found so after `fallbackAfterMs`, the first shown box matching `fallback` is taken. Waits up
+   * to `timeoutMs`; fails `not-found`.
+   */
+  | {
+      op: 'nameBox';
+      name: string;
+      selector: string;
+      near: string;
+      avoid?: string;
+      fallback?: string;
+      fallbackAfterMs?: number;
+      timeoutMs: number;
+    }
+  /**
+   * Presses a button the page shows only after scrolling (Niva Bupa's footer reads Calculate
+   * Premium once Key Add-Ons is scrolled to): scrolls the page's own scrolling panels (Ionic's
+   * ion-content scrolls inside its shadow root, not the window) to the element reading `near`,
+   * then through each panel from the top, until a button reading `text` (ignoring case and
+   * spacing) shows, and presses it. Fails `not-found` when none shows in time.
+   */
+  | { op: 'revealButton'; text: string; near: string; timeoutMs: number }
+  /**
    * Marks the shown boxes matching `selector` that are on the page now (data-fqf-before), so a later
    * step can take the one that appears afterwards (`:not([data-fqf-before])`): Niva Bupa's plan box,
    * drawn only once "I Know My Plan" is pressed, never its City box, there from the start. Marks
@@ -1392,6 +1418,130 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       const boxes = Array.from(document.querySelectorAll(command.selector)).filter(visible);
       for (const box of boxes) box.setAttribute('data-fqf-before', '');
       return { ok: true, value: String(boxes.length) };
+    }
+    case 'nameBox': {
+      const word = (w: string) =>
+        new RegExp(`(^|[^a-z])${w.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z]|$)`);
+      const near = word(command.near);
+      const avoid = command.avoid ? word(command.avoid) : null;
+      const reads = (el: Element, w: RegExp) => w.test((el.textContent ?? '').toLowerCase());
+      /** How many levels up the nearest element reading `near` is (and not `avoid`), or null. */
+      const distance = (box: Element): number | null => {
+        let n: Element | null = box.parentElement;
+        for (let up = 1; n && n !== document.body && up <= 8; up += 1, n = n.parentElement) {
+          if (reads(n, near)) return avoid && reads(n, avoid) ? null : up;
+        }
+        return null;
+      };
+      const byCaption = (): HTMLElement | null => {
+        const ranked = Array.from(document.querySelectorAll<HTMLElement>(command.selector))
+          .filter((b) => visible(b) && !(b as HTMLInputElement).disabled)
+          .map((b) => ({ b, d: distance(b) }))
+          .filter((x): x is { b: HTMLElement; d: number } => x.d !== null)
+          .sort((x, y) => x.d - y.d);
+        return ranked[0]?.b ?? null;
+      };
+      const started = Date.now();
+      const found = await until(() => {
+        const caption = byCaption();
+        if (caption) return { box: caption, how: 'by-caption' };
+        if (command.fallback && Date.now() - started >= (command.fallbackAfterMs ?? 5000)) {
+          const fb = first(document, command.fallback);
+          if (fb) return { box: fb, how: 'by-order' };
+        }
+        return null;
+      }, command.timeoutMs);
+      if (!found) return { ok: false, detail: 'not-found' };
+      for (const el of Array.from(document.querySelectorAll(`[data-fqf-box="${command.name}"]`))) {
+        if (el !== found.box) el.removeAttribute('data-fqf-box');
+      }
+      found.box.setAttribute('data-fqf-box', command.name);
+      return { ok: true, detail: found.how };
+    }
+    case 'revealButton': {
+      const squash = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const want = squash(command.text);
+      const BUTTONS =
+        'button, ion-button, [role="button"], input[type="button"], input[type="submit"]';
+      const findButton = (): HTMLElement | null =>
+        Array.from(document.querySelectorAll<HTMLElement>(BUTTONS)).find(
+          (b) =>
+            visible(b) &&
+            !(b as HTMLButtonElement).disabled &&
+            squash(text(b) || (b as HTMLInputElement).value || '') === want,
+        ) ?? null;
+      const press = (b: HTMLElement): PageOpResult => {
+        pressEl(b);
+        return { ok: true };
+      };
+      const deadline = Date.now() + Math.min(command.timeoutMs, 60_000);
+      const left = () => Math.max(0, deadline - Date.now());
+      const found = findButton();
+      if (found) return press(found);
+      /** The scrolling panels around an element: Ionic's inner scroll, and scrollable boxes. */
+      const panelsOf = (el: Element): HTMLElement[] => {
+        const out: HTMLElement[] = [];
+        let n: Node | null = el;
+        while (n) {
+          if (n instanceof HTMLElement) {
+            if (n.tagName === 'ION-CONTENT') {
+              const inner = n.shadowRoot?.querySelector<HTMLElement>('.inner-scroll');
+              if (inner) out.push(inner);
+            } else if (
+              n.scrollHeight > n.clientHeight + 1 &&
+              /(auto|scroll)/.test(getComputedStyle(n).overflowY)
+            ) {
+              out.push(n);
+            }
+          }
+          n = n instanceof ShadowRoot ? n.host : n.parentNode;
+        }
+        return out;
+      };
+      const nudge = (panel: HTMLElement) => panel.dispatchEvent(new Event('scroll'));
+      const squashText = (e: Element) => squash(text(e));
+      const anchor =
+        Array.from(document.querySelectorAll<HTMLElement>('*')).find(
+          (e) => e.children.length === 0 && visible(e) && squashText(e) === squash(command.near),
+        ) ?? null;
+      const panels = [
+        ...(anchor ? panelsOf(anchor) : []),
+        ...Array.from(document.querySelectorAll('ion-content'))
+          .filter(visible)
+          .map((c) => c.shadowRoot?.querySelector<HTMLElement>('.inner-scroll'))
+          .filter((p): p is HTMLElement => !!p),
+        ...(document.scrollingElement instanceof HTMLElement ? [document.scrollingElement] : []),
+      ].filter((p, i, all) => all.indexOf(p) === i);
+      // 1. The element reading `near` into view, in each of its panels (a real scroll each).
+      if (anchor) {
+        for (const panel of panelsOf(anchor)) {
+          const by = anchor.getBoundingClientRect().top - panel.getBoundingClientRect().top - 40;
+          panel.scrollTop += by === 0 ? 1 : by;
+          nudge(panel);
+        }
+        anchor.scrollIntoView({ block: 'center' });
+        const shown = await until(findButton, Math.min(1500, left()));
+        if (shown) return press(shown);
+      }
+      // 2. Through each panel from the top, a step at a time.
+      for (const panel of panels) {
+        if (cancelled()) return { ok: false, detail: 'cancelled' };
+        panel.scrollTop = 0;
+        nudge(panel);
+        await sleep(300);
+        for (let guard = 0; guard < 60 && left() > 0; guard += 1) {
+          const shown = findButton();
+          if (shown) return press(shown);
+          if (panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 2) break;
+          panel.scrollTop += Math.max(200, Math.round(panel.clientHeight * 0.6));
+          nudge(panel);
+          await sleep(400);
+        }
+        const shown = findButton();
+        if (shown) return press(shown);
+      }
+      const late = await until(findButton, left());
+      return late ? press(late) : { ok: false, detail: 'not-found' };
     }
     case 'fieldErrors': {
       const said: string[] = [];

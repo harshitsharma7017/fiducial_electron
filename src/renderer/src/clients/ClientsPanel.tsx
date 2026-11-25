@@ -1141,11 +1141,11 @@ function NivaHealthPanel(props: { clientId: string }): React.JSX.Element {
     <div className="quote-panel">
       <p className="insurer-note">
         <strong>Niva Bupa, premium calculator.</strong> Sign in to Niva Bupa and leave it on
-        UNO&rsquo;s home page (or the calculator&rsquo;s first step). For now the app opens the
-        Premium Calculator, presses &ldquo;I Know My Plan&rdquo;, picks the plan, fills the
-        client&rsquo;s Basic Details (members, dates of birth, city, phone, questions) and stops
-        before Continue: you check them, press Continue and choose the sum insured. It saves the
-        quote as a PDF when Niva Bupa shows the premium.
+        UNO&rsquo;s home page (or the calculator&rsquo;s first step). The app opens the Premium
+        Calculator, presses &ldquo;I Know My Plan&rdquo;, picks the plan, fills the client&rsquo;s
+        Basic Details, presses Continue, chooses the sum insured, period and add-ons, reads the
+        premium, then goes on to Plan Summary and fills the customer&rsquo;s name, email and mobile.
+        It never presses Generate Quote.
       </p>
       <label>
         Plan{' '}

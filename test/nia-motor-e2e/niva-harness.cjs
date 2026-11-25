@@ -69,7 +69,8 @@ const READ = `(() => {
     sum: q('#sum').value, period: chosen ? chosen.parentElement.textContent.trim() : null,
     addOns: window.__addOns, tier: window.__tier,
     alertsOpen: document.querySelectorAll('ion-alert, app-tier-network').length,
-    calculated: window.__calculated, summary: window.__summary,
+    calculated: window.__calculated, summary: window.__summary, generated: window.__generated,
+    customer: Array.from(document.querySelectorAll('#summary input')).map((i) => i.value),
   };
 })()`;
 
@@ -124,7 +125,7 @@ const CASES = [
     noToDo: ['Select Plan'],
   },
   {
-    name: 'stage details (as the app runs now): plan, then the Basic Details; stops before Continue',
+    name: 'stage details: plan, then the Basic Details; stops before Continue',
     start: '/uno/#/landing-page',
     client: FAMILY,
     run: RUN,
@@ -153,7 +154,7 @@ const CASES = [
     noToDo: ['Select Plan', 'Members', 'City'],
   },
   {
-    name: 'a tab left in Plan Recommendation by an earlier run (its marks too): set back, pressed afresh',
+    name: 'a calculator left in Plan Recommendation by an earlier run (its marks too): back home, a fresh calculator',
     start: CALCULATOR,
     // An earlier run left the page in "Plan Recommendation", the plan box shown, and its marks on
     // the City box (which would make it look like the only box there before).
@@ -180,7 +181,7 @@ const CASES = [
     expect: { mode: 'Plan Recommendation', plan: '', city: '', calculated: false },
   },
   {
-    name: "family from UNO's home page: ReAssure 2.0 floater, ₹20 lakh, 2 years, add-ons, Tiered Network",
+    name: "as the app runs now, family from UNO's home page: ReAssure 2.0 floater, ₹20 lakh, 2 years, add-ons, Tiered Network, on to Plan Summary",
     start: '/uno/#/landing-page',
     client: FAMILY,
     run: RUN,
@@ -198,13 +199,16 @@ const CASES = [
       city: 'Ahmedabad',
       phone: '9876543210',
       answers: ['NO', 'NO', 'NO'],
-      route: '#/new-premiumcalculator/third-step',
+      route: '#/new-premiumcalculator/plan-summary',
+      customer: ['Synthetic Insured', '', '9876543210'],
       sum: '₹ 2,000,000',
       addOns: ['Safeguard', 'Prolonged treatment assistance cover'],
       tier: true,
       alertsOpen: 0,
       calculated: true,
-      summary: false,
+      // On to Plan Summary, the customer's details filled there; Generate Quote never pressed.
+      summary: true,
+      generated: false,
     },
     toDo: ['check the ReAssure 2.0 options'],
   },
@@ -232,7 +236,9 @@ const CASES = [
       addOns: [],
       tier: false,
       calculated: true,
-      summary: false,
+      // On to Plan Summary, the customer's details filled there; Generate Quote never pressed.
+      summary: true,
+      generated: false,
     },
     toDo: ['add-on "Hospital Cash Plus" (not found'],
   },
@@ -247,9 +253,11 @@ const CASES = [
       plan: 'ReAssure2.0 Individual',
       city: 'Ahmedabad',
       sum: '₹ 1,500,000',
-      route: '#/new-premiumcalculator/third-step',
+      route: '#/new-premiumcalculator/plan-summary',
       calculated: false,
-      summary: false,
+      // On to Plan Summary, the customer's details filled there; Generate Quote never pressed.
+      summary: true,
+      generated: false,
     },
   },
   {
@@ -304,13 +312,20 @@ const CASES = [
     expect: { plan: 'ReAssure2.0 Individual', route: '#/new-premiumcalculator', calculated: false },
   },
   {
-    name: 'on another calculator step: refused before anything is touched',
+    name: "a calculator left on Customize Your Plan (an earlier run's): back home, a fresh calculator, all filled",
     start: '/uno/#/new-premiumcalculator/third-step',
-    client: FAMILY,
-    run: RUN,
-    outcome: 'refused',
-    message: "Go to UNO's home page",
-    expect: { mode: 'I Know My Plan', adultDobs: [''], city: '' },
+    client: SINGLE,
+    run: { ...RUN, sumInsured: 500000, years: 1, addOns: [], tieredNetwork: false },
+    outcome: 'ready',
+    premiumLabel: 'ReAssure2.0 Individual, ₹ 500,000, 1 Year',
+    expect: {
+      plan: 'ReAssure2.0 Individual',
+      planBox: 'ReAssure2.0 Individual',
+      city: 'Ahmedabad',
+      route: '#/new-premiumcalculator/plan-summary',
+      summary: true,
+      generated: false,
+    },
   },
 ];
 

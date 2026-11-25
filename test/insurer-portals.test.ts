@@ -145,6 +145,16 @@ describe('mayNavigate', () => {
     const bajaj = portal('bajaj-allianz');
     expect(mayNavigate(bajaj, 'https://partner.bajajgeneral.com/home', true)).toBe(true);
     expect(mayNavigate(bajaj, 'https://auth.prod.bajajgeneral.com/auth/x', true)).toBe(true);
+    // The same partner site under Bajaj's former name: that address only.
+    expect(mayNavigate(bajaj, 'https://partner.bajajallianz.com/home', true)).toBe(true);
+    expect(mayNavigate(bajaj, 'https://www.bajajallianz.com/', true)).toBe(false);
+    // Bajaj's own domain: its other addresses (single sign-on, products), not look-alikes.
+    expect(mayNavigate(bajaj, 'https://webapi.bajajgeneral.com/sso/x', true)).toBe(true);
+    expect(mayNavigate(bajaj, 'https://motor.bajajgeneral.com/quote', true)).toBe(true);
+    expect(mayNavigate(bajaj, 'https://bajajgeneral.com.evil.example/', true)).toBe(false);
+    expect(mayNavigate(bajaj, 'https://evilbajajgeneral.com/', true)).toBe(false);
+    expect(mayNavigate(bajaj, 'http://webapi.bajajgeneral.com/', true)).toBe(false);
+    expect(mayNavigate(bajaj, 'https://partner.bajajallianz.com.evil.example/', true)).toBe(false);
     expect(mayNavigate(bajaj, 'https://evil.example/', true)).toBe(false);
     expect(mayNavigate(bajaj, 'http://partner.bajajgeneral.com/', true)).toBe(false);
     expect(mayNavigate(bajaj, 'file:///etc/hosts', true)).toBe(false);
@@ -170,8 +180,8 @@ describe('mayNavigate', () => {
     ]) {
       expect(mayNavigate(hdfc, url, true)).toBe(false);
     }
-    // Other insurers keep exact origins only.
-    expect(mayNavigate(portal('bajaj-allianz'), 'https://www.bajajgeneral.com/', true)).toBe(false);
+    // Insurers without a domain of their own listed keep exact origins only.
+    expect(mayNavigate(portal('niva-bupa'), 'https://www.nivabupa.com/', true)).toBe(false);
     // The sign-in form is still filled on 1up.hdfcergo.com only.
     expect(mayFillLogin(hdfc, 'https://ams.hdfcergo.com/')).toBe(false);
   });

@@ -11,6 +11,7 @@ import type { ClientInput } from '../../shared/contracts/client';
 import { NIVA_HEALTH_PLAN_NAMES, type NivaRun } from '../../shared/insurers/niva-health';
 import {
   NIVA_CALCULATOR_ROUTE,
+  NIVA_SUMMARY_ROUTE,
   NIVA_CALCULATOR_TILE,
   NIVA_FIRST_STEP_HEADING,
   NIVA_HOME_ROUTE,
@@ -28,13 +29,14 @@ import { FillProgress, handedOver } from './hand-over';
  * - 'plan': then waits for the plan dropdown and picks the plan, on its own, and stops;
  * - 'details': then fills the client's Basic Details (members, dates of birth, city, phone, the
  *   questions) and stops before Continue, for the advisor to check;
- * - 'all': then fills the rest (members, dates of birth, city, questions, sum insured…) and reads
- *   the premium. Kept, and tested, for when it is turned on.
+ * - 'all': then Continue, the sum insured, period and add-ons, reads the premium, and goes on to
+ *   Plan Summary (Continue), where it fills the customer's name, email and mobile. It never presses
+ *   Generate Quote.
  * Where it stops, it hands the form over with what is left, and saves the PDF when the premium
  * shows.
  */
 export type NivaFillStage = 'i-know-my-plan' | 'plan' | 'details' | 'all';
-export const NIVA_FILL_UNTIL: NivaFillStage = 'details';
+export const NIVA_FILL_UNTIL: NivaFillStage = 'all';
 
 /** What the advisor fills after "I Know My Plan", from the client's details. */
 function nivaByHand(client: ClientInput, run: NivaRun, stage: NivaFillStage): string[] {
@@ -97,7 +99,7 @@ function explain(step: NivaHealthStep, run: NivaRun, detail: string | undefined)
     return `Niva Bupa does not offer ${run.years} year${run.years > 1 ? 's' : ''} here${offered ? ` (it offers: ${offered})` : ''}.`;
   }
   if (label === 'Calculate Premium' && detail === 'not-found') {
-    return "Niva Bupa's Calculate Premium did not show (it shows once Key Add-Ons is scrolled to). Press it yourself.";
+    return "Niva Bupa's Calculate Premium did not show, though the app scrolled its page to Key Add-Ons and through to the end (it shows once Key Add-Ons is scrolled to). Press it yourself.";
   }
   return null;
 }
@@ -138,13 +140,37 @@ export async function runNivaHealthQuote(deps: {
     }
   };
   const pages = deps.windows().filter((w) => !w.isDestroyed());
-  const page =
-    pages.find((w) => routeOf(w) === NIVA_CALCULATOR_ROUTE) ??
-    pages.find((w) => routeOf(w) === NIVA_HOME_ROUTE);
+  const inCalculator = (w: PortalPage) => routeOf(w).startsWith(NIVA_CALCULATOR_ROUTE);
+  const page = pages.find(inCalculator) ?? pages.find((w) => routeOf(w) === NIVA_HOME_ROUTE);
   if (!page) return openFirst;
   const wc = page.webContents;
+  // A calculator already open (an earlier run leaves it filled, in "Plan Recommendation", or on
+  // Customize Your Plan or Plan Summary) is never reused: the run goes back to UNO's home page and
+  // opens a fresh one, so the plan dropdown loads anew (24 November 2026). Nothing is saved by
+  // leaving it.
+  if (inCalculator(page)) {
+    await wc.executeJavaScript(`location.hash = '${NIVA_HOME_ROUTE}'`).catch(() => undefined);
+    const deadline = Date.now() + 10_000;
+    while (routeOf(page) !== NIVA_HOME_ROUTE && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    // Only Basic Details can be filled if the home page did not come.
+    if (routeOf(page) !== NIVA_HOME_ROUTE && routeOf(page) !== NIVA_CALCULATOR_ROUTE) {
+      return openFirst;
+    }
+    // The home page drawn (and loaded, should UNO load the page again).
+    while (wc.isLoading() && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 800));
+  }
   if (routeOf(page) === NIVA_HOME_ROUTE) {
-    const open = await exec(wc, { op: 'clickText', text: NIVA_CALCULATOR_TILE, timeoutMs: 8000 });
+    let open = await exec(wc, { op: 'clickText', text: NIVA_CALCULATOR_TILE, timeoutMs: 8000 });
+    // The page was drawn again under the click: once more, when it has settled.
+    if (!open.ok && open.detail?.startsWith('page-changed')) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      open = await exec(wc, { op: 'clickText', text: NIVA_CALCULATOR_TILE, timeoutMs: 8000 });
+    }
     if (!open.ok) {
       page.focus();
       return {
@@ -177,7 +203,11 @@ export async function runNivaHealthQuote(deps: {
     ...(failed ? ['Fill the rest, press Calculate Premium yourself and check the premium.'] : []),
   ];
   /** The result once Niva Bupa shows the premium (`kept.premium`). */
-  const compose = (got: Record<string, string>): QuoteRunResult => {
+  const compose = (
+    got: Record<string, string>,
+    /** Plan Summary, when the run went on to it: reached, and what is left there. */
+    summary?: { reached: boolean; left: string[] },
+  ): QuoteRunResult => {
     // "1 Year ₹15,073": the policy period and its premium, as Niva Bupa shows them.
     const shown = /^(.*?)\s*(₹\s?[\d,]+(?:\.\d+)?)\s*$/.exec(got.premium ?? '');
     const premium = shown
@@ -190,11 +220,17 @@ export async function runNivaHealthQuote(deps: {
       outcome: 'ready',
       step: null,
       message: premium
-        ? `Niva Bupa worked the premium out: ${premium.amount} for ${premium.label}. The app did not press Continue (the summary asking the customer's details).`
+        ? `Niva Bupa worked the premium out: ${premium.amount} for ${premium.label}. ${
+            summary?.reached
+              ? "The app pressed Continue to Plan Summary and filled the customer's details there; it did not press Generate Quote."
+              : summary
+                ? 'Plan Summary did not open (see below).'
+                : "The app did not press Continue (the summary asking the customer's details)."
+          }`
         : `Niva Bupa: everything is filled, but the premium could not be read. Check it on Niva Bupa's page.`,
       problems: [],
       ...(premium ? { premium } : {}),
-      toDo: toDo(false),
+      toDo: [...toDo(false), ...(summary?.left ?? [])],
     };
   };
   // A box Niva Bupa does not take is left for the advisor, and the run goes on; anything else
@@ -288,6 +324,50 @@ export async function runNivaHealthQuote(deps: {
       return handOver({ label: step.label, why: why ?? unexplained(step.label, result.detail) });
     }
   }
+  // Then on to Plan Summary (request of 24 November 2026): Continue, and the customer's name, email
+  // and mobile there. The premium is read and kept already: nothing here can lose it. Generate
+  // Quote is never pressed.
+  const summary = kept.premium ? await toPlanSummary(page) : undefined;
   page.focus();
-  return compose(kept);
+  return compose(kept, summary);
+
+  async function toPlanSummary(at: PortalPage): Promise<{ reached: boolean; left: string[] }> {
+    // The footer reads Continue at the top of Customize Your Plan (Calculate Premium while Key
+    // Add-Ons is in view): the page's panel is scrolled up there until it does.
+    const pressed = await exec(wc, {
+      op: 'revealButton',
+      text: 'Continue',
+      near: 'Customize Your Plan',
+      timeoutMs: 15000,
+    });
+    if (!pressed.ok) {
+      return { reached: false, left: ['Press Continue on Customize Your Plan (it did not show).'] };
+    }
+    const deadline = Date.now() + 20_000;
+    while (routeOf(at) !== NIVA_SUMMARY_ROUTE && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (routeOf(at) !== NIVA_SUMMARY_ROUTE) {
+      return {
+        reached: false,
+        left: ['Plan Summary did not open after Continue: check the page.'],
+      };
+    }
+    const { customer } = deps.client;
+    const left: string[] = [];
+    const fields: [string, string, string | undefined][] = [
+      ["customer's name", 'input[name="name"]', customer.name],
+      ["customer's email", 'input[name="emailId"]', customer.email],
+      ["customer's mobile", 'input[name="mobileno"]', customer.phone],
+    ];
+    for (const [what, selector, value] of fields) {
+      if (!value) {
+        left.push(`Plan Summary: the ${what} (the client's details have none)`);
+        continue;
+      }
+      const r = await exec(wc, { op: 'setField', selector, value });
+      if (!r.ok) left.push(`Plan Summary: the ${what} (${r.detail ?? 'not filled'})`);
+    }
+    return { reached: true, left };
+  }
 }

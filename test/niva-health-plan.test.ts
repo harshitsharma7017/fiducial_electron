@@ -70,8 +70,15 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
       open: { text: 'I Know My Plan' },
       timeoutMs: 8000,
     });
-    // Then the plan dropdown must have appeared, then 2 seconds before anything is filled.
-    expect(list[3]).toMatchObject({ op: 'waitFor', timeoutMs: 20000 });
+    // Then the plan dropdown must have appeared (recognised by its caption, and named), then 2
+    // seconds before anything is filled.
+    expect(list[3]).toMatchObject({
+      op: 'nameBox',
+      name: 'plan',
+      near: 'Select Plan',
+      avoid: 'City',
+      timeoutMs: 20000,
+    });
     expect(list[4]).toEqual({ op: 'pause', ms: 2000 });
     expect(list[5]).toMatchObject({
       op: 'pickOption',
@@ -82,8 +89,8 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
       // The box is named for the City step.
       markAs: 'plan',
     });
-    expect((list[3] as { selector: string }).selector).toContain(':not([data-fqf-before])');
-    expect((list[5] as { selector: string }).selector).toContain(':not([data-fqf-before])');
+    expect((list[3] as { fallback: string }).fallback).toContain(':not([data-fqf-before])');
+    expect((list[5] as { selector: string }).selector).toBe('input[data-fqf-box="plan"]');
     // Before the details: the plan dropdown again, showing the plan picked, then 2 seconds.
     expect(list.slice(6, 9)).toEqual([
       { op: 'waitFor', selector: 'input[data-fqf-box="plan"]', timeoutMs: 10000 },
@@ -166,14 +173,21 @@ describe('Niva Bupa premium calculator (I Know My Plan)', () => {
     expect(tiered.map((s) => s.op.op)).toEqual(['clickInRow', 'ionRadio', 'pause']);
   });
 
-  it('presses Calculate Premium, reads the premium, and never presses the Continue after it', () => {
+  it("presses Calculate Premium (scrolling Niva Bupa's panel until it shows), reads the premium", () => {
     const r = plan();
     if (!r.ok) throw new Error('refused');
     const clicks = r.steps
       .map((s) => s.op)
       .filter((o): o is Extract<PageOp, { op: 'clickButton' }> => o.op === 'clickButton')
       .map((o) => o.text);
-    expect(clicks).toEqual(['Continue', 'Calculate Premium']);
+    // Basic Details' Continue; Calculate Premium shows only once Key Add-Ons is scrolled to.
+    expect(clicks).toEqual(['Continue']);
+    expect(r.steps.find((s) => s.op.op === 'revealButton')?.op).toEqual({
+      op: 'revealButton',
+      text: 'Calculate Premium',
+      near: 'Key Add-Ons',
+      timeoutMs: 20000,
+    });
     expect(r.steps.at(-1)).toMatchObject({
       op: { op: 'ionRadioRead', group: { selector: 'ion-radio-group[formcontrolname="premium"]' } },
       keep: 'premium',

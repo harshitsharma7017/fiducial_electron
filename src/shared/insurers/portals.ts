@@ -250,7 +250,18 @@ const PORTALS: readonly InsurerPortal[] = [
     displayName: 'Bajaj Allianz',
     startUrl: 'https://partner.bajajgeneral.com/',
     loginOrigin: 'https://auth.prod.bajajgeneral.com',
-    allowedOrigins: ['https://partner.bajajgeneral.com', 'https://auth.prod.bajajgeneral.com'],
+    // partner.bajajallianz.com is the same partner site under Bajaj's former name (24 November
+    // 2026: it serves the same page, signing in on auth.prod.bajajgeneral.com); Bajaj sends the tab
+    // there, and it was blocked. That one address only, not the whole bajajallianz.com domain.
+    allowedOrigins: [
+      'https://partner.bajajgeneral.com',
+      'https://auth.prod.bajajgeneral.com',
+      'https://partner.bajajallianz.com',
+    ],
+    // Its products and services are on Bajaj's other bajajgeneral.com addresses (webapi. for its
+    // single sign-on, product pages handed out by its server and opened in new windows), blocked
+    // until 24 November 2026: Bajaj's own domain, as HDFC ERGO's.
+    allowedDomains: ['bajajgeneral.com'],
     subframeOrigins: [],
     loginMethod: 'password',
     automation: 'autofill',

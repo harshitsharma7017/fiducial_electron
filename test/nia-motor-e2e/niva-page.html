@@ -16,7 +16,7 @@
     Room Category and Deductable dropdowns, Key Add-Ons rows with "+ Add", Tiered Network's "Show
     more" opening a list (app-tier-network). The footer reads Continue, and Calculate Premium once
     Key Add-Ons is scrolled to; Calculate Premium works the premium out again (window.__calculated)
-    and scrolls back up. Continue after it sets window.__summary (never to be pressed by the run).
+    and scrolls back up. Continue after it sets window.__summary and opens Plan Summary (below).
   Ionic's controls are custom elements with shadow roots, as on Niva Bupa's page. Dates show as
   Niva Bupa shows them: month/day/year, no zeros.
 -->
@@ -112,6 +112,9 @@
       .spacer {
         height: 1600px;
       }
+      #footer3 {
+        text-transform: uppercase;
+      }
       .addon {
         display: flex;
         gap: 12px;
@@ -152,28 +155,13 @@
                box is a plain Material text box: it carries no autocomplete markings and does not
                name its list, and both lists open in the same overlay. -->
           <form onsubmit="return false;">
-            <div id="plan-field" class="hidden">
-              <!-- As in older Angular Material: the caption comes after the box in the page's code
-                   (drawn above it), so the run cannot find the box by a caption before it. -->
-              <mat-form-field
-                ><input
-                  id="mat-input-7"
-                  type="text"
-                  class="mat-mdc-autocomplete-trigger"
-                  aria-autocomplete="list"
-                  role="combobox"
-                /><span class="mat-form-field-label-wrapper"
-                  ><label for="mat-input-7">Select Plan</label></span
-                ></mat-form-field
-              >
-            </div>
-          </form>
-          <form onsubmit="return false;">
             <h3>Who would you like to insure today?</h3>
             <div id="members"></div>
             <h3>Customer's details</h3>
             <p>City</p>
-            <mat-form-field>
+            <!-- Drawn a moment after the calculator opens (as UNO may): before the run looks at
+                 the page, so the City box cannot be told apart by being there first. -->
+            <mat-form-field id="city-field" class="hidden">
               <input id="mat-input-6" type="text" class="mat-input-element" />
             </mat-form-field>
             <p>Phone no. (optional)</p>
@@ -207,6 +195,25 @@
             </div>
             <p id="error" class="hidden"></p>
           </form>
+          <!-- The plan box's form comes after the Customer's details form in the page's code
+               (drawn above it), the worse case for telling the boxes apart by their order. -->
+          <form onsubmit="return false;">
+            <div id="plan-field" class="hidden">
+              <!-- As in older Angular Material: the caption comes after the box in the page's code
+                   (drawn above it), so the run cannot find the box by a caption before it. -->
+              <mat-form-field
+                ><input
+                  id="mat-input-7"
+                  type="text"
+                  class="mat-mdc-autocomplete-trigger"
+                  aria-autocomplete="list"
+                  role="combobox"
+                /><span class="mat-form-field-label-wrapper"
+                  ><label for="mat-input-7">Select Plan</label></span
+                ></mat-form-field
+              >
+            </div>
+          </form>
         </ion-content>
         <ion-footer
           ><div>
@@ -218,46 +225,70 @@
       </app-dynamic-calculator>
 
       <app-third-step id="step3" class="hidden">
-        <h3>Customize Your Plan</h3>
-        <div>
+        <!-- As on Niva Bupa (Ionic): the step scrolls inside its ion-content (an inner scroll in
+             its shadow root), not the window; the footer listens to that scroll only, and shows
+             its label in capitals. -->
+        <ion-content id="content3" data-scroll>
+          <h3>Customize Your Plan</h3>
           <div>
             <div>
               <div>
-                <p id="si-caption">RECOMMENDED</p>
-                <ion-select id="sum"></ion-select>
+                <div>
+                  <p id="si-caption">RECOMMENDED</p>
+                  <ion-select id="sum"></ion-select>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div id="tenure">
-          <h3>Select your Policy Period Tenure</h3>
-          <div><ion-radio-group formcontrolname="premium" id="premium"></ion-radio-group></div>
-        </div>
-        <div>
-          <div>
-            <p>Acute Care Option</p>
-            <ion-select id="acute" data-value="None"></ion-select>
+          <div id="tenure">
+            <h3>Select your Policy Period Tenure</h3>
+            <div><ion-radio-group formcontrolname="premium" id="premium"></ion-radio-group></div>
           </div>
           <div>
-            <p>Room Category</p>
-            <ion-select id="room" data-value="No"></ion-select>
+            <div>
+              <p>Acute Care Option</p>
+              <ion-select id="acute" data-value="None"></ion-select>
+            </div>
+            <div>
+              <p>Room Category</p>
+              <ion-select id="room" data-value="No"></ion-select>
+            </div>
+            <div>
+              <p>Deductable</p>
+              <ion-select id="deductible" data-value="0"></ion-select>
+            </div>
           </div>
-          <div>
-            <p>Deductable</p>
-            <ion-select id="deductible" data-value="0"></ion-select>
-          </div>
-        </div>
-        <div class="spacer"></div>
-        <h3 id="addons-heading">Key Add-Ons</h3>
-        <div id="addons"></div>
-        <h3>Terms &amp; Conditions*</h3>
-        <div class="spacer"></div>
+          <div class="spacer"></div>
+          <h3 id="addons-heading">Key Add-Ons</h3>
+          <div id="addons"></div>
+          <h3>Terms &amp; Conditions*</h3>
+          <div class="spacer"></div>
+        </ion-content>
         <ion-footer
           ><div>
             <div><button type="button" id="footer3">Continue</button></div>
           </div></ion-footer
         >
       </app-third-step>
+      <!-- Plan Summary (recording of 24 November 2026): the sum insured and amounts, Add Ons,
+           Customer's Details (ion-inputs named name, emailId, mobileno). Generate Quote sets
+           window.__generated (never to be pressed by the run). -->
+      <app-plan-summary id="summary" class="hidden">
+        <h3>Summary</h3>
+        <div id="summary-amounts"></div>
+        <h3>Add Ons</h3>
+        <h3>Customer's Details</h3>
+        <ion-input
+          ><input id="ion-input-6" name="name" type="text" placeholder="Enter Name"
+        /></ion-input>
+        <ion-input
+          ><input id="ion-input-7" name="emailId" type="text" placeholder="Enter Email ID"
+        /></ion-input>
+        <ion-input
+          ><input id="ion-input-8" name="mobileno" type="text" placeholder="Enter Phone Number"
+        /></ion-input>
+        <button type="button" id="generate">Generate Quote</button>
+      </app-plan-summary>
     </ion-router-outlet>
     <div class="cdk-overlay-container" id="overlay"></div>
     <script>
@@ -281,20 +312,35 @@
       Object.assign(window, {
         __calculated: false,
         __summary: false,
+        __generated: false,
         __plan: '',
         __addOns: [],
         __tier: false,
+      });
+
+      document.querySelector('#generate').addEventListener('click', () => {
+        window.__generated = true;
+      });
+
+      // Back to UNO's home page (the run leaves a calculator it finds open): a fresh page, as UNO
+      // draws its calculator anew when it is opened again.
+      window.addEventListener('hashchange', () => {
+        if (location.hash === '#/landing-page') location.reload();
       });
 
       // --- home page, mode toggle -------------------------------------------------------------
       const onHome = location.hash === '#/landing-page';
       $('#home').classList.toggle('hidden', !onHome);
       $('#step1').classList.toggle('hidden', onHome);
+      const drawCityLater = () =>
+        setTimeout(() => $('#city-field').classList.remove('hidden'), 3500);
+      if (!onHome) drawCityLater();
       $('#calculator-tile').addEventListener('click', () =>
         setTimeout(() => {
           location.hash = '#/new-premiumcalculator';
           $('#home').classList.add('hidden');
           $('#step1').classList.remove('hidden');
+          drawCityLater();
         }, 300),
       );
       $('#mode').addEventListener('click', () => {
@@ -721,11 +767,25 @@
           }, 300),
         );
       });
-      // The footer follows the scroll: Calculate Premium once Key Add-Ons is in view.
+      // Ionic's ion-content: the content scrolls inside its shadow root (data-scroll: a panel of
+      // its own height, as Customize Your Plan's).
+      customElements.define(
+        'ion-content',
+        class extends HTMLElement {
+          constructor() {
+            super();
+            this.attachShadow({ mode: 'open' }).innerHTML =
+              '<style>:host{display:block} :host([data-scroll]) .inner-scroll{height:420px;overflow-y:auto}</style><div class="inner-scroll"><slot></slot></div>';
+          }
+        },
+      );
+      // The footer follows the panel's scroll (not the window's): Calculate Premium once Key
+      // Add-Ons is in view in it.
       const footer = $('#footer3');
-      document.addEventListener('scroll', () => {
+      const panel3 = $('#content3').shadowRoot.querySelector('.inner-scroll');
+      panel3.addEventListener('scroll', () => {
         footer.textContent =
-          $('#addons-heading').getBoundingClientRect().top < innerHeight
+          $('#addons-heading').getBoundingClientRect().top < panel3.getBoundingClientRect().bottom
             ? 'Calculate Premium'
             : 'Continue';
       });
@@ -734,10 +794,18 @@
           setTimeout(() => {
             price();
             window.__calculated = true;
-            scrollTo(0, 0);
+            panel3.scrollTop = 0;
             footer.textContent = 'Continue';
           }, 800);
-        } else window.__summary = true;
+        } else {
+          window.__summary = true;
+          setTimeout(() => {
+            location.hash = '#/new-premiumcalculator/plan-summary';
+            $('#step3').classList.add('hidden');
+            $('#summary').classList.remove('hidden');
+            $('#summary-amounts').textContent = `₹${premium(years).toLocaleString('en-US')}`;
+          }, 500);
+        }
       });
     </script>
   </body>

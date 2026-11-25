@@ -56,6 +56,7 @@ const PRESS_OPS: ReadonlySet<PageOp['op']> = new Set<PageOp['op']>([
   'clickButton',
   'clickSelector',
   'clickText',
+  'revealButton',
 ]);
 /** The insurer's buttons that work the premium out, as the plans press them. */
 const PREMIUM_BUTTON = /calculate premium|check premium|see premium|view premium/i;
@@ -65,7 +66,7 @@ export const isReadOp = (op: PageOp): boolean => READ_OPS.has(op.op);
 
 /** The text of the button a press step presses, if it says. */
 function buttonText(op: PageOp): string | null {
-  if (op.op === 'clickButton' || op.op === 'clickText') return op.text;
+  if (op.op === 'clickButton' || op.op === 'clickText' || op.op === 'revealButton') return op.text;
   if (op.op === 'clickSelector') return op.text ?? op.pattern?.replace(/[\^$\\]/g, '') ?? null;
   return null;
 }
