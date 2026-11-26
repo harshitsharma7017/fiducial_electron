@@ -1026,3 +1026,105 @@ quote service (`src/main/quotes/service.ts`, `resetPortal`) sends the insurer's 
 A form handed over to the advisor stays as it is until they finish it. A quote asked for while
 another runs is refused as busy, and the running one's tab is not touched. The ICICI partner API has
 no tab. The advisor stays signed in; a tab that cannot be sent home is left as it is.
+
+## Comparing insurers for a health client
+
+A health client's quote options start with **Compare insurers** (`src/renderer/src/quote/ComparePanel.tsx`).
+The advisor ticks one insurer or several (United India, Niva Bupa, HDFC ERGO, New India, and ICICI Lombard once its
+API is set up), picks each one's product, and runs them. They all run at the same time: each run has its own scope
+(`runScoped` in `run-uiic-health.ts`: its own cancel, its own last page), and the service allows one run per insurer.
+While several run, the app does not bring their tabs forward; the advisor opens one with its card's **Open tab**.
+
+The screen follows `quotes:progress` (a long poll): a card per insurer shows the step it is on, then its premium, its
+message and its PDF. A form handed over to the advisor shows what is left to fill; the app watches it for the premium
+(`quotes:finish` with the insurer) or takes the premium typed on the card, while the other insurers keep going. Once
+every insurer has finished, `quotes:compare` saves one PDF comparing the premiums (cheapest first), naming each
+insurer's own PDF and those with no premium. Nothing is ever submitted.
+
+**Let me change it before the PDF.** Ticked for an insurer (not ICICI's API), its run carries `adjust`: the app fills
+the form as usual and hands it over even when it read a premium (Niva Bupa stays on Customize Your Plan). It reads
+the form's values by caption then (page op `formValues`; never a password, OTP, captcha, card or Aadhaar box). The
+advisor changes what they need in the insurer's tab and gets the premium there, then presses **Generate PDF** on the
+card (`quotes:finish` with `waitMs: 0`): the premium shown then is the quote, whatever the run read before. The PDF
+names the boxes whose value changed ("Sum Insured: 5 Lakh → 10 Lakh", `form-changes.ts`), and its premium goes into
+the comparison. Such a form is never watched; **Discard** puts it away without a PDF and sends the tab home.
+
+## HDFC ERGO: how PIE is opened (and why it used to be Private Car)
+
+PIE has no sign-in of its own for the app: a tab is signed in to PIE only by opening a product from 1up (PIE's
+`WrapperApi/RedirectToDashboardGet` page, which then sends the tab on to that product's form). The app used to press
+Private Car for every product, as the only 1up tile it knew, then open its own form on PIE. Since 26 November 2026:
+
+- **The product's own tile first.** The recording of 5 November 2026 went from 1up straight to PIE's MST, Optima
+  Restore, Energy and Optima Secure forms by their own tiles (`PIE_TILES` in `run-hdfc.ts`, matched as whole words,
+  since 1up may name a tile "my:Optima Secure"). If the tile is not there, Private Car is pressed on the products
+  shown; if it leads elsewhere, or PIE does not open within 15 seconds, 1up's home page again and Private Car. Travel
+  keeps Private Car: 1up's Travel tile opened HDFC's public travel site in the recording.
+- **A PIE tab stays on PIE.** The reset after (and before) every quote sends a tab on PIE to PIE's dashboard
+  (`siteHomeUrls`), not to 1up, so PIE stays signed in and the next quote opens its form directly.
+- When PIE still does not open, the message lists the tiles 1up showed (short labels without digits, so never a saved
+  quote's customer), to tell the real tile names.
+
+## ICICI Lombard: NYSA's health site (Elevate, International Travel, Student Medical Travel)
+
+Recorded on 26 November 2026 (`icici-lombard-2026-11-26T06-19-41-899Z` and the next three). NYSA's dashboard Health tile
+has ICICI's server hand the tab to `nysa-health.icicilombard.com` (its `/swap` page). **Elevate opens only that way**: the Health tile leads to it through the health dashboard, and its address loaded directly shows ICICI's "Oops! your page could not be found" (so a tab already on the health site is sent back to NYSA's dashboard and its Health tile). For the travel forms the app loads the form's
+address (the health dashboard's tile if that does not show it). Code: `src/shared/insurers/icici-nysa.ts`,
+`src/main/quotes/icici-nysa.ts` (steps), `run-icici-nysa.ts` (runner); local copy and checks:
+`npm run test:nia -- nysa`.
+
+- **Elevate** (health client; Additional details → ICICI Lombard: sum insured on NYSA, term, the applicant's annual
+  income, the pre-existing disease answer): PIN code, NYSA's "Adult n" / "Child n" buttons (two adults, three
+  children at most; a son or daughter under 25 is a child), each member's relationship and date of birth, tenure, sum
+  insured, income band, the pre-existing disease and NRI questions, **Generate Quote**, then the three plans'
+  premiums (Basic, Essential, Recommended; Basic is the quote's premium, all three in the PDF).
+- **International Travel** (travel client; one traveller, Self): subtype Individual, state, round trip, where to,
+  immigrant visa No, the dates, the traveller, the plan by its exact name as ICICI lists it for the destination (`ICICI_INTL_TRAVEL_PLANS`: W plans for USA / Canada, S for Schengen, A and ASIA for Asia, X for Other;
+  "GOLD_W_50", "PLATINUM_W100"…; names alike are other plans, so never by the cover they carry), **Get quote**, then
+  the Total premium. A plan ICICI does not list is left for the advisor, before Get quote.
+- **Student Medical Travel**: state, not yet left India, the departure, the shortest policy duration covering the
+  studies, USA / Canada, the student, the plan (by its name, if the advisor gives one; else they choose it), **Get
+  quote**. Its plan list never filled when recorded: if it stays
+  empty the form is handed over before Get quote, and the app watches for the premium.
+- The advisor allowed pressing Generate Quote and Get quote (the premium shows only after them); Save & Proceed, KYC
+  and payment are never pressed.
+- **Trip Secure** is not automated: its form is not in the page's document (no box, button or frame was seen by the
+  recorder, only its pop-ups), most likely drawn behind a shadow root the app cannot reach.
+- NYSA's controls are Angular Material: page ops `matSelect` (options matched by text, amount, income band, plan
+  number or duration), `toggle` (by its question), `countTo`, `readCards`, and `matDate` by its box.
+- A tab on the health site is reset to its dashboard (`siteHomeUrls`), staying signed in there.
+
+**Trace of every HDFC run** (26 November 2026, to tell why a form opens through Private Car): each HDFC ERGO run
+saves a trace in the app's diagnostics folder (`<userData>/diagnostics/hdfc-ergo-….json`, readable by the user only,
+the latest 20 kept), named in the run's result. It holds each move with its time: where the tabs were at the start,
+whether a tab was already on PIE (1up then not needed), what 1up's home and product list showed (short labels, never one
+with digits), the tile looked for and tapped, whether it led to PIE, why the app fell back to Private Car, PIE's own
+landing, each load of the form and whether it showed; and every address the tabs went through (origin and path only,
+never a query: PIE's redirect carries a token there). No client data.
+
+**ICICI: when the Health tile stops at the health dashboard** (26 November 2026, live: "ICICI's Health tile did not lead
+to Elevate within 45 seconds"). As recorded, the health site goes on to Elevate by itself; if it stays on its dashboard
+for 8 seconds, the app presses the dashboard's Elevate tile, found by its text or its hover label (page op
+`clickTile`; ICICI names its tiles by tooltip, "TripSecure+" on International Travel). No such tile: the run says so,
+listing the tiles it saw. Every ICICI NYSA run saves a trace like HDFC's (`src/main/quotes/run-trace.ts`): where it
+started, NYSA's dashboard, the Health tile pressed, where the health site went, the tile pressed, and every address the
+tab went through.
+
+**HDFC: PIE Dashboard, not Private Car** (26 November 2026; the first HDFC trace,
+`hdfc-ergo-2026-11-26T09-02-59-511Z`). Under Issue Quotes & Policy, 1up now lists quick quotes ("NEW Health", "Private
+Car", "Two-wheeler"), Policy Issuance ("Health", "Motor", …) and **"PIE Dashboard"**, 1up's link to PIE. Its Private Car
+quick quote opens 1up's own quote screen ("What is the Registration Number ?"), not PIE as on 5 November: that is why
+every HDFC quote went through Private Car, and why it then failed. The app now presses PIE Dashboard (PIE's sign-in
+redirect, then its dashboard) and opens the form itself; on older 1up screens without it, the form's own tile, then
+Private Car. Each try is in the run's trace.
+
+**Niva Bupa stops on Customize Your Plan** (26 November 2026): the premium is read on the sum insured page and the run
+ends there. It no longer continues to Plan Summary (asked for on 24 November, withdrawn: "why go to the last page if the
+premium is on the sum insured page"). Generate Quote is never pressed.
+
+**ICICI's dropdowns, one list at a time** (26 November 2026, live Elevate): a relationship ICICI's list did not offer
+left that list open, and the next dropdowns then read its options (the sum insured and income "not offered"). `matSelect`
+now closes every other open list before opening its own (backdrop, Escape on the dropdown), reads only its own list, and
+closes it for sure. A relation is chosen by the names ICICI's lists may give it ("SPOUSE", "WIFE"/"HUSBAND", "EMPLOYEE
+SPOUSE"…). A value not offered is left for the advisor with what the list offers. The ICICI and HDFC traces also record
+each form step's result.

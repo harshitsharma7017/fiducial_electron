@@ -142,6 +142,8 @@ const unusedQuotes = {
   run: () => Promise.reject(new Error('not used')),
   cancel: () => false,
   openPdf: () => Promise.resolve(false),
+  progress: () => Promise.resolve({ version: 0, items: [] }),
+  compare: () => Promise.resolve({ ok: false as const, message: 'not used' }),
   finish: () => Promise.reject(new Error('not used')),
 };
 
@@ -408,7 +410,7 @@ describe('the client service and IPC channels', () => {
   };
   const idOf = (result: unknown) => (result as { data: { id: string } }).data.id;
 
-  it('saves and reads back the quote choices through the app (Bajaj Allianz among them)', async () => {
+  it('saves and reads back the quote choices through the app (Bajaj Allianz and ICICI among them)', async () => {
     const { call } = setup(true);
     const quoteChoices = {
       'bajaj-allianz': {
@@ -417,6 +419,15 @@ describe('the client service and IPC channels', () => {
         monthlyIncome: 60000,
         occupation: '108',
         deathSumInsured: 500000,
+      },
+      // ICICI's, with Elevate on NYSA's (26 November 2026).
+      'icici-lombard': {
+        sumInsured: 1000000,
+        tenure: 2,
+        preExistingDisease: false,
+        paymentOption: 'annual',
+        nysaSumInsured: 1500000,
+        annualIncome: 800000,
       },
     };
     const id = idOf(await call('clients:save', { client: { ...HOLDER, quoteChoices } }));

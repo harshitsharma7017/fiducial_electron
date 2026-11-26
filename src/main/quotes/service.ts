@@ -12,6 +12,7 @@
 // Other
 // insurers and products are refused with a reason. Motor quotes are for a saved vehicle, travel
 // e-proposals for a travel client, the others for a saved client.
+import type { WebContents } from 'electron';
 import type { ClientService } from '../clients/service';
 import type { PortalPage } from '../insurers/portal-host';
 import { AppException } from '../ipc/dispatcher';
@@ -20,6 +21,7 @@ import type { QuoteRunRequest } from '../../shared/ipc/contract';
 import { clientForInsurer } from '../../shared/contracts/client';
 import { findPortal, mayFillLogin } from '../../shared/insurers/portals';
 import { GUESSED_READING, type HandOver } from './hand-over';
+import { formChanges, parseFormValues } from './form-changes';
 import type { PageOp, PageOpResult } from './page-ops';
 import {
   lastWorkedPage,
@@ -28,13 +30,12 @@ import {
   runUiicMotorQuote,
   runUiicOmpProposal,
   runUiicTravelProposal,
-  beginRun,
-  endRun,
   exec,
   followWork,
   QuoteRunStopped,
-  stopRun,
+  runScoped,
   type QuoteRunResult,
+  type ScopedRun,
 } from './run-uiic-health';
 import type { UiicProposalForm } from './uiic-health-proposal';
 import type { QuotePdfs } from './quote-pdf';
@@ -59,6 +60,11 @@ import { runNiaTravelQuote } from './run-nia-travel';
 import { runNivaHealthQuote } from './run-niva-health';
 import { runBajajPaQuote } from './run-bajaj-pa';
 import {
+  runIciciElevateQuote,
+  runIciciIntlTravelQuote,
+  runIciciStudentTravelQuote,
+} from './run-icici-nysa';
+import {
   runHdfcMotorQuote,
   runHdfcMstQuote,
   runHdfcRetailQuote,
@@ -80,17 +86,49 @@ export interface QuoteService {
    * Stops the run in progress where it is, or the wait for a handed-over form's premium; false if
    * there is neither. Presses nothing.
    */
-  cancel(): boolean;
+  cancel(insurerId?: string): boolean;
   /**
    * Finishes the form the last run left for the advisor (request of 20 November 2026): once the
    * advisor has filled the rest and pressed the insurer's premium button, reads the premium from
    * the insurer's page (waiting up to `waitMs`), or takes the `amount` the advisor typed, and
    * saves the quote as a PDF. Presses nothing.
    */
-  finish(request: { waitMs: number; amount?: string }): Promise<QuoteRunResult>;
+  finish(request: { waitMs: number; amount?: string; insurerId?: string }): Promise<QuoteRunResult>;
   /** Opens a quote PDF this app saved (by its name); false for any other. */
   openPdf(name: string): Promise<boolean>;
+  /**
+   * Each insurer's latest quote, as it goes (request of 25 November 2026: several insurers at
+   * once): answers once something changed after `since` (or after 20 seconds anyway).
+   */
+  progress(since: number): Promise<{ version: number; items: QuoteProgress[] }>;
+  /**
+   * One PDF comparing the premiums the given insurers quoted for a health client (their latest
+   * quotes with a premium), beside each insurer's own PDF.
+   */
+  compare(request: { clientId: string; insurerIds: string[] }): Promise<QuoteCompareResult>;
 }
+
+/** One insurer's latest quote, for the screens' progress. */
+export interface QuoteProgress {
+  insurerId: string;
+  product: string;
+  state: 'running' | 'handed-over' | 'ready' | 'refused' | 'failed' | 'cancelled';
+  /** The step it is on (while running), or stopped at. */
+  step: string | null;
+  message: string | null;
+  premium?: { label: string; amount: string };
+  pdf?: { name: string };
+  toDo?: string[];
+  finish?: NonNullable<QuoteRunResult['finish']>;
+  /** Set while the app watches a handed-over form for its premium. */
+  watching?: boolean;
+  /** A form the advisor changes before its PDF: they press Generate PDF (it is not watched). */
+  adjust?: boolean;
+  updatedAt: string;
+}
+
+export type QuoteCompareResult =
+  { ok: true; pdf: { name: string }; insurers: number } | { ok: false; message: string };
 
 /** Who and what a quote is for, in its document. */
 type QuoteFacts = Pick<QuoteDocument, 'details' | 'members'> & { clientName: string | null };
@@ -109,6 +147,12 @@ interface Pending {
   stopWatching: boolean;
   /** The finished result, once one wait or the typed amount finished it. */
   done: QuoteRunResult | null;
+  /**
+   * The advisor changes the form before its PDF ("let me change it first"): the PDF is saved when
+   * they press Generate PDF, naming what they changed (`shown`: the form's values when handed over).
+   */
+  adjust: boolean;
+  shown: [string, string][] | null;
 }
 
 /** A premium reading, short, as a poll: never "only after this step" (fresh). */
@@ -131,6 +175,9 @@ const KIND: Partial<Record<QuoteRunRequest['product'], string>> = {
   'niva-health': 'Health',
   'nia-health': 'Health',
   'hdfc-mst': 'Health',
+  'icici-elevate': 'Health',
+  'icici-intl-travel': 'Travel',
+  'icici-student-travel': 'Travel',
   'hdfc-retail': 'Health',
   'bajaj-pa': 'Personal Accident',
   motor: 'Motor',
@@ -159,6 +206,9 @@ const PRODUCT_TITLE: Partial<Record<QuoteRunRequest['product'], string>> = {
   'icici-motor': 'motor',
   'icici-api-motor': 'motor',
   'hdfc-mst': 'MST',
+  'icici-elevate': 'Elevate',
+  'icici-intl-travel': 'International Travel',
+  'icici-student-travel': 'Student Medical Travel',
   'bajaj-pa': 'personal accident',
   'hdfc-retail': 'health',
   'hdfc-travel': 'travel',
@@ -192,8 +242,49 @@ export function createQuoteService(deps: {
    */
   iciciApi?: () => Promise<{ client: IciciApiClient; imidCode?: string } | null>;
 }): QuoteService {
-  let running = false;
-  let pending: Pending | null = null;
+  /** The runs in progress, by insurer: several insurers' quotes run at once, one per insurer. */
+  const active = new Map<string, ScopedRun<QuoteRunResult>>();
+  /** The forms left for the advisor to finish, by insurer; `latestPending` the last one left. */
+  const pendings = new Map<string, Pending>();
+  let latestPending: string | null = null;
+  /** Each insurer's latest quote, for the screens (progress); `version` counts its changes. */
+  const progressOf = new Map<string, QuoteProgress>();
+  let version = 0;
+  let waiters: (() => void)[] = [];
+  const setProgress = (
+    insurerId: string,
+    change: Partial<QuoteProgress> & Pick<QuoteProgress, 'state'>,
+  ): void => {
+    const before = progressOf.get(insurerId);
+    progressOf.set(insurerId, {
+      insurerId,
+      product: change.product ?? before?.product ?? '',
+      step: null,
+      message: null,
+      // The same state goes on (a run's next step, a handed-over form now watched): what it had.
+      ...(change.state === before?.state ? before : {}),
+      ...change,
+      updatedAt: (deps.now ?? (() => new Date()))().toISOString(),
+    });
+    version += 1;
+    const told = waiters;
+    waiters = [];
+    for (const wake of told) wake();
+  };
+  /** A run's result, as its insurer's progress. */
+  const progressFrom = (insurerId: string, result: QuoteRunResult): void => {
+    setProgress(insurerId, {
+      state: result.outcome,
+      step: result.step,
+      message: result.message,
+      ...(result.premium ? { premium: result.premium } : {}),
+      ...(result.pdf ? { pdf: result.pdf } : {}),
+      ...(result.toDo?.length ? { toDo: result.toDo } : {}),
+      ...(result.finish ? { finish: result.finish } : {}),
+      watching: false,
+      adjust: result.outcome === 'handed-over' && pendings.get(insurerId)?.adjust === true,
+    });
+  };
   /**
    * While a run works, the tab it fills is brought to the front (once per change of tab), so the
    * advisor watches the insurer's form, including a pop-up such as United India's calculator.
@@ -255,6 +346,8 @@ export function createQuoteService(deps: {
     result: QuoteRunResult,
     request: QuoteRunRequest,
     facts: QuoteFacts,
+    /** What the advisor changed on the insurer's form before this premium, if they did. */
+    changed?: { changes: string[] },
   ): Promise<QuoteRunResult> => {
     if (result.outcome !== 'ready' || !result.premium || !deps.pdfs) return result;
     const insurer = findPortal(request.insurerId)?.displayName ?? request.insurerId;
@@ -292,6 +385,13 @@ export function createQuoteService(deps: {
               `${insurer}: persons with a pre-existing medical disease, deformity or disability are not offered cover online and should visit the insurer's nearest office.`,
             ]
           : []),
+        ...(changed
+          ? [
+              changed.changes.length > 0
+                ? `Changed by the advisor on ${insurer}'s page before this premium: ${changed.changes.join('; ')}. The other details are as saved with the client.`
+                : `Checked by the advisor on ${insurer}'s page before this premium (no change to the form was found).`,
+            ]
+          : []),
         'Premiums are as the insurer showed them for the details above; they can change if any detail changes.',
       ],
     };
@@ -319,8 +419,8 @@ export function createQuoteService(deps: {
     facts: QuoteFacts,
   ): Promise<QuoteRunResult> => {
     const { handOver, ...view } = result;
-    pending = null;
     const insurerId = request.insurerId;
+    pendings.delete(insurerId);
     // A form filled (or partly) without a premium: the page the run ended in, read by the usual
     // captions once the advisor has the premium.
     const fallback = (): HandOver | null => {
@@ -344,20 +444,31 @@ export function createQuoteService(deps: {
         }),
       };
     };
+    // "Let me change it first" (Compare insurers): a premium read is not the quote yet; the form
+    // stays for the advisor, and the premium shown when they press Generate PDF is.
+    const adjust = 'adjust' in request && request.adjust === true;
+    const keepForAdvisor = adjust && view.outcome === 'ready' && !!handOver;
     const finishable =
+      keepForAdvisor ||
       view.outcome === 'handed-over' ||
       (!view.premium && (view.outcome === 'ready' || view.outcome === 'failed'));
     if (!finishable) return withPdf(view, request, facts);
     const how = handOver ?? fallback();
-    const finish = view.finish ?? { button: null, guessed: true };
+    const finish = view.finish ?? { button: null, guessed: how ? !how.known : true };
     let baseline: string | null = null;
-    if (how) {
-      const r = how.page.isDestroyed()
-        ? null
-        : await exec(how.page.webContents, pollOp(how.read)).catch(() => null);
-      baseline = r?.ok ? readingKey(r) : null;
+    let shown: [string, string][] | null = null;
+    if (how && !how.page.isDestroyed()) {
+      const wc = how.page.webContents;
+      // Changed or not, the premium shown when the advisor presses Generate PDF is the quote.
+      if (!adjust) {
+        const r = await exec(wc, pollOp(how.read)).catch(() => null);
+        baseline = r?.ok ? readingKey(r) : null;
+      } else {
+        const r = await exec(wc, { op: 'formValues' }).catch(() => null);
+        shown = r?.ok ? parseFormValues(r.value) : null;
+      }
     }
-    pending = {
+    pendings.set(insurerId, {
       insurerId,
       request,
       facts,
@@ -366,14 +477,36 @@ export function createQuoteService(deps: {
       baseline,
       stopWatching: false,
       done: null,
-    };
+      adjust,
+      shown,
+    });
+    latestPending = insurerId;
+    if (keepForAdvisor) {
+      const insurer = findPortal(insurerId)?.displayName ?? insurerId;
+      const now = view.premium ? ` ${insurer} shows ₹${view.premium.amount} for now.` : '';
+      return {
+        ...view,
+        outcome: 'handed-over',
+        message: `The app filled ${insurer}'s form.${now} Change anything you need in ${insurer}'s tab and get the premium there, then press Generate PDF: the premium shown then is the quote.`,
+        finish,
+      };
+    }
     return { ...view, finish };
   };
   /** The premium on the handed-over form, once the insurer shows one it did not show before. */
   const readPremium = async (p: Pending): Promise<PageOpResult | null> => {
     const how = p.handOver;
     if (!how) return null;
-    const op = pollOp(how.read);
+    const polled = pollOp(how.read);
+    // A form the advisor changes: the sum insured and period they chose, not the client's (only
+    // never Niva Bupa's recommended premium, shown before any sum insured is chosen).
+    const op: PageOp =
+      p.adjust && polled.op === 'ionRadioRead' && polled.requires
+        ? {
+            ...polled,
+            requires: polled.requires.chosen ? { chosen: polled.requires.chosen } : {},
+          }
+        : polled;
     const own = how.page.isDestroyed() ? null : how.page;
     // The form's own page first; if it was closed, any of the insurer's pages (a new tab).
     const pages = own ? [own] : deps.windowsOf(p.insurerId).filter((w) => !w.isDestroyed());
@@ -392,14 +525,27 @@ export function createQuoteService(deps: {
    * advisor stays signed in. Resolves once the home page has loaded (or 20 seconds on); a tab that
    * cannot be sent home is left as it is.
    */
-  const resetPortal = async (insurerId: string): Promise<void> => {
-    const home = findPortal(insurerId)?.homeUrl;
-    if (!home) return;
+  const resetPortal = async (
+    insurerId: string,
+    worked: WebContents | null = lastWorkedPage(),
+  ): Promise<void> => {
+    const portal = findPortal(insurerId);
+    if (!portal?.homeUrl) return;
     const pages = deps.windowsOf(insurerId).filter((w) => !w.isDestroyed());
-    const worked = lastWorkedPage();
     const page = pages.find((w) => w.webContents === worked) ?? pages[0];
     if (!page) return;
     const wc = page.webContents;
+    // A tab on one of the insurer's other sites goes to that site's home (HDFC ERGO's PIE).
+    const siteOf = (url: string): string | null => {
+      try {
+        return new URL(url).origin;
+      } catch {
+        return null;
+      }
+    };
+    const on = siteOf(wc.getURL());
+    const home =
+      (portal.siteHomeUrls ?? []).find((u) => on !== null && siteOf(u) === on) ?? portal.homeUrl;
     try {
       // A home address differing only after "#" (Niva Bupa's, ICICI's) does not load the page
       // again: the single-page app keeps its old screens (Ionic keeps a calculator left half-way,
@@ -435,25 +581,28 @@ export function createQuoteService(deps: {
       insurer: p.insurerId,
       quoteOutcome: result.outcome,
     });
-    const saved = await withPdf(result, p.request, p.facts);
+    let changed: { changes: string[] } | undefined;
+    if (p.adjust && result.outcome === 'ready') {
+      const page = p.handOver?.page;
+      const r =
+        page && !page.isDestroyed()
+          ? await exec(page.webContents, { op: 'formValues' }).catch(() => null)
+          : null;
+      const now = r?.ok ? parseFormValues(r.value) : null;
+      changed = { changes: p.shown && now ? formChanges(p.shown, now) : [] };
+    }
+    const saved = await withPdf(result, p.request, p.facts, changed);
     p.done = saved;
-    if (pending === p) pending = null;
+    if (pendings.get(p.insurerId) === p) pendings.delete(p.insurerId);
+    progressFrom(p.insurerId, saved);
     // The handed-over form is finished: the tab goes back to its home page.
-    void resetPortal(p.insurerId);
+    void resetPortal(p.insurerId, p.handOver?.page.webContents ?? null);
     return saved;
   };
   /** ICICI Lombard by its partner API: no portal, no form; a premium or ICICI's reason. */
   const runByIciciApi = async (
     request: Extract<QuoteRunRequest, { product: 'icici-api-motor' | 'icici-api-health' }>,
   ): Promise<QuoteRunResult> => {
-    if (running) {
-      return {
-        outcome: 'refused',
-        step: null,
-        message: 'A quote is already being worked out.',
-        problems: [],
-      };
-    }
     const api = deps.iciciApi ? await deps.iciciApi() : null;
     if (!api) {
       return {
@@ -473,7 +622,6 @@ export function createQuoteService(deps: {
             vehicle: (await deps.clients.getVehicle(request.vehicleId)).saved.vehicle,
           }
         : { kind: 'client' as const, record: await deps.clients.get(request.clientId) };
-    running = true;
     try {
       const result =
         subject.kind === 'vehicle' && request.product === 'icici-api-motor'
@@ -528,13 +676,13 @@ export function createQuoteService(deps: {
         return { outcome: 'failed', step: 'ICICI Lombard API', message: err.message, problems: [] };
       }
       throw err;
-    } finally {
-      running = false;
     }
   };
   const follow = (insurerId: string): void => {
     let shown: unknown = null;
     followWork((wc) => {
+      // Several insurers at once: no tab is brought to the front (they would take turns).
+      if (active.size > 1) return;
       if (wc === shown) return;
       const page = deps.windowsOf(insurerId).find((p) => !p.isDestroyed() && p.webContents === wc);
       if (!page) return;
@@ -543,16 +691,41 @@ export function createQuoteService(deps: {
     });
   };
   return {
-    cancel: () => {
-      if (running) return stopRun();
-      if (!pending || pending.stopWatching) return false;
-      pending.stopWatching = true;
-      // Cancelled: the tab goes back to its home page (the premium can still be typed in).
-      void resetPortal(pending.insurerId);
-      return true;
+    cancel: (insurerId) => {
+      // One insurer's run (or its handed-over form's wait), or, without one, every one.
+      const ids = insurerId ? [insurerId] : [...new Set([...active.keys(), ...pendings.keys()])];
+      let stopped = false;
+      for (const id of ids) {
+        const run = active.get(id);
+        if (run) {
+          stopped = run.stop() || stopped;
+          continue;
+        }
+        const p = pendings.get(id);
+        if (p?.adjust) {
+          // A form the advisor was changing: put away, no PDF (the tab goes back home).
+          pendings.delete(id);
+          setProgress(id, {
+            state: 'cancelled',
+            message: "Discarded: no PDF was saved. The insurer's tab goes back to its home page.",
+            watching: false,
+            adjust: false,
+          });
+          void resetPortal(id, p.handOver?.page.webContents ?? null);
+          stopped = true;
+          continue;
+        }
+        if (!p || p.stopWatching) continue;
+        p.stopWatching = true;
+        setProgress(id, { state: 'handed-over', watching: false });
+        // Cancelled: the tab goes back to its home page (the premium can still be typed in).
+        void resetPortal(id, p.handOver?.page.webContents ?? null);
+        stopped = true;
+      }
+      return stopped;
     },
-    finish: async ({ waitMs, amount }) => {
-      const p = pending;
+    finish: async ({ waitMs, amount, insurerId }) => {
+      const p = pendings.get(insurerId ?? latestPending ?? '');
       if (!p) {
         return {
           outcome: 'refused',
@@ -573,10 +746,11 @@ export function createQuoteService(deps: {
         });
       }
       p.stopWatching = false;
+      setProgress(p.insurerId, { state: 'handed-over', watching: true });
       const until = Date.now() + waitMs;
       for (;;) {
         if (p.done) return p.done;
-        if (pending !== p) {
+        if (pendings.get(p.insurerId) !== p) {
           return {
             outcome: 'cancelled',
             step: null,
@@ -590,36 +764,135 @@ export function createQuoteService(deps: {
         if (p.stopWatching || Date.now() >= until) break;
         await pauseMs(2000);
       }
+      if (pendings.get(p.insurerId) === p) {
+        setProgress(p.insurerId, { state: 'handed-over', watching: false });
+      }
       return {
         outcome: 'handed-over',
         step: null,
-        message: p.stopWatching
-          ? 'Stopped watching for the premium. Type it in to save the PDF, or watch again.'
-          : 'The premium has not shown yet. Finish the form, or type the premium in to save the PDF.',
+        message: p.adjust
+          ? "The app could not read a premium on the insurer's page. Get the premium shown there (on the page the app filled), or type it in to save the PDF."
+          : p.stopWatching
+            ? 'Stopped watching for the premium. Type it in to save the PDF, or watch again.'
+            : 'The premium has not shown yet. Finish the form, or type the premium in to save the PDF.',
         problems: [],
         finish: p.finish,
       };
     },
     openPdf: (name) => deps.pdfs?.open(name) ?? Promise.resolve(false),
     run: async (request) => {
+      const insurerId = request.insurerId;
+      // One quote per insurer at a time (several insurers' quotes run at once, each in its tab).
+      if (active.has(insurerId)) {
+        return {
+          outcome: 'refused',
+          step: null,
+          message: 'A quote is already being filled for this insurer.',
+          problems: [],
+        };
+      }
       const api = request.product === 'icici-api-motor' || request.product === 'icici-api-health';
-      // A quote asked for while another runs is refused as busy: neither reset touches the tab the
-      // running one works in.
-      const resets = !api && deps.enabled && !running;
-      // Every quote starts from the insurer's home page.
-      if (resets) await resetPortal(request.insurerId);
-      const result = await runOnce(request);
-      // Every quote ends back there too, whatever its outcome, unless a form is left for the
-      // advisor to finish (it stays until they do, or stop watching).
-      if (resets && !result.finish) void resetPortal(request.insurerId);
-      return result;
+      const resets = !api && deps.enabled;
+      const run = runScoped(
+        async () => {
+          // Every quote starts from the insurer's home page.
+          if (resets) await resetPortal(insurerId, null);
+          const result = await runOnce(request);
+          // Every quote ends back there too, whatever its outcome, unless a form is left for the
+          // advisor to finish (it stays until they do, or stop watching).
+          if (resets && !result.finish) void resetPortal(insurerId);
+          return result;
+        },
+        (step) => setProgress(insurerId, { state: 'running', step }),
+      );
+      active.set(insurerId, run);
+      setProgress(insurerId, { state: 'running', product: request.product, step: 'Starting' });
+      try {
+        const result = await run.done;
+        progressFrom(insurerId, result);
+        return result;
+      } catch (err) {
+        setProgress(insurerId, {
+          state: 'failed',
+          message: 'The quote could not be run (the request was not valid).',
+        });
+        throw err;
+      } finally {
+        active.delete(insurerId);
+      }
+    },
+    progress: async (since) => {
+      if (version <= since) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 20_000);
+          waiters.push(() => {
+            clearTimeout(timer);
+            resolve();
+          });
+        });
+      }
+      return { version, items: [...progressOf.values()] };
+    },
+    compare: async ({ clientId, insurerIds }) => {
+      const quoted = insurerIds
+        .map((id) => progressOf.get(id))
+        .filter((p): p is QuoteProgress => !!p && p.state === 'ready' && !!p.premium);
+      if (quoted.length === 0) {
+        return { ok: false, message: 'No insurer has a premium yet: nothing to compare.' };
+      }
+      if (!deps.pdfs) return { ok: false, message: 'Quotes are not saved as PDFs here.' };
+      const record = await deps.clients.get(clientId);
+      const issuedAt = (deps.now ?? (() => new Date()))();
+      const facts = healthFacts(record.client, issuedAt);
+      const name = (id: string) => findPortal(id)?.displayName ?? id;
+      const missing = insurerIds.filter((id) => !quoted.some((q) => q.insurerId === id));
+      const doc: QuoteDocument = {
+        title: 'Health insurance quotes compared',
+        insurer: quoted.map((q) => name(q.insurerId)).join(', '),
+        product: 'Comparison',
+        issuedAt,
+        reference: quoteReference(issuedAt),
+        clientName: record.client.customer.name,
+        details: facts.details,
+        ...(facts.members ? { members: facts.members } : {}),
+        // Cheapest first.
+        plans: [...quoted]
+          .sort(
+            (a, b) =>
+              Number(a.premium!.amount.replace(/[^\d.]/g, '')) -
+              Number(b.premium!.amount.replace(/[^\d.]/g, '')),
+          )
+          .map((q) => ({
+            name: `${name(q.insurerId)}: ${q.premium!.label}`,
+            amount: q.premium!.amount,
+          })),
+        amountLabel: 'Premium, as each insurer showed it',
+        notes: [
+          'Each premium as the insurer worked it out on its own page, for the details saved with the client; covers and terms differ between insurers.',
+          ...quoted
+            .filter((q) => q.pdf)
+            .map((q) => `${name(q.insurerId)}'s own quote: ${q.pdf!.name}.`),
+          ...(missing.length > 0
+            ? [`Not compared (no premium yet): ${missing.map(name).join(', ')}.`]
+            : []),
+        ],
+      };
+      try {
+        const file = await deps.pdfs.save(
+          doc,
+          `Health quotes compared - ${record.client.customer.name}`,
+        );
+        return { ok: true, pdf: { name: file }, insurers: quoted.length };
+      } catch {
+        return { ok: false, message: 'The comparison could not be saved as a PDF.' };
+      }
     },
   };
   async function runOnce(request: QuoteRunRequest): Promise<QuoteRunResult> {
     if (!deps.enabled) throw new AppException('UNSUPPORTED_FLOW');
     const { insurerId } = request;
-    // A new run replaces any form left to finish.
-    pending = null;
+    // A new run replaces any form left to finish for this insurer.
+    pendings.delete(insurerId);
     if (request.product === 'icici-api-motor' || request.product === 'icici-api-health') {
       return runByIciciApi(request);
     }
@@ -641,7 +914,10 @@ export function createQuoteService(deps: {
           ? insurerId !== 'niva-bupa'
           : request.product === 'bajaj-pa'
             ? insurerId !== 'bajaj-allianz'
-            : request.product === 'icici-motor'
+            : request.product === 'icici-motor' ||
+                request.product === 'icici-elevate' ||
+                request.product === 'icici-intl-travel' ||
+                request.product === 'icici-student-travel'
               ? insurerId !== 'icici-lombard'
               : newIndiaOnly
                 ? insurerId !== 'new-india'
@@ -651,14 +927,6 @@ export function createQuoteService(deps: {
         outcome: 'refused',
         step: null,
         message: 'Quote automation is not built for this insurer yet.',
-        problems: [],
-      };
-    }
-    if (running) {
-      return {
-        outcome: 'refused',
-        step: null,
-        message: 'A quote is already being filled.',
         problems: [],
       };
     }
@@ -691,8 +959,6 @@ export function createQuoteService(deps: {
                 holder: (await deps.clients.getMarine(request.marineId)).marine,
                 shipment: request.shipment,
               };
-      running = true;
-      beginRun();
       follow(insurerId);
       try {
         const result =
@@ -714,8 +980,6 @@ export function createQuoteService(deps: {
       } catch (err) {
         return whenCancelled(err, insurerId);
       } finally {
-        running = false;
-        endRun();
         followWork(null);
       }
     }
@@ -730,7 +994,9 @@ export function createQuoteService(deps: {
         : request.product === 'travel-proposal' ||
             request.product === 'omp-proposal' ||
             request.product === 'nia-travel' ||
-            request.product === 'hdfc-travel'
+            request.product === 'hdfc-travel' ||
+            request.product === 'icici-intl-travel' ||
+            request.product === 'icici-student-travel'
           ? {
               kind: 'traveller' as const,
               record: await deps.clients.getTraveller(request.travellerId),
@@ -743,8 +1009,6 @@ export function createQuoteService(deps: {
                 record: { ...record, client: clientForInsurer(record.client, insurerId) },
               };
             })();
-    running = true;
-    beginRun();
     follow(insurerId);
     try {
       const today = (deps.now ?? (() => new Date()))();
@@ -753,7 +1017,12 @@ export function createQuoteService(deps: {
       if (subject.kind === 'vehicle') {
         result =
           request.product === 'hdfc-motor'
-            ? await runHdfcMotorQuote({ windows, vehicle: subject.vehicle, run: request.run })
+            ? await runHdfcMotorQuote({
+                windows,
+                vehicle: subject.vehicle,
+                run: request.run,
+                ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
+              })
             : request.product === 'icici-motor'
               ? await runIciciMotorQuote({ windows, vehicle: subject.vehicle, run: request.run })
               : newIndiaMotor
@@ -768,29 +1037,44 @@ export function createQuoteService(deps: {
           today,
         };
         result =
-          request.product === 'hdfc-travel'
-            ? await runHdfcTravelQuote({
+          request.product === 'icici-intl-travel'
+            ? await runIciciIntlTravelQuote({
                 windows,
                 traveller: subject.record.traveller,
                 run: request.run,
-                today,
+                ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
               })
-            : request.product === 'nia-travel'
-              ? await runNiaTravelQuote({
+            : request.product === 'icici-student-travel'
+              ? await runIciciStudentTravelQuote({
                   windows,
                   traveller: subject.record.traveller,
-                  trip: request.trip,
-                  passportNumber: travel.passportNumber,
-                  noPreExisting: request.noPreExistingConfirmed,
-                  today,
+                  run: request.run,
+                  ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
                 })
-              : request.product === 'omp-proposal'
-                ? await runUiicOmpProposal({ ...travel, trip: request.trip })
-                : request.product === 'travel-proposal'
-                  ? await runUiicTravelProposal({ ...travel, trip: request.trip })
-                  : (() => {
-                      throw new AppException('VALIDATION_FAILED');
-                    })();
+              : request.product === 'hdfc-travel'
+                ? await runHdfcTravelQuote({
+                    windows,
+                    traveller: subject.record.traveller,
+                    run: request.run,
+                    today,
+                    ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
+                  })
+                : request.product === 'nia-travel'
+                  ? await runNiaTravelQuote({
+                      windows,
+                      traveller: subject.record.traveller,
+                      trip: request.trip,
+                      passportNumber: travel.passportNumber,
+                      noPreExisting: request.noPreExistingConfirmed,
+                      today,
+                    })
+                  : request.product === 'omp-proposal'
+                    ? await runUiicOmpProposal({ ...travel, trip: request.trip })
+                    : request.product === 'travel-proposal'
+                      ? await runUiicTravelProposal({ ...travel, trip: request.trip })
+                      : (() => {
+                          throw new AppException('VALIDATION_FAILED');
+                        })();
       } else if (request.product === 'nia-pa') {
         result = await runNiaPaQuote({
           windows,
@@ -805,6 +1089,7 @@ export function createQuoteService(deps: {
           client: subject.record.client,
           run: request.run,
           today,
+          ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
         });
       } else if (request.product === 'bajaj-pa') {
         result = await runBajajPaQuote({
@@ -812,11 +1097,19 @@ export function createQuoteService(deps: {
           client: subject.record.client,
           run: request.run,
         });
+      } else if (request.product === 'icici-elevate') {
+        result = await runIciciElevateQuote({
+          windows,
+          client: subject.record.client,
+          run: request.run,
+          ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
+        });
       } else if (request.product === 'hdfc-mst') {
         result = await runHdfcMstQuote({
           windows,
           client: subject.record.client,
           run: request.run,
+          ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
         });
       } else if (request.product === 'niva-health') {
         result = await runNivaHealthQuote({
@@ -824,6 +1117,7 @@ export function createQuoteService(deps: {
           client: subject.record.client,
           run: request.run,
           today,
+          ...(request.adjust ? { adjust: true } : {}),
           ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
         });
       } else if (request.product === 'nia-health') {
@@ -842,7 +1136,9 @@ export function createQuoteService(deps: {
         request.product !== 'travel-proposal' &&
         request.product !== 'omp-proposal' &&
         request.product !== 'nia-travel' &&
-        request.product !== 'hdfc-travel'
+        request.product !== 'hdfc-travel' &&
+        request.product !== 'icici-intl-travel' &&
+        request.product !== 'icici-student-travel'
       ) {
         result = await runUiicHealthProposal({
           windows,
@@ -892,8 +1188,6 @@ export function createQuoteService(deps: {
     } catch (err) {
       return whenCancelled(err, insurerId);
     } finally {
-      running = false;
-      endRun();
       followWork(null);
     }
   }

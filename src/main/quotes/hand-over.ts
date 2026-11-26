@@ -44,6 +44,8 @@ const FILL_OPS: ReadonlySet<PageOp['op']> = new Set<PageOp['op']>([
   'check',
   'pickNth',
   'pickDate',
+  'matSelect',
+  'toggle',
 ]);
 const READ_OPS: ReadonlySet<PageOp['op']> = new Set<PageOp['op']>([
   'readAmount',
@@ -51,6 +53,7 @@ const READ_OPS: ReadonlySet<PageOp['op']> = new Set<PageOp['op']>([
   'readValue',
   'readTable',
   'ionRadioRead',
+  'readCards',
 ]);
 const PRESS_OPS: ReadonlySet<PageOp['op']> = new Set<PageOp['op']>([
   'clickButton',
@@ -76,6 +79,8 @@ function buttonText(op: PageOp): string | null {
  * else the premium reading at the end of the plan. The plan's length when it has neither.
  */
 export function finishStart(steps: readonly PlanStep[]): number {
+  const marked = steps.findIndex((s) => s.finish === true);
+  if (marked >= 0) return marked;
   const press = steps.findIndex(
     (s) => PRESS_OPS.has(s.op.op) && PREMIUM_BUTTON.test(buttonText(s.op) ?? s.label),
   );
@@ -122,10 +127,12 @@ export const GUESSED_READING: PageOp = {
 export function leftItem(step: PlanStep, detail: string | undefined): string {
   const d = detail ?? '';
   const only = /^only-(\d+)$/.exec(d);
+  // What the insurer's list offered instead, when the step says ("option-missing (offered: …)").
+  const offered = /\(offered: (.*)\)$/.exec(d)?.[1];
   const why = only
     ? `the form offers only ${only[1]} choices here`
     : d.startsWith('option-missing')
-      ? "the insurer's list does not offer the saved value"
+      ? `the insurer's list does not offer the saved value${offered ? `; it offers: ${offered}` : ''}`
       : d.startsWith('no-match')
         ? 'no suggestion matches the saved value'
         : d.startsWith('not-found')
@@ -226,4 +233,22 @@ export function handedOver(options: {
     finish: { button, guessed: !known },
     handOver: { page: options.page, read, known, compose: options.compose },
   };
+}
+
+/**
+ * A run that read the premium, with how to read it again on the same page: kept only when the
+ * advisor asked to change the form before its PDF ("let me change it first", the service's
+ * `adjust`); otherwise the service saves the PDF as before.
+ */
+export function readAgain(
+  result: QuoteRunResult,
+  options: {
+    page: PortalPage;
+    progress: FillProgress;
+    compose: (read: PageOpResult) => QuoteRunResult;
+  },
+): QuoteRunResult {
+  if (result.outcome !== 'ready' || result.handOver) return result;
+  const { read, known } = options.progress.reading();
+  return { ...result, handOver: { page: options.page, read, known, compose: options.compose } };
 }

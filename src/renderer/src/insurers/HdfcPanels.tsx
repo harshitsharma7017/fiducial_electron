@@ -65,7 +65,7 @@ function ResultView(props: { result: Result }): React.JSX.Element | null {
 }
 
 const OPENING =
-  "Sign in to HDFC's 1up. From 1up's home page the app opens PIE itself (Issue Quotes & Policy, then Private Car).";
+  "Sign in to HDFC's 1up. From 1up's home page the app opens PIE itself (Issue Quotes & Policy, then PIE Dashboard).";
 
 /**
  * Energy, Optima Secure, Optima Restore for a health client: the product is chosen here, the rest

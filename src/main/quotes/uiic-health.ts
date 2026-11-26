@@ -62,6 +62,12 @@ export interface PlanStep {
   keep?: string;
   /** What the advisor is told if this step stops the run (instead of the general message). */
   ifStuck?: string;
+  /**
+   * The first of the plan's finish steps (the press that works the premium out), when its button
+   * is not one the hand-over knows by name (ICICI's "Generate Quote", "Get quote"): nothing is
+   * pressed from here on while anything is left for the advisor.
+   */
+  finish?: boolean;
 }
 
 /**

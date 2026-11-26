@@ -6,7 +6,7 @@ import type { PortalPage } from '../insurers/portal-host';
 import type { ClientInput } from '../../shared/contracts/client';
 import { BAJAJ_PA_PATH, BAJAJ_PA_PLANS, type BajajPaRun } from '../../shared/insurers/bajaj';
 import { planBajajPaQuote, type BajajStep } from './bajaj-pa';
-import { exec, type QuoteRunResult } from './run-uiic-health';
+import { exec, type QuoteRunResult, reportStep } from './run-uiic-health';
 import { FillProgress, handedOver, leftItem } from './hand-over';
 
 export const BAJAJ_ORIGINS = [
@@ -106,6 +106,7 @@ export async function runBajajPaQuote(deps: {
     });
   };
   for (const [index, step] of plan.steps.entries()) {
+    reportStep(step.label);
     if (progress.stopBefore(index)) return handOver();
     const result = await exec(wc, step.op);
     if (result.ok && step.keep && result.value) kept[step.keep] = result.value;

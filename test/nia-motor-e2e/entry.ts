@@ -13,6 +13,11 @@ import { runNiaRuralQuote } from '../../src/main/quotes/run-nia-rural';
 import { runNiaTravelQuote } from '../../src/main/quotes/run-nia-travel';
 import { runNivaHealthQuote } from '../../src/main/quotes/run-niva-health';
 import { runBajajPaQuote } from '../../src/main/quotes/run-bajaj-pa';
+import {
+  runIciciElevateQuote,
+  runIciciIntlTravelQuote,
+  runIciciStudentTravelQuote,
+} from '../../src/main/quotes/run-icici-nysa';
 import { exec } from '../../src/main/quotes/run-uiic-health';
 import {
   runHdfcMotorQuote,
@@ -36,7 +41,10 @@ export {
   runHdfcMstQuote,
   runHdfcRetailQuote,
   runHdfcTravelQuote,
+  runIciciElevateQuote,
+  runIciciIntlTravelQuote,
   runIciciMotorQuote,
+  runIciciStudentTravelQuote,
   runNiaFireQuote,
   runNiaHealthQuote,
   runNiaMarineQuote,

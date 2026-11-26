@@ -1,0 +1,736 @@
+<!doctype html>
+<!--
+  A local copy of ICICI Lombard's NYSA health site as the recordings of 26 November 2026 show it
+  (icici-lombard-2026-11-26T06-19-41-899Z and the next three), drawn by its address:
+  /health/dashboard (tiles), /swap (ICICI's hand-over page, on to the dashboard), /health/elevate,
+  /travel/international-travel, /travel/student-medical-travel. Angular Material as NYSA uses it:
+  dropdowns (mat-select, options in an overlay; ids repeat, as NYSA's do), toggle buttons, a
+  calendar opened by pressing the date box (in a dialog; days labelled by numbers, "04/11/2008",
+  and months by what they show, "SEPT", as ICICI's), Elevate's "Adult n" / "Child n" buttons (one more per
+  press; "Only 2 Adult are allowed"), plan cards after Generate Quote, the Total premium after Get
+  quote. ?noplans=1: the student plan list never fills (as recorded). Synthetic data only;
+  window.__state() for the harness, window.__pressed: the buttons pressed.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ICICI Lombard - General Insurance</title>
+    <style>
+      body {
+        font: 14px sans-serif;
+        margin: 8px;
+      }
+      .q {
+        margin: 6px 0;
+      }
+      mat-select,
+      mat-button-toggle-group,
+      mat-calendar,
+      mat-month-view,
+      mat-year-view,
+      mat-multi-year-view {
+        display: inline-block;
+      }
+      mat-select {
+        border: 1px solid #888;
+        padding: 3px;
+        min-width: 120px;
+        cursor: pointer;
+      }
+      .mat-button-toggle-checked button {
+        background: #9cf;
+      }
+      #overlay,
+      .cdk-overlay-container {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: #fff;
+      }
+      .cdk-overlay-container mat-option {
+        display: block;
+        padding: 2px 6px;
+        cursor: pointer;
+      }
+      .mat-calendar-body-disabled {
+        color: #bbb;
+      }
+      [role='dialog'].message {
+        position: fixed;
+        top: 40%;
+        left: 30%;
+        background: #fee;
+        padding: 10px;
+        border: 1px solid #c00;
+      }
+      .mat-error {
+        color: #c00;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ICICI Lombard</h1>
+    <main id="app"></main>
+    <div class="cdk-overlay-container"></div>
+    <div id="overlay"></div>
+    <script>
+      const $ = (s, r = document) => r.querySelector(s);
+      const params = new URLSearchParams(location.search);
+      const TODAY = new Date(2026, 10, 26);
+      const MONTHS = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
+      ];
+      window.__pressed = [];
+      const app = $('#app');
+      const el = (html) => {
+        const t = document.createElement('template');
+        t.innerHTML = html.trim();
+        return t.content.firstElementChild;
+      };
+      const button = (text, onClick, cls = '') => {
+        const b = el(`<button type="button" class="${cls}">${text}</button>`);
+        b.addEventListener('click', () => {
+          window.__pressed.push(text);
+          onClick();
+        });
+        return b;
+      };
+      const message = (text) => {
+        const d = el(`<div role="dialog" class="message"><p>${text}</p></div>`);
+        d.appendChild(button('OK', () => d.remove(), 'secondarybtn_2 popupbtn'));
+        document.body.appendChild(d);
+      };
+
+      // --- mat-select: options drawn in the overlay when pressed ---------------------------------
+      const overlay = $('.cdk-overlay-container');
+      let openSelect = null;
+      const closePanel = () => {
+        if (openSelect) {
+          openSelect.setAttribute('aria-expanded', 'false');
+          openSelect.removeAttribute('aria-controls');
+        }
+        overlay.replaceChildren();
+        openSelect = null;
+      };
+      let panels = 0;
+      /** `options`: a list, or a function giving it (a list still loading gives []). */
+      function matSelect(id, placeholder, options, onChange = () => {}) {
+        const s = el(
+          `<mat-select id="${id}" placeholder="${placeholder}" class="mat-mdc-select" role="combobox"><div class="mat-mdc-select-trigger"><span class="mat-mdc-select-value-text">${placeholder}</span></div></mat-select>`,
+        );
+        s.value = null;
+        // As Material: Escape on the dropdown itself closes its list (not on the page).
+        s.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && openSelect === s) closePanel();
+        });
+        $('.mat-mdc-select-trigger', s).addEventListener('click', () => {
+          // A list already open covers the page: its backdrop takes the press.
+          if (openSelect) return;
+          // As Material: a dropdown without options does not open.
+          if ((typeof options === 'function' ? options() : options).length === 0) return;
+          openSelect = s;
+          panels += 1;
+          const panel = el(
+            `<div role="listbox" id="mat-select-${panels}-panel" class="mat-mdc-select-panel"></div>`,
+          );
+          s.setAttribute('aria-expanded', 'true');
+          s.setAttribute('aria-controls', panel.id);
+          const backdrop = el('<div class="cdk-overlay-backdrop"></div>');
+          backdrop.addEventListener('click', closePanel);
+          overlay.appendChild(backdrop);
+          const list = typeof options === 'function' ? options() : options;
+          for (const o of list) {
+            const opt = el(`<mat-option role="option" class="mat-mdc-option">${o}</mat-option>`);
+            opt.addEventListener('click', () => {
+              s.value = o;
+              $('.mat-mdc-select-value-text', s).textContent = o;
+              closePanel();
+              onChange(o);
+            });
+            panel.appendChild(opt);
+          }
+          overlay.appendChild(panel);
+        });
+        return s;
+      }
+      const selected = (s) => (s ? s.value : null);
+
+      // --- toggle buttons, by question ----------------------------------------------------------
+      function toggles(question, texts, { name = 'fontStyle', chosen = null, onChange } = {}) {
+        const q = el(
+          `<div class="q"><p>${question}</p><mat-button-toggle-group></mat-button-toggle-group></div>`,
+        );
+        const group = $('mat-button-toggle-group', q);
+        group.value = chosen;
+        const draw = () => {
+          group.replaceChildren(
+            ...texts.map((t) => {
+              const wrap = el(
+                `<mat-button-toggle class="${group.value === t ? 'mat-button-toggle-checked' : ''}"></mat-button-toggle>`,
+              );
+              const b = el(
+                `<button type="button" name="${name}" class="mat-button-toggle-button" aria-pressed="${group.value === t}">${t}</button>`,
+              );
+              b.addEventListener('click', () => {
+                group.value = t;
+                draw();
+                onChange?.(t);
+              });
+              wrap.appendChild(b);
+              return wrap;
+            }),
+          );
+        };
+        draw();
+        q.group = group;
+        return q;
+      }
+
+      // --- the calendar, opened by pressing a date box ------------------------------------------
+      let cal = null;
+      function dateBox(id, min, onChange = () => {}) {
+        const input = el(`<input id="${id}" readonly placeholder="DD/MM/YYYY" />`);
+        input.addEventListener('click', () => openCalendar(input, min, onChange));
+        return input;
+      }
+      function openCalendar(input, min, onChange) {
+        const state = {
+          view: 'month',
+          y: TODAY.getFullYear(),
+          m: TODAY.getMonth(),
+          input,
+          min,
+          onChange,
+        };
+        // As Material draws it: a dialog holding the calendar (ICICI's labels days by numbers).
+        const wrap = el(
+          '<mat-datepicker-content role="dialog" class="mat-datepicker-content"><mat-calendar></mat-calendar></mat-datepicker-content>',
+        );
+        $('#overlay').replaceChildren(wrap);
+        cal = { state, el: $('mat-calendar', wrap) };
+        draw();
+      }
+      const cell = (label, aria, disabled, onPick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'mat-calendar-body-cell' + (disabled ? ' mat-calendar-body-disabled' : '');
+        b.setAttribute('aria-label', aria);
+        b.innerHTML = `<span class="mat-calendar-body-cell-content">${label}</span>`;
+        if (!disabled) b.addEventListener('click', onPick);
+        return b;
+      };
+      const pad = (n) => String(n).padStart(2, '0');
+      function draw() {
+        const s = cal.state;
+        const head = document.createElement('div');
+        const title =
+          s.view === 'month'
+            ? `${MONTHS[s.m].slice(0, 3).toUpperCase()} ${s.y}`
+            : s.view === 'year'
+              ? String(s.y)
+              : `${s.start} – ${s.start + 23}`;
+        head.innerHTML = `<button type="button" class="mat-calendar-period-button">${title}</button><button type="button" class="mat-calendar-previous-button" aria-label="Previous month"></button><button type="button" class="mat-calendar-next-button" aria-label="Next month"></button>`;
+        const body = document.createElement(
+          s.view === 'month'
+            ? 'mat-month-view'
+            : s.view === 'year'
+              ? 'mat-year-view'
+              : 'mat-multi-year-view',
+        );
+        if (s.view === 'month') {
+          const days = new Date(s.y, s.m + 1, 0).getDate();
+          for (let d = 1; d <= days; d++) {
+            const date = new Date(s.y, s.m, d);
+            body.appendChild(
+              cell(d, `${pad(d)}/${pad(s.m + 1)}/${s.y}`, s.min && date < s.min, () => {
+                s.input.value = `${pad(d)}/${pad(s.m + 1)}/${s.y}`; // NYSA's dd/mm/yyyy
+                $('#overlay').replaceChildren();
+                cal = null;
+                s.onChange(s.input.value);
+              }),
+            );
+          }
+        } else if (s.view === 'year') {
+          MONTHS.forEach((name, m) =>
+            body.appendChild(
+              cell(
+                name === 'September' ? 'SEPT' : name.slice(0, 3).toUpperCase(),
+                `${pad(m + 1)}/${s.y}`,
+                false,
+                () => {
+                  s.m = m;
+                  s.view = 'month';
+                  draw();
+                },
+              ),
+            ),
+          );
+        } else {
+          for (let y = s.start; y < s.start + 24; y++)
+            body.appendChild(
+              cell(y, String(y), false, () => {
+                s.y = y;
+                s.view = 'year';
+                draw();
+              }),
+            );
+        }
+        cal.el.replaceChildren(head, body);
+        $('.mat-calendar-period-button', head).addEventListener('click', () => {
+          if (s.view === 'month') {
+            s.view = 'multi';
+            s.start = s.y - ((s.y - 1) % 24);
+          } else s.view = 'month';
+          draw();
+        });
+        const move = (by) => () => {
+          if (s.view === 'month') {
+            const t = new Date(s.y, s.m + by, 1);
+            s.y = t.getFullYear();
+            s.m = t.getMonth();
+          } else if (s.view === 'year') s.y += by;
+          else s.start += 24 * by;
+          draw();
+        };
+        $('.mat-calendar-previous-button', head).addEventListener('click', move(-1));
+        $('.mat-calendar-next-button', head).addEventListener('click', move(1));
+      }
+      const parse = (v) => {
+        const [d, m, y] = (v || '').split('/').map(Number);
+        return y ? new Date(y, m - 1, d) : null;
+      };
+
+      // --- the pages ------------------------------------------------------------------------------
+      const path = location.pathname;
+      if (path === '/swap') {
+        app.appendChild(el('<h2>Please wait we are processing your request...</h2>'));
+        // NYSA's Health tile: on to Elevate, through the dashboard (as recorded).
+        if (params.get('stay') !== '1') sessionStorage.setItem('fromHealthTile', '1');
+        if (params.get('plus') === 'inside') sessionStorage.setItem('plusInside', '1');
+        if (params.get('spouse') === 'wife') sessionStorage.setItem('spouseWife', '1');
+        setTimeout(() => (location.href = '/health/dashboard'), 500);
+      } else if (path === '/health/dashboard' && sessionStorage.getItem('fromHealthTile')) {
+        sessionStorage.removeItem('fromHealthTile');
+        sessionStorage.setItem('elevateOpened', '1');
+        app.appendChild(el('<h2>Transaction &amp; Services</h2>'));
+        setTimeout(() => (location.href = '/health/elevate'), 700);
+      } else if (path === '/health/elevate' && !sessionStorage.getItem('elevateOpened')) {
+        // Its address loaded directly (ICICI's page, 26 November 2026).
+        app.appendChild(
+          el(
+            "<p>Oops! your page could not be found. But now that you've landed here, take a deep breath and relax.</p>",
+          ),
+        );
+        app.appendChild(button('Refresh', () => location.reload()));
+      } else if (path === '/health/dashboard') {
+        app.appendChild(el('<h2>Transaction &amp; Services</h2>'));
+        // Each tile names its product by its hover label (as ICICI's: "TripSecure+").
+        for (const [text, tooltip, to] of [
+          ['Health Insurance', 'Elevate', '/health/elevate'],
+          ['International Travel', 'TripSecure+', '/travel/international-travel'],
+          ['Student Medical Travel', 'Student', '/travel/student-medical-travel'],
+        ]) {
+          const tile = el(`<div class="productview_box" mattooltip="${tooltip}">${text}</div>`);
+          tile.addEventListener('click', () => {
+            if (to === '/health/elevate') sessionStorage.setItem('elevateOpened', '1');
+            location.href = to;
+          });
+          app.appendChild(tile);
+        }
+      } else if (path === '/health/elevate') {
+        sessionStorage.removeItem('elevateOpened');
+        elevate();
+      } else if (path === '/travel/international-travel') travel(false);
+      else if (path === '/travel/student-medical-travel') travel(true);
+
+      function elevate() {
+        const type = toggles('Policy Type', ['New', 'Portability'], {
+          name: 'productType',
+          chosen: 'New',
+        });
+        const pincode = el('<input id="pincode" formcontrolname="pincode" maxlength="6" />');
+        const city = el('<input formcontrolname="cityState" readonly />');
+        pincode.addEventListener('input', () => {
+          city.value = '';
+          if (/^\d{6}$/.test(pincode.value))
+            setTimeout(() => (city.value = 'AHMEDABAD, GUJARAT'), 400);
+        });
+        const counts = { Adult: 1, Child: 0 };
+        const MAX = { Adult: 2, Child: 3 };
+        const rows = el('<div id="rows"></div>');
+        const kept = { Adult: [], Child: [] };
+        // As recorded, the button itself adds one; with plusInside (?plus=inside), only the "+"
+        // icon inside it does, and its "−" icon removes one (never to be pressed here).
+        const inside = sessionStorage.getItem('plusInside') === '1';
+        const counter = (kind) => {
+          const b = el(
+            inside
+              ? `<button type="button" class="refilingbtn"><img class="minus-icon" alt="remove" src="data:," /><span>${kind} ${counts[kind]}</span><img class="add-icon" alt="add" src="data:," /></button>`
+              : `<button type="button" class="refilingbtn">${kind} ${counts[kind]}</button>`,
+          );
+          const show = () => {
+            if (inside) b.querySelector('span').textContent = `${kind} ${counts[kind]}`;
+            else b.textContent = `${kind} ${counts[kind]}`;
+          };
+          const add = () => {
+            if (counts[kind] >= MAX[kind]) return message(`Only ${MAX[kind]} ${kind} are allowed`);
+            counts[kind] += 1;
+            show();
+            drawRows();
+          };
+          if (inside) {
+            b.querySelector('.add-icon').addEventListener('click', add);
+            b.querySelector('.minus-icon').addEventListener('click', () => {
+              window.__minusPressed = (window.__minusPressed ?? 0) + 1;
+              if (counts[kind] > (kind === 'Adult' ? 1 : 0)) counts[kind] -= 1;
+              show();
+            });
+          } else b.addEventListener('click', add);
+          return b;
+        };
+        function drawRows() {
+          // Each member's row is kept as it was filled; new rows are added.
+          for (const kind of ['Adult', 'Child']) {
+            while (kept[kind].length < counts[kind]) {
+              const id = kind === 'Adult' ? 'adultDetails' : 'childDetails';
+              const row = el(`<div class="member ${kind}"></div>`);
+              row.append(
+                matSelect(
+                  id,
+                  kind === 'Adult' ? 'Select Relationship' : 'Relationship with Applicant of child',
+                  kind === 'Adult'
+                    ? params.get('spouse') === 'wife' ||
+                      sessionStorage.getItem('spouseWife') === '1'
+                      ? ['SELF', 'WIFE', 'HUSBAND', 'FATHER', 'MOTHER', 'EMPLOYEE SON']
+                      : [
+                          'SELF',
+                          'SPOUSE',
+                          'FATHER',
+                          'MOTHER',
+                          'FATHER-IN-LAW',
+                          'MOTHER-IN-LAW',
+                          'SON',
+                          'DAUGHTER',
+                          'EMPLOYEE SON',
+                        ]
+                    : ['SON', 'DAUGHTER', 'DAUGHTER-IN-LAW', 'EMPLOYEE'],
+                ),
+                dateBox(id, null),
+              );
+              kept[kind].push(row);
+            }
+          }
+          rows.replaceChildren(
+            ...kept.Adult.slice(0, counts.Adult),
+            ...kept.Child.slice(0, counts.Child),
+          );
+        }
+        const tenure = toggles('Policy Tenure (In Years)', ['1', '2', '3', '4', '5'], {
+          chosen: '1',
+        });
+        const range = toggles('SI Range', ['7.5L-50L', '1Cr-Unlimited'], { chosen: '7.5L-50L' });
+        const sum = matSelect('applicantAnnualSum', 'Select applicant sum insured', () =>
+          range.group.value === '7.5L-50L'
+            ? ['₹ 7.5 L', '₹ 10 L', '₹ 15 L', '₹ 20 L', '₹ 25 L', '₹ 50 L']
+            : ['₹ 1 Cr', '₹ 2 Cr'],
+        );
+        const income = matSelect('applicantAnnualIncome', 'Select applicant annual income', [
+          '0 - 5,00,000',
+          '5,00,000 - 10,00,000',
+          '10,00,000 - 25,00,000',
+          '25,00,000 & above',
+        ]);
+        const ped = toggles('Do any of the insured have any pre-existing medical condition?', [
+          'Yes',
+          'No',
+        ]);
+        const nri = toggles('Do you want to opt for a NRI discount?', ['Yes', 'No'], {
+          chosen: 'No',
+        });
+        const errors = el('<div id="errors"></div>');
+        const cards = el('<div id="cards"></div>');
+        app.append(
+          type,
+          pincode,
+          city,
+          counter('Adult'),
+          counter('Child'),
+          rows,
+          tenure,
+          range,
+          sum,
+          income,
+          ped,
+          nri,
+          errors,
+        );
+        drawRows();
+        const members = () => [...rows.querySelectorAll('.member')];
+        const lakhOf = (t) => Number(/([\d.]+)/.exec(t || '')?.[1] ?? 0);
+        app.appendChild(
+          button(
+            'Generate Quote',
+            () => {
+              const wrong = [];
+              if (!/^\d{6}$/.test(pincode.value)) wrong.push('PIN Code is required');
+              for (const row of members()) {
+                if (!selected($('mat-select', row))) wrong.push('Relationship is required');
+                if (!$('input', row).value) wrong.push('DOB is required');
+              }
+              if (!selected(sum)) wrong.push('Sum insured is required');
+              if (!selected(income)) wrong.push('Annual income is required');
+              if (!ped.group.value) wrong.push('Pre-existing medical condition is required');
+              errors.replaceChildren(
+                ...wrong.map((w) => el(`<mat-error class="mat-error">${w}</mat-error>`)),
+              );
+              if (wrong.length) return;
+              window.__generated = (window.__generated ?? 0) + 1;
+              setTimeout(() => {
+                const base = Math.round(
+                  lakhOf(selected(sum)) *
+                    900 *
+                    members().length *
+                    (1 + 0.1 * (Number(tenure.group.value) - 1)),
+                );
+                const plans = [
+                  ['Basic', base],
+                  ['Essential', Math.round(base * 1.22)],
+                  ['Recommended', Math.round(base * 1.42)],
+                ];
+                cards.replaceChildren(
+                  ...plans.map(([name, amount]) =>
+                    el(
+                      `<label><input type="radio" name="plan" id="${name}" style="display:none" /><p><strong>₹ ${amount.toLocaleString('en-IN')} /</strong> yearly</p><span>${name}</span> Base + Mandatory</label>`,
+                    ),
+                  ),
+                );
+                app.appendChild(cards);
+                app.appendChild(button('Proceed', () => {}));
+              }, 800);
+            },
+            'mdc-button primary-',
+          ),
+        );
+        window.__state = () => ({
+          type: type.group.value,
+          pincode: pincode.value,
+          city: city.value,
+          adults: counts.Adult,
+          children: counts.Child,
+          relations: members().map((r) => selected($('mat-select', r))),
+          dobs: members().map((r) => $('input', r).value),
+          tenure: tenure.group.value,
+          sum: selected(sum),
+          income: selected(income),
+          ped: ped.group.value,
+          generated: window.__generated ?? 0,
+          minusPressed: window.__minusPressed ?? 0,
+          pressed: window.__pressed,
+        });
+      }
+
+      function travel(student) {
+        const state = matSelect(
+          'state',
+          'Select State',
+          ['GUJARAT', 'MAHARASHTRA', 'RAJASTHAN'],
+          () => loadPlans(),
+        );
+        let subtype = null;
+        let trip = null;
+        const where = el('<table><tbody><tr></tr></tbody></table>');
+        let visa = null;
+        let left = null;
+        let duration = null;
+        let usa = null;
+        if (!student) {
+          subtype = matSelect('productSubtype', 'Select Product Subtype', [
+            'Individual',
+            'Family',
+            'Senior Citizen',
+          ]);
+          subtype.value = 'Individual';
+          $('.mat-mdc-select-value-text', subtype).textContent = 'Individual';
+          trip = toggles('Trip type', ['Round Trip', 'Multi-trip'], {
+            name: 'tripType',
+            chosen: 'Round Trip',
+          });
+          for (const [id, name] of [
+            ['USAorCanada', 'USA / Canada'],
+            ['schengenCountries', 'Schengen'],
+            ['asia', 'Asia'],
+            ['otherCountries', 'Other Countries'],
+          ]) {
+            const td = el(
+              `<td><input type="radio" name="travelLoc" id="${id}" style="display:none" /><label for="${id}">${name}</label></td>`,
+            );
+            $('input', td).addEventListener('change', () => loadPlans());
+            $('tr', where).appendChild(td);
+          }
+          visa = toggles('Are the traveller visiting on an Immigrant Visa? *', ['Yes', 'No']);
+        } else {
+          left = toggles('Has the student already traveled from India ? *', ['Yes', 'No']);
+        }
+        const leaving = dateBox(student ? 'leavingIndiaOn' : 'leavingDate', TODAY, () =>
+          loadPlans(),
+        );
+        const returning = student ? null : dateBox('returningDate', TODAY, () => loadPlans());
+        if (student) {
+          duration = matSelect(
+            'policyDuration',
+            'Select Policy Duration',
+            ['30 days', '60 days', '90 days', '180 days', '1 Year', '2 Years'],
+            () => loadPlans(),
+          );
+          usa = toggles('Visiting USA / Canada during studies ? *', ['Yes', 'No'], {
+            onChange: () => loadPlans(),
+          });
+        }
+        const dob = dateBox('members', null, () => loadPlans());
+        const relation = matSelect(
+          'members',
+          'Select Relationship',
+          ['Self', 'Spouse', 'Father', 'Mother'],
+          () => loadPlans(),
+        );
+        let plans = [];
+        const plan = matSelect('plan', 'Select Plan', () => plans);
+        function loadPlans() {
+          plans = [];
+          if (params.get('noplans') === '1') return;
+          const ready = student
+            ? leaving.value &&
+              selected(duration) &&
+              usa.group.value &&
+              dob.value &&
+              selected(relation)
+            : leaving.value &&
+              returning.value &&
+              dob.value &&
+              selected(relation) &&
+              $('input:checked', where);
+          if (!ready) return;
+          setTimeout(() => {
+            const where = document.querySelector('input[name="travelLoc"]:checked')?.id;
+            plans = student
+              ? ['STUDENT_W_50', 'STUDENT_W100', 'STUDENT_W_250']
+              : where === 'schengenCountries'
+                ? ['PLATINUM_S100', 'PLATINUMS_100', 'GOLD_S_50', 'PLATINUM_S_500', 'GOLD_S50']
+                : where === 'asia'
+                  ? ['GOLD_A_25', 'GOLD_A25', 'ASIA']
+                  : where === 'otherCountries'
+                    ? [
+                        'GOLD_X_500',
+                        'SILVER_X_50',
+                        'Gold_X50',
+                        'PLATINUM_X_100',
+                        'GOLD_X100',
+                        'GOLD_X50',
+                        'PLATINUM_X50',
+                        'GOLD_X250',
+                        'SILVER_X_100',
+                        'PLATINUM_X_500',
+                        'GOLD_X_50',
+                        'GOLD_X_100',
+                        'GOLD_X500',
+                        'PLATINUM_X_50',
+                        'PLATINUM_X100',
+                        'GOLD_X_250',
+                        'PLATINUM_X500',
+                        'PLATINUM_X250',
+                        'PLATINUM_X_250',
+                      ]
+                    : [
+                        'PLATINUM_W_250',
+                        'PLATINUM_W500',
+                        'GOLD1',
+                        'GOLD_W50',
+                        'GOLD_W500',
+                        'PLATINUM_W50',
+                        'SILVER_W_100',
+                        'GOLD_W_50',
+                        'PLATINUM_W_100',
+                        'GOLD_W100',
+                        'PLATINUM_W100',
+                        'SILVER_W_50',
+                        'PLATINUM_W_500',
+                        'PLATINUM_W_50',
+                        'GOLD_W_100',
+                        'GOLD_W250',
+                        'PLATINUM_W250',
+                        'GOLD_W_500',
+                        'GOLD_W_250',
+                      ];
+          }, 800);
+        }
+        const errors = el('<div id="errors"></div>');
+        const fields = student
+          ? [state, left, leaving, duration, usa, dob, relation, plan]
+          : [subtype, state, trip, where, visa, leaving, returning, dob, relation, plan];
+        app.append(el('<h2>Travel Details</h2>'), ...fields, errors);
+        app.appendChild(
+          button(
+            'Get quote',
+            () => {
+              const wrong = [];
+              if (!selected(state)) wrong.push('State is required');
+              if (!leaving.value) wrong.push('Leaving date is required');
+              if (!dob.value) wrong.push('DOB is required');
+              if (!selected(relation)) wrong.push('Relationship is required');
+              if (!selected(plan)) wrong.push('Plan is required');
+              errors.replaceChildren(
+                ...wrong.map((w) => el(`<mat-error class="mat-error">${w}</mat-error>`)),
+              );
+              if (wrong.length) return;
+              window.__quoted = (window.__quoted ?? 0) + 1;
+              setTimeout(() => {
+                const days = student
+                  ? Number(/\d+/.exec(selected(duration))[0]) *
+                    (/year/i.test(selected(duration)) ? 365 : 1)
+                  : Math.round((parse(returning.value) - parse(leaving.value)) / 86400000) + 1;
+                const cover = Number((/(\d+)\D*$/.exec(selected(plan)) ?? [0, 10])[1]);
+                const total = days * cover * (student ? 3 : 5) + 1;
+                app.replaceChildren(
+                  el('<h2>Insured Details</h2>'),
+                  el(
+                    `<div class="bar">1 Traveller No of Days ${days} Total premium₹${total.toLocaleString('en-IN')} Base premium₹${(total - 1).toLocaleString('en-IN')}</div>`,
+                  ),
+                  button('Save & Proceed', () => {}),
+                );
+              }, 800);
+            },
+            'mdc-button primary-',
+          ),
+        );
+        window.__state = () => ({
+          subtype: selected(subtype),
+          state: selected(state),
+          trip: trip?.group.value ?? null,
+          where: $('input:checked', where)?.id ?? null,
+          visa: visa?.group.value ?? null,
+          left: left?.group.value ?? null,
+          leaving: leaving.value,
+          returning: returning?.value ?? null,
+          duration: selected(duration),
+          usa: usa?.group.value ?? null,
+          dob: dob.value,
+          relation: selected(relation),
+          plan: selected(plan),
+          quoted: window.__quoted ?? 0,
+          pressed: window.__pressed,
+        });
+      }
+    </script>
+  </body>
+</html>

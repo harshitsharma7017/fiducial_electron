@@ -170,7 +170,11 @@ export function createClientService(deps: {
       if (aadhaar && !deps.aadhaar) throw new AppException('UNSUPPORTED_FLOW');
       if (id !== null && !guard(() => s.get(id))) throw new AppException('VALIDATION_FAILED');
       const saved = guard(() => s.save(id, input));
-      deps.logger.info('client.saved');
+      deps.logger.info('client.saved', {
+        choiceFields: Object.entries(input.quoteChoices ?? {}).flatMap(([insurer, fields]) =>
+          Object.keys(fields ?? {}).map((field) => `${insurer}.${field}`),
+        ),
+      });
       if (aadhaar) await deps.aadhaar!.set(saved.id, aadhaar);
       else if (aadhaar === null) await deps.aadhaar?.clear(saved.id);
       return saved.id;

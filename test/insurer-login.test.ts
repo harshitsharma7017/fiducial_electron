@@ -76,6 +76,8 @@ const unusedQuotes = {
   run: () => Promise.reject(new Error('not used')),
   cancel: () => false,
   openPdf: () => Promise.resolve(false),
+  progress: () => Promise.resolve({ version: 0, items: [] }),
+  compare: () => Promise.resolve({ ok: false as const, message: 'not used' }),
   finish: () => Promise.reject(new Error('not used')),
 };
 

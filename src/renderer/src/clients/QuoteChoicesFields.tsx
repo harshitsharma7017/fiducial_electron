@@ -18,6 +18,7 @@ import {
 import { ICICI_BOOSTER_DEDUCTIBLES, ICICI_ELEVATE_SUMS } from '../../../shared/insurers/icici-api';
 import { BAJAJ_OCCUPATIONS, type BajajOccupation } from '../../../shared/insurers/bajaj';
 import { rememberedPosp, rememberPosp } from '../insurers/hdfc-posp';
+import { ICICI_NYSA_ELEVATE_SUMS } from '../../../shared/insurers/icici-nysa';
 
 const lakh = (n: number) => `₹${(n / 100000).toLocaleString('en-IN')} lakh`;
 const rupees = (n: number) => `₹${n.toLocaleString('en-IN')}`;
@@ -421,7 +422,7 @@ function Icici(props: {
   return (
     <div className="form-grid">
       <label>
-        Sum insured (Elevate: ₹5, 10 or 25 lakh)
+        Sum insured (partner API; Elevate: ₹5, 10 or 25 lakh)
         <select
           value={c.sumInsured ?? QUOTE_DEFAULTS.iciciSumInsured}
           onChange={(e) => patch({ sumInsured: Number(e.target.value) })}
@@ -472,6 +473,24 @@ function Icici(props: {
           <option value="quarterly">Quarterly</option>
         </select>
       </label>
+      <label>
+        Sum insured on NYSA (Elevate)
+        <select
+          value={c.nysaSumInsured ?? QUOTE_DEFAULTS.iciciNysaSumInsured}
+          onChange={(e) => patch({ nysaSumInsured: Number(e.target.value) })}
+        >
+          {ICICI_NYSA_ELEVATE_SUMS.map((s) => (
+            <option key={s} value={s}>
+              {lakh(s)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <Rupees
+        label="Applicant's annual income (Elevate on NYSA)"
+        value={c.annualIncome}
+        onChange={(annualIncome) => patch({ annualIncome })}
+      />
       <label>
         Any member with a pre-existing disease?
         <select

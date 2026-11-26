@@ -16,6 +16,8 @@ import { RecordPage, type RecordItem } from '../ui/RecordPage';
 import { toast } from '../ui/toast';
 import { IciciApiHealthPanel, useIciciApiReady } from '../quote/IciciApiPanels';
 import { QuoteWorkspace, type QuoteOption } from '../quote/QuoteWorkspace';
+import { ComparePanel } from '../quote/ComparePanel';
+import { IciciElevatePanel } from '../quote/IciciNysaPanels';
 import {
   ageOn,
   CLIENT_DETAIL_INSURER_NAMES,
@@ -415,6 +417,9 @@ export function ClientsPanel(): React.JSX.Element | null {
       >
         {quote && quoteClient && (
           <>
+            {quote.product === 'compare' && (
+              <ComparePanel client={quoteClient} iciciApi={iciciApi} />
+            )}
             {quote.product === 'uiic-health' && <QuotePanel clientId={quote.id} />}
             {quote.product === 'nia-health' && <NiaHealthPanel clientId={quote.id} />}
             {quote.product === 'nia-pa' && <NiaPaPanel clientId={quote.id} />}
@@ -423,6 +428,7 @@ export function ClientsPanel(): React.JSX.Element | null {
             {quote.product === 'bajaj-pa' && <BajajPaPanel clientId={quote.id} />}
             {quote.product === 'hdfc-retail' && <HdfcRetailPanel clientId={quote.id} />}
             {quote.product === 'icici-api-health' && <IciciApiHealthPanel clientId={quote.id} />}
+            {quote.product === 'icici-elevate' && <IciciElevatePanel clientId={quote.id} />}
             {PROPOSAL_FORMS.map(
               (f) =>
                 quote.product === f.product && (
@@ -452,6 +458,13 @@ export function ClientsPanel(): React.JSX.Element | null {
 function healthQuoteOptions(c: ClientSummary, iciciApi: boolean): QuoteOption[] {
   const noMembers = c.memberCount > 0 ? {} : { unavailable: 'Add members to this client first.' };
   return [
+    {
+      key: 'compare',
+      insurer: 'Compare insurers',
+      label: 'Several insurers at once',
+      description: 'Runs them together, one PDF each and a comparison PDF',
+      ...noMembers,
+    },
     {
       key: 'uiic-health',
       insurer: 'United India',
@@ -488,7 +501,14 @@ function healthQuoteOptions(c: ClientSummary, iciciApi: boolean): QuoteOption[] 
       label: 'Health premium',
       description: 'Calculates and reads the premium',
     },
-    // ICICI health is by its Partner API only: listed once the API is set up.
+    {
+      key: 'icici-elevate',
+      insurer: 'ICICI Lombard',
+      label: 'Elevate premium (NYSA)',
+      description: 'Fills NYSA’s health site and reads the plans',
+      ...noMembers,
+    },
+    // ICICI by its Partner API: listed once the API is set up.
     ...(iciciApi
       ? [
           {
@@ -552,9 +572,9 @@ function HdfcMstPanel(props: { clientId: string }): React.JSX.Element {
     <div className="quote-panel">
       <p className="insurer-note">
         <strong>HDFC ERGO, MST (Medisure Super Top-up), PIE.</strong> Sign in to HDFC&rsquo;s 1up.
-        From 1up&rsquo;s home page the app opens PIE itself (Issue Quotes &amp; Policy, then Private
-        Car), then opens the MST form, fills the cover, term and members, and reads the premium PIE
-        works out. It never presses Generate Quote.
+        From 1up&rsquo;s home page the app opens PIE itself (Issue Quotes &amp; Policy, then PIE
+        Dashboard), then opens the MST form, fills the cover, term and members, and reads the
+        premium PIE works out. It never presses Generate Quote.
       </p>
       <SavedChoicesNote
         insurer="hdfc-ergo"

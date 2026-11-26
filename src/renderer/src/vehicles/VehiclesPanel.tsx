@@ -407,10 +407,10 @@ function HdfcMotorSection(props: { vehicle: VehicleSummary }): React.JSX.Element
     <>
       <p className="insurer-note">
         <strong>HDFC ERGO, {HDFC_MOTOR_NAMES[product]} (PIE).</strong> Sign in to HDFC&rsquo;s 1up.
-        From 1up&rsquo;s home page the app opens PIE itself (Issue Quotes &amp; Policy, then Private
-        Car), then opens the {HDFC_MOTOR_NAMES[product]} form, fills it, presses Calculate Premium
-        and reads the premium. It never presses Generate Quote. PIE asks the customer&rsquo;s name,
-        email and mobile before it works the premium out; they are not saved.
+        From 1up&rsquo;s home page the app opens PIE itself (Issue Quotes &amp; Policy, then PIE
+        Dashboard), then opens the {HDFC_MOTOR_NAMES[product]} form, fills it, presses Calculate
+        Premium and reads the premium. It never presses Generate Quote. PIE asks the
+        customer&rsquo;s name, email and mobile before it works the premium out; they are not saved.
       </p>
       <div className="form-grid">
         <label>

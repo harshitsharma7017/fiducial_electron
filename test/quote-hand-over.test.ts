@@ -68,8 +68,9 @@ describe('filling what can be filled', () => {
     expect(
       progress.skip(STEPS[gender]!, gender, { ok: false, detail: 'option-missing (offered: M)' }),
     ).toBe(true);
+    // What the list offered instead is kept for the advisor.
     expect(progress.left).toEqual([
-      "Proposer's gender: fill it in yourself (the insurer's list does not offer the saved value).",
+      "Proposer's gender: fill it in yourself (the insurer's list does not offer the saved value; it offers: M).",
     ]);
   });
 
@@ -113,7 +114,13 @@ describe('finishing a handed-over form', () => {
   ];
   /** United India's home page and calculator; the quotes table shows once `shown.premium`. */
   const portal = () => {
-    const shown = { premium: false, pressed: [] as string[], sentHome: [] as number[] };
+    const shown = {
+      premium: false,
+      pressed: [] as string[],
+      sentHome: [] as number[],
+      // What the form's Sum Insured box shows (the advisor may change it).
+      sumInsured: '5 Lakh',
+    };
     let opened = false;
     const wc = (id: number, url: string) => ({
       id,
@@ -129,6 +136,15 @@ describe('finishing a handed-over form', () => {
         if (code.includes('"op":"clickLink"')) opened = true;
         const press = /"op":"clickButton","text":"([^"]+)"/.exec(code);
         if (press) shown.pressed.push(press[1]!);
+        if (code.includes('"op":"formValues"')) {
+          return Promise.resolve({
+            ok: true,
+            value: JSON.stringify([
+              ['Sum Insured', shown.sumInsured],
+              ['Policy Period', '1 Year'],
+            ]),
+          });
+        }
         if (code.includes('"op":"readPlans"')) {
           return Promise.resolve(
             shown.premium ? { ok: true, plans: PLANS } : { ok: false, detail: 'not-shown' },
@@ -229,6 +245,74 @@ describe('finishing a handed-over form', () => {
       amountLabel: 'Premium (as read by the advisor)',
       plans: [{ name: 'United India premium', amount: '12345' }],
     });
+  }, 20_000);
+
+  it('compares the insurers quoted in one PDF, noting those without a premium', async () => {
+    const { save, service, request } = setup();
+    await service.run(request);
+    expect(await service.compare({ clientId: 'c1', insurerIds: ['united-india'] })).toEqual({
+      ok: false,
+      message: 'No insurer has a premium yet: nothing to compare.',
+    });
+    await service.finish({ waitMs: 0, amount: '12345', insurerId: 'united-india' });
+    const compared = await service.compare({
+      clientId: 'c1',
+      insurerIds: ['united-india', 'hdfc-ergo'],
+    });
+    expect(compared).toMatchObject({ ok: true, insurers: 1, pdf: { name: 'quote.pdf' } });
+    const doc = save.mock.calls.at(-1)![0];
+    expect(doc).toMatchObject({
+      title: 'Health insurance quotes compared',
+      product: 'Comparison',
+      plans: [{ name: 'United India: United India premium', amount: '12345' }],
+    });
+    expect(doc.members).toHaveLength(2);
+    expect(doc.notes.at(-1)).toBe('Not compared (no premium yet): HDFC ERGO.');
+  }, 20_000);
+
+  it('lets the advisor change the form first: Generate PDF takes the premium shown then', async () => {
+    const { shown, save, service, request } = setup();
+    const result = await service.run({ ...request, adjust: true });
+    expect(result.outcome).toBe('handed-over');
+    expect((await service.progress(0)).items[0]).toMatchObject({
+      state: 'handed-over',
+      adjust: true,
+    });
+    // The advisor changes the sum insured and gets the premium on United India's page.
+    shown.sumInsured = '10 Lakh';
+    shown.premium = true;
+    const done = await service.finish({ waitMs: 0, insurerId: 'united-india' });
+    expect(done).toMatchObject({ outcome: 'ready', premium: { amount: '11948' } });
+    expect(save.mock.calls[0]![0].notes).toContain(
+      "Changed by the advisor on United India's page before this premium: Sum Insured: 5 Lakh → 10 Lakh. The other details are as saved with the client.",
+    );
+    expect((await service.progress(0)).items[0]).toMatchObject({ state: 'ready', adjust: false });
+  }, 20_000);
+
+  it('keeps a premium the run read for the advisor to change, and takes it unchanged', async () => {
+    const { shown, save, service, request } = setup();
+    // The premium shows before the advisor touches anything: it is not the quote yet.
+    shown.premium = true;
+    const result = await service.run({ ...request, adjust: true });
+    expect(result.outcome).toBe('handed-over');
+    expect(save).not.toHaveBeenCalled();
+    // Generate PDF with nothing changed: the premium shown is taken (no baseline to differ from).
+    const done = await service.finish({ waitMs: 0, insurerId: 'united-india' });
+    expect(done.outcome).toBe('ready');
+    expect(save.mock.calls[0]![0].notes).toContain(
+      "Checked by the advisor on United India's page before this premium (no change to the form was found).",
+    );
+  }, 20_000);
+
+  it('Discard puts away a form the advisor was changing, without a PDF', async () => {
+    const { save, service, request } = setup();
+    await service.run({ ...request, adjust: true });
+    expect(service.cancel('united-india')).toBe(true);
+    expect(save).not.toHaveBeenCalled();
+    expect((await service.progress(0)).items[0]).toMatchObject({ state: 'cancelled' });
+    expect((await service.finish({ waitMs: 0, insurerId: 'united-india' })).outcome).toBe(
+      'refused',
+    );
   }, 20_000);
 
   it('stops watching when asked, and the premium can still be typed', async () => {

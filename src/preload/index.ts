@@ -13,6 +13,7 @@ import type {
   ImportPreview,
   PortalTabsView,
   InsurerPortalList,
+  QuoteProgressView,
   QuoteRunResultView,
   TravellerView,
 } from '../shared/ipc/contract';
@@ -64,8 +65,8 @@ const api: FqfApi = {
   quotes: {
     run: (request) =>
       ipcRenderer.invoke(IPC_CHANNELS.quotesRun, request) as Promise<AppResult<QuoteRunResultView>>,
-    cancel: () =>
-      ipcRenderer.invoke(IPC_CHANNELS.quotesCancel, {}) as Promise<
+    cancel: (insurerId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.quotesCancel, insurerId ? { insurerId } : {}) as Promise<
         AppResult<{ cancelled: boolean }>
       >,
     finish: (request) =>
@@ -75,6 +76,16 @@ const api: FqfApi = {
     openPdf: (name) =>
       ipcRenderer.invoke(IPC_CHANNELS.quotesOpenPdf, { name }) as Promise<
         AppResult<{ opened: boolean }>
+      >,
+    progress: (since) =>
+      ipcRenderer.invoke(IPC_CHANNELS.quotesProgress, { since }) as Promise<
+        AppResult<{ version: number; items: QuoteProgressView[] }>
+      >,
+    compare: (request) =>
+      ipcRenderer.invoke(IPC_CHANNELS.quotesCompare, request) as Promise<
+        AppResult<
+          { ok: true; pdf: { name: string }; insurers: number } | { ok: false; message: string }
+        >
       >,
   },
   clients: {

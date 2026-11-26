@@ -29,7 +29,7 @@ for (const event of ['unhandledRejection', 'uncaughtException']) {
 setTimeout(() => {
   console.log('FAIL  harness timed out');
   app.exit(1);
-}, 360_000).unref();
+}, 600_000).unref();
 const hanging = new Set();
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -203,7 +203,7 @@ const CASES = [
     },
   },
   {
-    name: "on 1up's home page: Issue Quotes & Policy, Private Car, PIE, then the form and premium",
+    name: "on 1up's home page: Issue Quotes & Policy, PIE Dashboard, PIE, then the car form and premium",
     start: '/dashBoardScreen',
     on1up: true,
     kind: 'motor',
@@ -214,8 +214,24 @@ const CASES = [
     read: READ_MOTOR,
     // Tapped by their labels (not the saved quote also reading Private Car), never on the canvas.
     redirect:
-      'tapped=Issue%20Quotes%20%26%20Policy%0ANew%20business%20and%20renewals%7CPrivate%20Car&canvasTaps=0',
+      'tapped=Issue%20Quotes%20%26%20Policy%0ANew%20business%20and%20renewals%7CPIE%20Dashboard&canvasTaps=0',
     expect: { path: '/PrivateCar/CreateQuote', make: 'MARUTI', calculated: 1, saved: false },
+  },
+  {
+    name: "1up without PIE Dashboard: its Private Car quick quote opens 1up's own screen, not PIE; refused, saying what 1up shows",
+    start: '/dashBoardScreen?nodash=1',
+    on1up: true,
+    kind: 'mst',
+    client: FAMILY,
+    run: { cover: 'family-floater', years: 2 },
+    outcome: 'refused',
+    message: '1up\'s "Private Car" did not lead to PIE within 20 seconds.',
+    trace: [
+      'tap PIE Dashboard',
+      'tap Medisure Super Top Up',
+      'tap Private Car',
+      'Private Car did not lead to PIE in time',
+    ],
   },
   {
     name: '1up covered by a message: Issue Quotes & Policy not found, told to open PIE by hand',
@@ -258,7 +274,19 @@ const CASES = [
     },
   },
   {
-    name: 'MST from 1up: PIE sends the tab on to Private Car by itself; the run waits, then opens MST',
+    name: "MST from 1up as it is now: PIE Dashboard (not the Private Car quick quote), PIE's dashboard, then the MST form",
+    trace: [
+      'start',
+      '1up home shows',
+      'trying PIE Dashboard',
+      'tap Issue Quotes & Policy',
+      '1up shows',
+      'tap PIE Dashboard',
+      'PIE Dashboard led to PIE',
+      'PIE settled',
+      'loading the form',
+      'the form is ready',
+    ],
     start: '/dashBoardScreen',
     on1up: true,
     kind: 'mst',
@@ -315,7 +343,40 @@ const CASES = [
     },
   },
   {
-    name: 'health from 1up, PIE never finishing loading: Private Car tile, then the Optima Secure form itself, premium',
+    name: 'older 1up without PIE Dashboard: Optima Secure by its own tile ("my:Optima Secure"), PIE opens that form, never Private Car',
+    start: '/dashBoardScreen?old=1',
+    on1up: true,
+    kind: 'retail',
+    client: FAMILY,
+    run: {
+      product: 'optima-secure',
+      cover: 'family',
+      years: 2,
+      sumInsuredLacs: 10,
+      city: 'Mumbai',
+      posp: 'Synthetic POSP',
+    },
+    outcome: 'ready',
+    amount: '25000',
+    redirect:
+      'tapped=Issue%20Quotes%20%26%20Policy%0ANew%20business%20and%20renewals%7Cmy%3AOptima%20Secure&canvasTaps=0',
+    notVisited: '/PrivateCar/',
+    trace: [
+      'start',
+      '1up home shows',
+      'trying PIE Dashboard',
+      'tap PIE Dashboard',
+      'trying Optima Secure',
+      'tap Optima Secure',
+      'Optima Secure led to PIE',
+      'PIE settled',
+      'the form is ready',
+    ],
+    read: `(() => ({ planType: document.querySelector('#OptimaSecurePlanType').value, saved: window.__saved }))()`,
+    expect: { planType: 'Optima Secure', saved: false },
+  },
+  {
+    name: 'health from 1up, PIE never finishing loading: PIE Dashboard, then the Optima Secure form itself, premium',
     start: '/dashBoardScreen?hang=1',
     on1up: true,
     kind: 'retail',
@@ -388,7 +449,9 @@ app.whenReady().then(async () => {
   const oneUpOrigin = `http://localhost:${server.address().port}`;
   installNavigationPolicy(createLogger([]));
   let failures = 0;
-  for (const c of CASES) {
+  // PIE_ONLY=<words>: only the cases whose name holds them (when looking into one).
+  const only = process.env.PIE_ONLY;
+  for (const c of only ? CASES.filter((x) => x.name.includes(only)) : CASES) {
     const ses = session.fromPartition(`pie-${Math.random()}`);
     setSessionPolicy(ses, {
       navigate: (url) => url.startsWith(origin + '/') || url.startsWith(oneUpOrigin + '/'),
@@ -403,9 +466,22 @@ app.whenReady().then(async () => {
     if (c.start) await win.loadURL((c.on1up ? oneUpOrigin : origin) + c.start);
     const windows = () => [win];
     const today = new Date(2026, 10, 5);
+    // The run's trace (diagnostics), as the app would save it.
+    let saved = null;
+    const diagnose = (_name, data) => {
+      saved = data;
+      return 'hdfc-ergo-trace.json';
+    };
     const result =
       c.kind === 'mst'
-        ? await runHdfcMstQuote({ windows, client: c.client, run: c.run, origin, oneUpOrigin })
+        ? await runHdfcMstQuote({
+            windows,
+            client: c.client,
+            run: c.run,
+            origin,
+            oneUpOrigin,
+            diagnose,
+          })
         : c.kind === 'retail'
           ? await runHdfcRetailQuote({
               windows,
@@ -414,6 +490,7 @@ app.whenReady().then(async () => {
               today,
               origin,
               oneUpOrigin,
+              diagnose,
             })
           : c.kind === 'travel'
             ? await runHdfcTravelQuote({
@@ -422,6 +499,7 @@ app.whenReady().then(async () => {
                 run: c.run,
                 today,
                 origin,
+                diagnose,
               })
             : await runHdfcMotorQuote({
                 windows,
@@ -429,6 +507,7 @@ app.whenReady().then(async () => {
                 run: c.run,
                 origin,
                 oneUpOrigin,
+                diagnose,
               });
     const state = c.read
       ? await win.webContents.executeJavaScript(c.read).catch((e) => ({ error: e.message }))
@@ -444,6 +523,23 @@ app.whenReady().then(async () => {
       problems.push(`premium ${JSON.stringify(result.premium)} (expected ${c.amount})`);
     if (c.redirect && !visited.some((u) => u.includes('/WrapperApi/') && u.includes(c.redirect)))
       problems.push(`no PIE redirect with ${c.redirect}: ${JSON.stringify(visited)}`);
+    // The trace: saved, named in the result, holding these moves in this order, no query string.
+    if (c.trace) {
+      const moves = (saved?.trace ?? []).map((e) => e.what);
+      let from = 0;
+      for (const want of c.trace) {
+        const at = moves.indexOf(want, from);
+        if (at < 0)
+          problems.push(`trace lacks "${want}" (after ${from}): ${JSON.stringify(moves)}`);
+        else from = at + 1;
+      }
+      if (JSON.stringify(saved).includes('?'))
+        problems.push('trace holds a query string (a token could be in it)');
+      if (!(result.toDo ?? []).some((t) => t.includes('hdfc-ergo-trace.json')))
+        problems.push(`result does not name the trace: ${JSON.stringify(result.toDo)}`);
+    }
+    if (c.notVisited && visited.some((u) => u.includes(c.notVisited)))
+      problems.push(`went to ${c.notVisited}: ${JSON.stringify(visited)}`);
     for (const [k, v] of Object.entries(c.expect ?? {}))
       if (!same(state[k], v))
         problems.push(`${k}: ${JSON.stringify(state[k])} (expected ${JSON.stringify(v)})`);
@@ -453,7 +549,8 @@ app.whenReady().then(async () => {
     );
     failures += problems.length ? 1 : 0;
   }
-  console.log(`\n${CASES.length - failures} of ${CASES.length} HDFC PIE checks passed`);
+  const ran = only ? CASES.filter((x) => x.name.includes(only)).length : CASES.length;
+  console.log(`\n${ran - failures} of ${ran} HDFC PIE checks passed`);
   for (const res of hanging) res.destroy();
   server.close();
   app.exit(failures ? 1 : 0);

@@ -3,6 +3,11 @@
 // unexpected fields are rejected, not ignored.
 import { z } from 'zod';
 import {
+  iciciElevateRunSchema,
+  iciciIntlTravelRunSchema,
+  iciciStudentTravelRunSchema,
+} from '../insurers/icici-nysa';
+import {
   aadhaarSchema,
   clientInputSchema,
   clientRecordSchema,
@@ -230,6 +235,35 @@ export const savePropertyRequestSchema = z
   .strict();
 export type SavePropertyRequest = z.input<typeof savePropertyRequestSchema>;
 
+/** One insurer's latest quote, as it goes (several insurers' quotes run at once). */
+export const quoteProgressSchema = z
+  .object({
+    insurerId: z.string().min(1).max(40),
+    product: z.string().max(40),
+    state: z.enum(['running', 'handed-over', 'ready', 'refused', 'failed', 'cancelled']),
+    step: z.string().max(300).nullable(),
+    message: z.string().max(2000).nullable(),
+    premium: z
+      .object({ label: z.string().max(300), amount: z.string().max(40) })
+      .strict()
+      .optional(),
+    pdf: z
+      .object({ name: z.string().min(1).max(200) })
+      .strict()
+      .optional(),
+    toDo: z.array(z.string().max(500)).max(60).optional(),
+    finish: z
+      .object({ button: z.string().max(120).nullable(), guessed: z.boolean() })
+      .strict()
+      .optional(),
+    watching: z.boolean().optional(),
+    /** A form the advisor changes before its PDF: they press Generate PDF (not watched). */
+    adjust: z.boolean().optional(),
+    updatedAt: z.string().max(40),
+  })
+  .strict();
+export type QuoteProgressView = z.infer<typeof quoteProgressSchema>;
+
 export const quoteRunResultSchema = z
   .object({
     /** 'handed-over': the run filled what it could; the advisor finishes the form. */
@@ -328,6 +362,13 @@ export type ImportCommitResult = z.infer<typeof importCommitResultSchema>;
  * the travel e-proposals (Overseas Travel, Overseas Mediclaim) for a travel client. E-proposals
  * are filled, never saved or submitted.
  */
+/**
+ * Health quotes run from Compare insurers: the advisor changes the insurer's form before its PDF
+ * ("let me change it first"). The run fills the form and hands it over, even with a premium; the
+ * advisor then presses Generate PDF, and the premium shown then is the quote.
+ */
+const adjustSchema = z.boolean().optional();
+
 export const quoteRunRequestSchema = z.discriminatedUnion('product', [
   z
     .object({ product: z.literal('motor'), vehicleId: entityIdSchema, insurerId: insurerIdSchema })
@@ -346,6 +387,7 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       insurerId: insurerIdSchema,
       /** Health: the advisor confirms, for this quote, every member's good health declaration. */
       goodHealthConfirmed: z.boolean(),
+      adjust: adjustSchema,
     })
     .strict(),
   // New India health quote forms: the policy is chosen for this run.
@@ -357,6 +399,7 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       policy: z.enum(NIA_HEALTH_POLICIES),
       /** The advisor confirms, for this quote, that no member has a listed condition. */
       goodHealthConfirmed: z.boolean(),
+      adjust: adjustSchema,
     })
     .strict(),
   // HDFC ERGO's PIE motor forms, for a saved vehicle: the form and its choices for this run.
@@ -387,6 +430,33 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       run: iciciApiMotorRunSchema,
     })
     .strict(),
+  // ICICI Lombard's NYSA health site (recordings of 26 November 2026): Elevate for a health
+  // client; International Travel and Student Medical Travel for a travel client.
+  z
+    .object({
+      product: z.literal('icici-elevate'),
+      clientId: entityIdSchema,
+      insurerId: z.literal('icici-lombard'),
+      run: iciciElevateRunSchema,
+      adjust: adjustSchema,
+    })
+    .strict(),
+  z
+    .object({
+      product: z.literal('icici-intl-travel'),
+      travellerId: entityIdSchema,
+      insurerId: z.literal('icici-lombard'),
+      run: iciciIntlTravelRunSchema,
+    })
+    .strict(),
+  z
+    .object({
+      product: z.literal('icici-student-travel'),
+      travellerId: entityIdSchema,
+      insurerId: z.literal('icici-lombard'),
+      run: iciciStudentTravelRunSchema,
+    })
+    .strict(),
   // ICICI Lombard by its partner API: Elevate or Activate Booster for a health client.
   z
     .object({
@@ -403,6 +473,7 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       clientId: entityIdSchema,
       insurerId: insurerIdSchema,
       run: hdfcRetailRunSchema,
+      adjust: adjustSchema,
     })
     .strict(),
   // HDFC ERGO's PIE Retail Travel form, for a travel client.
@@ -431,6 +502,7 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       clientId: entityIdSchema,
       insurerId: insurerIdSchema,
       run: hdfcMstRunSchema,
+      adjust: adjustSchema,
     })
     .strict(),
   // Niva Bupa's premium calculator, for a health client: the plan and its options for this run.
@@ -440,6 +512,7 @@ export const quoteRunRequestSchema = z.discriminatedUnion('product', [
       clientId: entityIdSchema,
       insurerId: insurerIdSchema,
       run: nivaRunSchema,
+      adjust: adjustSchema,
     })
     .strict(),
   // New India Personal Accident forms, for a health client's proposer: choices for this run.
@@ -598,6 +671,8 @@ export const ipcContract = {
     request: z
       .object({
         waitMs: z.int().min(0).max(1_800_000),
+        /** The insurer whose form (several may wait at once); the last one left, if absent. */
+        insurerId: insurerIdSchema.optional(),
         amount: z
           .string()
           .trim()
@@ -632,8 +707,32 @@ export const ipcContract = {
     request: z.object({}).strict(),
     response: z.object({ ok: z.boolean(), message: z.string().max(600) }).strict(),
   },
+  [IPC_CHANNELS.quotesProgress]: {
+    /** Answers once something changed after version `since` (or after 20 seconds anyway). */
+    request: z.object({ since: z.int().min(0) }).strict(),
+    response: z
+      .object({ version: z.int().min(0), items: z.array(quoteProgressSchema).max(20) })
+      .strict(),
+  },
+  [IPC_CHANNELS.quotesCompare]: {
+    /** One PDF comparing the premiums these insurers quoted for a health client. */
+    request: z
+      .object({ clientId: entityIdSchema, insurerIds: z.array(insurerIdSchema).min(1).max(10) })
+      .strict(),
+    response: z.discriminatedUnion('ok', [
+      z
+        .object({
+          ok: z.literal(true),
+          pdf: z.object({ name: z.string().min(1).max(200) }).strict(),
+          insurers: z.int().min(1),
+        })
+        .strict(),
+      z.object({ ok: z.literal(false), message: z.string().max(400) }).strict(),
+    ]),
+  },
   [IPC_CHANNELS.quotesCancel]: {
-    request: z.object({}).strict(),
+    /** One insurer's quote, or, without one, every quote in progress. */
+    request: z.object({ insurerId: insurerIdSchema.optional() }).strict(),
     /** False when no run was in progress to stop. */
     response: z.object({ cancelled: z.boolean() }).strict(),
   },

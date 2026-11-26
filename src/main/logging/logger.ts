@@ -108,6 +108,11 @@ const FIELD_SCHEMAS = {
   importKind: z.enum(IMPORT_KINDS),
   /** How many rows an import read or saved. */
   rowCount: z.number().int().min(0).max(100_000),
+  /**
+   * Which saved quote choices a client save carried, as "insurer.field" names (never their
+   * values): for telling where a choice was lost (26 November 2026, ICICI's not kept).
+   */
+  choiceFields: z.array(token(/^[a-z]+(-[a-z]+)*\.[A-Za-z]{1,40}$/)).max(80),
 } as const;
 
 export type LogFields = { [K in keyof typeof FIELD_SCHEMAS]?: z.infer<(typeof FIELD_SCHEMAS)[K]> };

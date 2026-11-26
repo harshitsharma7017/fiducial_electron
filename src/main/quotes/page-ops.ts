@@ -77,6 +77,8 @@ export type PageOp =
       nth?: number;
       /** Instead of a counter's box: the date box captioned so ("Previous Policy End Date"). */
       label?: string;
+      /** Instead: the `nth` shown box matching this (ICICI's DOB boxes share an id). */
+      selector?: string;
     }
   /**
    * Chooses an option in one of the page's Ionic dropdowns (ion-select, opening an ion-alert):
@@ -309,6 +311,64 @@ export type PageOp =
    */
   | { op: 'inspect' }
   /**
+   * The values the form shows, by caption, as JSON pairs [caption, value] in `value`: each shown
+   * box (input, select, textarea, Angular Material's and Ionic's selects) and each chosen radio or
+   * ticked box. For telling what the advisor changed on a form the app handed over, before its PDF
+   * (request of 25 November 2026). Never a password, OTP, captcha, card or Aadhaar box.
+   */
+  | { op: 'formValues' }
+  /**
+   * An Angular Material dropdown (mat-select; ICICI's NYSA health forms): opens the `nth` shown one
+   * matching `selector` and chooses the option `pick` names, waiting up to `timeoutMs` for the
+   * options (a plan list loads after earlier answers). `pick`: `text` (exactly, ignoring case and
+   * spacing, else the shortest starting with it); `amount`, rupees as the option shows them ("₹ 10
+   * L", "₹ 1 Cr", "5,00,000"); `range`, the band "a - b" holding the amount (an income band);
+   * `number`, the option whose first number is it (a plan code "GOLD_W_50" for 50); `atLeastDays`,
+   * the shortest duration ("90 days", "6 months", "1 year") at least that long. Gives the option's
+   * text as `value`; fails `option-missing (offered: …)`.
+   */
+  | {
+      op: 'matSelect';
+      selector: string;
+      nth?: number;
+      pick: {
+        text?: string;
+        /** With `text`: that option only, never one starting with it ("GOLD_W_50", not "..._500"). */
+        exact?: boolean;
+        /** The first of these names the list offers (ignoring case): a relation's other names. */
+        anyOf?: string[];
+        amount?: number;
+        range?: number;
+        number?: number;
+        atLeastDays?: number;
+      };
+      timeoutMs: number;
+    }
+  /**
+   * Presses the Angular Material toggle button reading `text` (ignoring case and spacing) in the
+   * toggle group whose question (the nearest caption around it) holds `question`, or whose buttons
+   * are named `name`; checks it is then chosen.
+   */
+  | { op: 'toggle'; text: string; question?: string; name?: string; timeoutMs: number }
+  /**
+   * A counter drawn as one button reading "`label` n" (ICICI Elevate's "Adult 1", "Child 0"), each
+   * press adding one: pressed until it reads `count`. Fails `over` when it already reads more, or
+   * `refused` when the page says no more are allowed (its message is closed).
+   */
+  | { op: 'countTo'; label: string; count: number; timeoutMs: number }
+  /**
+   * Plan cards, each a choice (radio, by its id) in a card showing its premium ("Basic ₹ 97,256 /
+   * yearly"): each card's first amount, as `plans` (name: the id), once at least one shows.
+   */
+  | { op: 'readCards'; ids: string[]; timeoutMs: number }
+  /**
+   * Presses the first shown tile matching `selector` whose text or hover label (Angular
+   * Material's tooltip, title, aria-label) matches `pattern` (ignoring case): ICICI's health
+   * dashboard names a tile by its tooltip ("TripSecure+" on International Travel). Fails
+   * `not-found (tiles: text [label]; …)`, listing the tiles shown.
+   */
+  | { op: 'clickTile'; selector: string; pattern: string; timeoutMs: number }
+  /**
    * Finds a box by what surrounds it and names it (data-fqf-box = `name`), for later steps: the
    * shown box matching `selector` whose nearest surrounding element reading `near` (a word, any
    * case) does not also read `avoid`; the closest such box wins. Niva Bupa's plan box ("Select
@@ -354,7 +414,22 @@ export type PageOp =
    * sent, never a pointer press (Flutter would take that for a tap on the canvas at its corner).
    * Fails `not-found` (with the count of labelled elements shown) when none reads so in time.
    */
-  | { op: 'flutterTap'; labels: string[]; timeoutMs: number }
+  | {
+      op: 'flutterTap';
+      labels: string[];
+      timeoutMs: number;
+      /**
+       * Also a label holding one of `labels` as whole words, anywhere (the shortest wins): HDFC's
+       * 1up may name a product's tile with more around it ("my:Optima Secure").
+       */
+      within?: boolean;
+    }
+  /**
+   * The labels Flutter's semantics show (turning them on first, as flutterTap does), as JSON in
+   * `value`: short ones only (at most 40 characters, without digits, so not a saved quote's
+   * customer and date), at most 40. For telling what 1up offered when PIE did not open.
+   */
+  | { op: 'flutterLabels'; timeoutMs: number }
   /** The text of any visible pop-up (dialog), whatever it says: `ok: false` with `errors`. */
   | { op: 'popup' }
   /**
@@ -1391,6 +1466,31 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       );
       return box ? { ok: false, errors: text(box).slice(0, 400) } : { ok: true };
     }
+    case 'flutterLabels': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim();
+      const deep = (root: ParentNode, selector: string, out: Element[] = []): Element[] => {
+        out.push(...Array.from(root.querySelectorAll(selector)));
+        for (const el of Array.from(root.querySelectorAll('*'))) {
+          if (el.shadowRoot) deep(el.shadowRoot, selector, out);
+        }
+        return out;
+      };
+      if (deep(document, 'flt-semantics').length === 0) {
+        const placeholder = deep(document, 'flt-semantics-placeholder')[0];
+        if (placeholder) (placeholder as HTMLElement).click();
+      }
+      const labels =
+        (await until(() => {
+          const names = deep(document, 'flt-semantics')
+            .filter(visible)
+            .map((el) =>
+              loose(el.getAttribute('aria-label') || (el as HTMLElement).innerText || ''),
+            )
+            .filter((n) => n && n.length <= 40 && !/\d/.test(n));
+          return names.length > 0 ? names : null;
+        }, command.timeoutMs)) ?? [];
+      return { ok: true, value: JSON.stringify([...new Set(labels)].slice(0, 40)) };
+    }
     case 'flutterTap': {
       const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
       const wants = command.labels.map(loose);
@@ -1422,7 +1522,14 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         const starts = named
           .filter((n) => wants.some((w) => n.name.startsWith(`${w} `)))
           .sort((a, b) => a.name.length - b.name.length);
-        return starts[0]?.el ?? null;
+        if (starts[0]) return starts[0].el;
+        if (!command.within) return null;
+        const words = (w: string) =>
+          new RegExp(`(^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`);
+        const inside = named
+          .filter((n) => wants.some((w) => words(w).test(n.name)))
+          .sort((a, b) => a.name.length - b.name.length);
+        return inside[0]?.el ?? null;
       }, command.timeoutMs);
       if (!target) return { ok: false, detail: `not-found (${seen} labelled shown)` };
       (target as HTMLElement).click();
@@ -1506,6 +1613,459 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         command.timeoutMs,
       );
       return gone ? { ok: true } : { ok: false, detail: 'still-shown' };
+    }
+    case 'matSelect': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const select = (): HTMLElement | null =>
+        Array.from(document.querySelectorAll<HTMLElement>(command.selector)).filter(visible)[
+          command.nth ?? 0
+        ] ?? null;
+      const el = await until(select, Math.min(command.timeoutMs, 15000));
+      if (!el) return { ok: false, detail: 'not-found' };
+      const shown = (s: Element) =>
+        text(
+          s.querySelector('.mat-mdc-select-value-text, .mat-select-value-text') ??
+            document.createElement('span'),
+        );
+      /** Rupees in an option's words: "₹ 10 L" 1000000, "₹ 1 Cr", "5,00,000", "7.5L". */
+      const rupeesIn = (t: string): number[] =>
+        Array.from(
+          t.replace(/,/g, '').matchAll(/(\d+(?:\.\d+)?)\s*(cr|crore|l|lac|lakh|k)?\b/gi),
+        ).map((m) => {
+          const n = Number(m[1]);
+          const unit = (m[2] ?? '').toLowerCase();
+          return unit.startsWith('c')
+            ? n * 1e7
+            : unit.startsWith('l')
+              ? n * 1e5
+              : unit === 'k'
+                ? n * 1e3
+                : n;
+        });
+      const daysIn = (t: string): number | null => {
+        const m = /(\d+(?:\.\d+)?)\s*(day|week|month|year)/i.exec(t);
+        if (!m) return null;
+        const n = Number(m[1]);
+        const unit = m[2]!.toLowerCase();
+        return unit === 'day' ? n : unit === 'week' ? n * 7 : unit === 'month' ? n * 30 : n * 365;
+      };
+      const { pick } = command;
+      const choose = (options: HTMLElement[]): HTMLElement | null => {
+        const named = options.map((o) => ({ o, t: loose(text(o)) })).filter((x) => x.t);
+        if (pick.anyOf !== undefined) {
+          for (const name of pick.anyOf) {
+            const hit = named.find((x) => x.t === loose(name));
+            if (hit) return hit.o;
+          }
+          return null;
+        }
+        if (pick.text !== undefined) {
+          const want = loose(pick.text);
+          if (pick.exact) {
+            // As spelt ("GOLD_X50", not ICICI's "Gold_X50" beside it); else the one option
+            // reading so whatever its capitals.
+            const spelt = (o: HTMLElement) => text(o).replace(/\s+/g, ' ').trim();
+            const asSpelt = options.find((o) => spelt(o) === pick.text!.trim());
+            if (asSpelt) return asSpelt;
+            const anyCase = named.filter((x) => x.t === want);
+            return anyCase.length === 1 ? anyCase[0]!.o : null;
+          }
+          const same = named.find((x) => x.t === want)?.o;
+          if (same) return same;
+          return (
+            named.filter((x) => x.t.startsWith(want)).sort((a, b) => a.t.length - b.t.length)[0]
+              ?.o ?? null
+          );
+        }
+        if (pick.amount !== undefined) {
+          return named.find((x) => rupeesIn(x.t)[0] === pick.amount)?.o ?? null;
+        }
+        if (pick.range !== undefined) {
+          const r = pick.range;
+          return (
+            named.find((x) => {
+              const [lo, hi] = rupeesIn(x.t);
+              if (lo === undefined) return false;
+              if (hi === undefined) return /above|more|\+/.test(x.t) ? r >= lo : false;
+              return r >= lo && r <= hi;
+            })?.o ?? null
+          );
+        }
+        if (pick.number !== undefined) {
+          return (
+            named.find((x) => Number(/\d+(?:\.\d+)?/.exec(x.t)?.[0]) === pick.number)?.o ?? null
+          );
+        }
+        if (pick.atLeastDays !== undefined) {
+          const want = pick.atLeastDays;
+          return (
+            named
+              .map((x) => ({ ...x, d: daysIn(x.t) }))
+              .filter((x): x is typeof x & { d: number } => x.d !== null && x.d >= want)
+              .sort((a, b) => a.d - b.d)[0]?.o ?? null
+          );
+        }
+        return null;
+      };
+      /** Every list open now (any dropdown's), and their options. */
+      const openOptions = (): HTMLElement[] =>
+        Array.from(
+          document.querySelectorAll<HTMLElement>(
+            '.cdk-overlay-container mat-option, .cdk-overlay-container [role="option"]',
+          ),
+        ).filter(visible);
+      /**
+       * This dropdown's own options: the list it names (aria-controls / aria-owns, as Material
+       * marks it while open), never another dropdown's left open (26 November 2026: a list left
+       * open made the next dropdowns read its options).
+       */
+      const panelOptions = (): HTMLElement[] => {
+        const now = select() ?? el;
+        const id = now.getAttribute('aria-controls') ?? now.getAttribute('aria-owns');
+        const own = id ? document.getElementById(id) : null;
+        if (own) {
+          return Array.from(
+            own.querySelectorAll<HTMLElement>('mat-option, [role="option"]'),
+          ).filter(visible);
+        }
+        // Not named: the open list, which is this dropdown's (every other list is closed before
+        // it is opened).
+        return openOptions();
+      };
+      /** Whether any list is open, even an empty one (its panel or the backdrop over the page). */
+      const anyOpen = (): boolean =>
+        openOptions().length > 0 ||
+        Array.from(
+          document.querySelectorAll<HTMLElement>(
+            '.cdk-overlay-container .mat-mdc-select-panel, .cdk-overlay-container .mat-select-panel, .cdk-overlay-container [role="listbox"], .cdk-overlay-backdrop',
+          ),
+        ).some(visible);
+      /** Closes every open list: its backdrop pressed, Escape on its dropdown; waits until gone. */
+      const close = async () => {
+        for (let i = 0; i < 3 && anyOpen(); i += 1) {
+          const backdrop = document.querySelector<HTMLElement>('.cdk-overlay-backdrop');
+          if (backdrop) pressEl(backdrop);
+          for (const target of [
+            ...Array.from(
+              document.querySelectorAll<HTMLElement>(
+                'mat-select[aria-expanded="true"], .mat-mdc-select-open, .mat-select-open',
+              ),
+            ),
+            document.activeElement,
+          ]) {
+            target?.dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }),
+            );
+          }
+          await until(() => (anyOpen() ? null : true), 1000);
+        }
+      };
+      // Another dropdown's list left open would cover this one (and be read for it).
+      if (anyOpen()) await close();
+      let offered: string[] = [];
+      const end = Date.now() + command.timeoutMs;
+      while (Date.now() < end) {
+        const now = select() ?? el;
+        if (panelOptions().length === 0) {
+          if (anyOpen()) await close();
+          pressEl(now.querySelector('.mat-mdc-select-trigger, .mat-select-trigger') ?? now);
+          await until(() => (panelOptions().length > 0 ? true : null), 2500);
+        }
+        const options = panelOptions();
+        offered = options.map((o) => text(o)).filter(Boolean);
+        const target = choose(options);
+        if (target) {
+          pressEl(target);
+          const chosen = text(target);
+          const kept = await until(
+            () => (loose(shown(select() ?? now)) === loose(chosen) ? true : null),
+            2500,
+          );
+          // A multiple-choice list stays open: closed once chosen.
+          if (openOptions().length > 0) await close();
+          return kept ? { ok: true, value: chosen } : { ok: false, detail: 'not-kept' };
+        }
+        // Not offered (yet): the list may still be loading.
+        await close();
+        await sleep(1000);
+      }
+      await close();
+      return {
+        ok: false,
+        detail: `option-missing${offered.length ? ` (offered: ${offered.slice(0, 12).join('; ')})` : ''}`,
+      };
+    }
+    case 'toggle': {
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const want = loose(command.text);
+      const question = command.question ? loose(command.question) : null;
+      /** The group's question: the nearest container around it with more than its buttons. */
+      const asked = (group: Element): string => {
+        const own = loose(text(group));
+        for (let n = group.parentElement, up = 0; n && up < 5; n = n.parentElement, up += 1) {
+          const t = loose(text(n));
+          if (t.length > own.length) return t;
+        }
+        return '';
+      };
+      const find = (): HTMLElement | null =>
+        Array.from(
+          document.querySelectorAll<HTMLElement>(
+            'mat-button-toggle button, .mat-button-toggle-button',
+          ),
+        ).find((b) => {
+          if (!visible(b) || loose(text(b)) !== want) return false;
+          if (command.name !== undefined && b.getAttribute('name') !== command.name) return false;
+          if (question === null) return true;
+          const group = b.closest('mat-button-toggle-group') ?? b.closest('mat-button-toggle');
+          return group !== null && asked(group).includes(question);
+        }) ?? null;
+      const chosen = (b: HTMLElement) =>
+        b.getAttribute('aria-pressed') === 'true' ||
+        b.getAttribute('aria-checked') === 'true' ||
+        b.closest('mat-button-toggle')?.classList.contains('mat-button-toggle-checked') === true;
+      const button = await until(find, command.timeoutMs);
+      if (!button) return { ok: false, detail: 'not-found' };
+      if (chosen(button)) return { ok: true, detail: 'already-chosen' };
+      pressEl(button);
+      const set = await until(() => {
+        const b = find();
+        return b && chosen(b) ? true : null;
+      }, 2500);
+      return set ? { ok: true } : { ok: false, detail: 'not-kept' };
+    }
+    case 'countTo': {
+      const pattern = new RegExp(
+        `^${command.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(\\d+)$`,
+        'i',
+      );
+      const find = (): { el: HTMLElement; n: number } | null => {
+        for (const b of Array.from(document.querySelectorAll<HTMLElement>('button'))) {
+          if (!visible(b)) continue;
+          const m = pattern.exec(text(b));
+          if (m) return { el: b, n: Number(m[1]) };
+        }
+        return null;
+      };
+      /** How an element names itself: its words, label, alt, icon name, picture, classes. */
+      const says = (el: Element): string =>
+        [
+          text(el),
+          el.getAttribute('aria-label'),
+          el.getAttribute('alt'),
+          el.getAttribute('title'),
+          el.getAttribute('src'),
+          el.getAttribute('svgicon'),
+          el.getAttribute('fonticon'),
+          typeof el.className === 'string' ? el.className : el.getAttribute('class'),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+      const PLUS = /(^|[^a-z])(add|plus|increment|increase)([^a-z]|$)|\+/;
+      const MINUS = /(^|[^a-z])(minus|remove|decrement|decrease|subtract)([^a-z]|$)|(^|\s)-(\s|$)/;
+      /**
+       * What may add one, in the order tried: the button itself (as recorded), then what is
+       * inside it or right beside it that looks like "add" / "+" (never "minus"), then the rest
+       * inside it, last first (a "+" icon usually ends the button). NYSA's live Elevate did not
+       * count up when the button itself was pressed (26 November 2026).
+       */
+      const candidates = (button: HTMLElement): HTMLElement[] => {
+        const inside = Array.from(button.querySelectorAll<HTMLElement>('*'));
+        const beside = Array.from(
+          button.parentElement?.querySelectorAll<HTMLElement>(
+            'button, img, svg, mat-icon, i, span, a',
+          ) ?? [],
+        ).filter((el) => !button.contains(el) && !el.contains(button) && !pattern.test(text(el)));
+        const plusLike = (els: HTMLElement[]) =>
+          els.filter((el) => PLUS.test(says(el)) && !MINUS.test(says(el)));
+        const rest = inside.filter((el) => !MINUS.test(says(el))).reverse();
+        return [...new Set([button, ...plusLike(inside), ...plusLike(beside), ...rest])];
+      };
+      /** The button's make-up, for when nothing counts up (what to press, next time). */
+      const makeUp = (button: HTMLElement): string =>
+        [button, ...Array.from(button.querySelectorAll<HTMLElement>('*'))]
+          .slice(0, 12)
+          .map((el) => {
+            const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/)[0] : '';
+            const named = [el.getAttribute('alt'), el.getAttribute('aria-label')]
+              .filter(Boolean)
+              .join('/');
+            return `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ''}${named ? `[${named}]` : ''}`;
+          })
+          .join(' ');
+      const refused = async (): Promise<string | null> => {
+        const popup = scopes('')
+          .map((d) => text(d))
+          .find((t) => /allowed|maximum|not allowed/i.test(t));
+        if (!popup) return null;
+        await sleep(200);
+        const ok = Array.from(document.querySelectorAll<HTMLElement>('button')).find(
+          (b) => visible(b) && /^ok$/i.test(text(b)),
+        );
+        ok?.click();
+        return popup.slice(0, 120);
+      };
+      let at = await until(find, command.timeoutMs);
+      if (!at) return { ok: false, detail: 'not-found' };
+      /** Which candidate counted up last time (its place in the list), tried first. */
+      let works: number | null = null;
+      for (let press = 0; at.n < command.count && press < 10; press += 1) {
+        const before = at.n;
+        const tries = candidates(at.el);
+        const order: number[] =
+          works !== null && works < tries.length
+            ? [works, ...tries.keys()].filter((v, i, all) => all.indexOf(v) === i)
+            : [...tries.keys()];
+        let counted = false;
+        for (const i of order.slice(0, 8)) {
+          pressEl(tries[i]!);
+          const changed = await until(() => {
+            const now = find();
+            return now && now.n !== before ? true : null;
+          }, 1500);
+          const said = await refused();
+          if (said) return { ok: false, detail: `refused: ${said}` };
+          if (changed) {
+            works = i;
+            counted = true;
+            break;
+          }
+        }
+        at = find();
+        if (!at) return { ok: false, detail: 'not-found' };
+        if (!counted) {
+          return {
+            ok: false,
+            detail: `shows ${at.n}: nothing in or beside the button counted up (it is: ${makeUp(at.el)})`,
+          };
+        }
+      }
+      if (at.n > command.count) return { ok: false, detail: `over (shows ${at.n})` };
+      return at.n === command.count ? { ok: true } : { ok: false, detail: `shows ${at.n}` };
+    }
+    case 'clickTile': {
+      const pattern = new RegExp(command.pattern, 'i');
+      const hover = (el: Element): string =>
+        ['mattooltip', 'ng-reflect-message', 'title', 'aria-label', 'data-tooltip']
+          .map((a) => el.getAttribute(a) ?? '')
+          .filter(Boolean)
+          .join(' ');
+      const tiles = () =>
+        Array.from(document.querySelectorAll<HTMLElement>(command.selector)).filter(visible);
+      const target = await until(
+        () => tiles().find((t) => pattern.test(text(t)) || pattern.test(hover(t))) ?? null,
+        command.timeoutMs,
+      );
+      if (!target) {
+        const seen = tiles()
+          .slice(0, 15)
+          .map((t) => `${text(t).slice(0, 40)}${hover(t) ? ` [${hover(t).slice(0, 30)}]` : ''}`)
+          .join('; ');
+        return { ok: false, detail: `not-found (tiles: ${seen || 'none'})` };
+      }
+      pressEl(target);
+      return { ok: true, value: text(target).slice(0, 60) };
+    }
+    case 'readCards': {
+      const amountIn = (t: string): string | null => {
+        const m = /₹\s*([\d,]+(?:\.\d+)?)/.exec(t);
+        return m ? m[1]!.replace(/,/g, '') : null;
+      };
+      const read = (): { name: string; amount: string }[] | null => {
+        const plans: { name: string; amount: string }[] = [];
+        for (const id of command.ids) {
+          const input = document.getElementById(id);
+          if (!input) continue;
+          let card: Element | null = input.closest('label');
+          for (
+            let n = input.parentElement, up = 0;
+            !card && n && up < 4;
+            n = n.parentElement, up += 1
+          ) {
+            if (amountIn(text(n))) card = n;
+          }
+          const amount = card ? amountIn(text(card)) : null;
+          if (amount) plans.push({ name: id, amount });
+        }
+        return plans.length > 0 ? plans : null;
+      };
+      const plans = await until(read, command.timeoutMs);
+      return plans
+        ? { ok: true, plans, value: plans[0]!.amount }
+        : { ok: false, detail: 'not-shown' };
+    }
+    case 'formValues': {
+      const squash = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+      const SECRET = /password|otp|captcha|cvv|card number|aadha+r|pass ?code|pin code of card/i;
+      const captionOf = (el: Element): string => {
+        const field = el.closest('mat-form-field, .mat-mdc-form-field, ion-item, .form-group');
+        const label = field?.querySelector('mat-label, label, ion-label');
+        const byFor = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null;
+        const named =
+          (byFor && text(byFor)) ||
+          (label && text(label)) ||
+          el.getAttribute('aria-label') ||
+          el.getAttribute('placeholder') ||
+          el.getAttribute('label') ||
+          (el.getAttribute('formcontrolname') ?? el.getAttribute('name') ?? '').replace(
+            /([a-z])([A-Z])/g,
+            '$1 $2',
+          );
+        return squash(named)
+          .replace(/\s*\*\s*$/, '')
+          .slice(0, 80);
+      };
+      const pairs: [string, string][] = [];
+      const add = (caption: string, value: string) => {
+        const v = squash(value).slice(0, 80);
+        if (!caption || SECRET.test(caption) || pairs.length >= 80) return;
+        pairs.push([caption, v]);
+      };
+      const shownBox = (el: Element) =>
+        visible(el) || (el.parentElement !== null && visible(el.parentElement));
+      for (const el of Array.from(
+        document.querySelectorAll<HTMLElement>(
+          'input, select, textarea, mat-select, ion-select, ion-radio-group',
+        ),
+      )) {
+        if (el.closest(DIALOGS) || !shownBox(el)) continue;
+        // Ionic's own inner input (its shadow host carries the caption).
+        if (el.parentElement?.closest('ion-select, ion-input, ion-searchbar')) continue;
+        if (el instanceof HTMLSelectElement) {
+          add(captionOf(el), el.selectedOptions[0] ? text(el.selectedOptions[0]) : '');
+        } else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+          const type = el instanceof HTMLInputElement ? el.type.toLowerCase() : 'textarea';
+          if (/^(hidden|password|file|button|submit|reset|image)$/.test(type)) continue;
+          if (type === 'radio') {
+            if (!(el as HTMLInputElement).checked) continue;
+            const group = el.closest('fieldset, [role="radiogroup"], .form-group');
+            const legend = group?.querySelector('legend, label');
+            const own = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null;
+            add(
+              squash(legend ? text(legend) : el.name).slice(0, 80),
+              (own && text(own)) || el.value,
+            );
+          } else if (type === 'checkbox') {
+            add(captionOf(el), (el as HTMLInputElement).checked ? 'Yes' : 'No');
+          } else {
+            add(captionOf(el), el.value);
+          }
+        } else if (el.tagName === 'MAT-SELECT') {
+          const shown = el.querySelector('.mat-mdc-select-value-text, .mat-select-value-text');
+          add(captionOf(el), shown ? text(shown) : '');
+        } else if (el.tagName === 'ION-SELECT') {
+          const shown = el.shadowRoot?.querySelector('.select-text, [part="text"]');
+          add(captionOf(el), shown ? text(shown) : squash(el.getAttribute('value')));
+        } else if (el.tagName === 'ION-RADIO-GROUP') {
+          const chosen = Array.from(el.querySelectorAll('ion-radio')).find(
+            (r) =>
+              r.classList.contains('radio-checked') || r.getAttribute('aria-checked') === 'true',
+          );
+          if (chosen) add(captionOf(el), text(chosen.closest('ion-item') ?? chosen));
+        }
+      }
+      return { ok: true, value: JSON.stringify(pairs) };
     }
     case 'inspect': {
       const short = (t: string | null | undefined, n = 80) =>
@@ -1755,8 +2315,15 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       return found ? { ok: true } : { ok: false, detail: 'heading-not-shown' };
     }
     case 'popup': {
+      // An open calendar or dropdown is not a message (Material draws its calendar in a dialog:
+      // "… JAN FEB … Close calendar", 26 November 2026).
       const box = Array.from(document.querySelectorAll(DIALOGS)).find(
-        (el) => visible(el) && text(el) !== '',
+        (el) =>
+          visible(el) &&
+          text(el) !== '' &&
+          !el.matches('mat-datepicker-content, .mat-datepicker-content') &&
+          !el.querySelector('mat-calendar') &&
+          el.closest('mat-datepicker-content, .mat-datepicker-content') === null,
       );
       return box ? { ok: false, errors: text(box).slice(0, 400) } : { ok: true };
     }
@@ -1953,13 +2520,19 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         return null;
       };
       const box = () =>
-        command.label !== undefined
-          ? labelled(command.label)
-          : (dateBoxes()[command.nth ?? 0] ?? null);
+        command.selector !== undefined
+          ? (Array.from(document.querySelectorAll<HTMLInputElement>(command.selector)).filter(
+              visible,
+            )[command.nth ?? 0] ?? null)
+          : command.label !== undefined
+            ? labelled(command.label)
+            : (dateBoxes()[command.nth ?? 0] ?? null);
       // A box added by the counter or a question a moment ago may not be drawn yet.
       const start = await until(box, 2500);
       if (!start) {
-        if (command.label !== undefined) return { ok: false, detail: 'date-box-not-found' };
+        if (command.label !== undefined || command.selector !== undefined) {
+          return { ok: false, detail: 'date-box-not-found' };
+        }
         const counter = findCounters()[command.counter ?? 0];
         const shows = counter?.box?.value ?? (counter ? text(counter.root) : 'no counter');
         return {
@@ -1968,8 +2541,14 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         };
       }
       if (same(start.value)) return { ok: true, detail: 'already-set' };
+      // The calendar's button beside the box (a few levels up in Material's form field), else the
+      // box itself (NYSA's boxes open their calendar when pressed).
       const toggle =
-        start.parentElement?.querySelector<HTMLElement>('mat-datepicker-toggle button') ?? start;
+        start.parentElement?.querySelector<HTMLElement>('mat-datepicker-toggle button') ??
+        start
+          .closest('mat-form-field, .mat-mdc-form-field')
+          ?.querySelector<HTMLElement>('mat-datepicker-toggle button') ??
+        start;
       pressEl(toggle);
       const calendar = (): HTMLElement | null =>
         Array.from(document.querySelectorAll<HTMLElement>('mat-calendar')).find(visible) ?? null;
@@ -1979,10 +2558,34 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
       const disabled = (el: Element) =>
         el.classList.contains('mat-calendar-body-disabled') ||
         el.getAttribute('aria-disabled') === 'true';
+      /** A day cell labelled by numbers (ICICI's "04/11/2008"): day and month in either order. */
+      const numberedDay = (el: Element): boolean => {
+        const parts = (el.getAttribute('aria-label') ?? '')
+          .split(/[^0-9]+/)
+          .filter(Boolean)
+          .map(Number);
+        if (parts.length !== 3 || parts[2] !== y) return false;
+        return (parts[0] === d && parts[1] === m) || (parts[0] === m && parts[1] === d);
+      };
+      /** The month and year the calendar's header names ("DEC 2026", "SEPT 2026"). */
+      const shownMonth = (cal: Element): boolean => {
+        const head = loose(
+          text(cal.querySelector('.mat-calendar-period-button') ?? document.createElement('i')),
+        );
+        return head.includes(String(y)) && head.includes(month.slice(0, 3));
+      };
+      const loose = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+      const giveUp = (detail: string) => {
+        // The calendar is closed again, so the form is left as it was.
+        document.activeElement?.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }),
+        );
+        return { ok: false, detail };
+      };
       for (let move = 0; ; move += 1) {
         const cal = calendar();
         if (!cal) break; // closed: the day was chosen
-        if (move >= 60) return { ok: false, detail: 'calendar-did-not-reach-date' };
+        if (move >= 60) return giveUp('calendar-did-not-reach-date');
         const cells = Array.from(cal.querySelectorAll<HTMLElement>('.mat-calendar-body-cell'));
         const go = (selector: string): boolean => {
           const b = cal.querySelector<HTMLButtonElement>(selector);
@@ -1992,12 +2595,16 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
         };
         let target: HTMLElement | undefined;
         if (cal.querySelector('mat-month-view')) {
-          target = cells.find((c) => {
-            const w = words(c);
-            return w.includes(String(d)) && w.includes(month) && w.includes(String(y));
-          });
+          target =
+            cells.find((c) => {
+              const w = words(c);
+              return w.includes(String(d)) && w.includes(month) && w.includes(String(y));
+            }) ??
+            cells.find(numberedDay) ??
+            // Labels that name no date: the day's number, once the header shows the month.
+            (shownMonth(cal) ? cells.find((c) => loose(text(c)) === String(d)) : undefined);
           if (!target && !go('.mat-calendar-period-button')) {
-            return { ok: false, detail: 'calendar-period-button-missing' };
+            return giveUp('calendar-period-button-missing');
           }
         } else if (cal.querySelector('mat-multi-year-view')) {
           target = cells.find((c) => text(c) === String(y));
@@ -2005,20 +2612,22 @@ export async function quotePageAgent(command: PageOp): Promise<PageOpResult> {
             const years = cells.map((c) => Number(text(c))).filter((n) => n > 0);
             const back = years.length > 0 && y < Math.min(...years);
             if (!go(back ? '.mat-calendar-previous-button' : '.mat-calendar-next-button')) {
-              return { ok: false, detail: 'date-disabled' };
+              return giveUp('date-disabled');
             }
           }
         } else if (cal.querySelector('mat-year-view')) {
-          target = cells.find((c) => {
-            const w = words(c);
-            return (w.includes(month) && w.includes(String(y))) || w.includes(month.slice(0, 3));
-          });
-          if (!target) return { ok: false, detail: 'month-not-found' };
+          // By its label, else by what it shows: "DEC", "SEPT" (labels may hold only numbers).
+          target =
+            cells.find((c) => {
+              const w = words(c);
+              return (w.includes(month) && w.includes(String(y))) || w.includes(month.slice(0, 3));
+            }) ?? cells.find((c) => loose(text(c)).startsWith(month.slice(0, 3)));
+          if (!target) return giveUp('month-not-found');
         } else {
-          return { ok: false, detail: 'calendar-view-unknown' };
+          return giveUp('calendar-view-unknown');
         }
         if (target) {
-          if (disabled(target)) return { ok: false, detail: 'date-disabled' };
+          if (disabled(target)) return giveUp('date-disabled');
           pressEl(target.querySelector('.mat-calendar-body-cell-content') ?? target);
           // The day: done once the box shows it, whether or not the calendar closes by itself.
           if (cal.querySelector('mat-month-view')) {

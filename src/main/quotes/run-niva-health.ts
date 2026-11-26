@@ -11,7 +11,6 @@ import type { ClientInput } from '../../shared/contracts/client';
 import { NIVA_HEALTH_PLAN_NAMES, type NivaRun } from '../../shared/insurers/niva-health';
 import {
   NIVA_CALCULATOR_ROUTE,
-  NIVA_SUMMARY_ROUTE,
   NIVA_CALCULATOR_TILE,
   NIVA_FIRST_STEP_HEADING,
   NIVA_HOME_ROUTE,
@@ -20,8 +19,8 @@ import {
   planNivaHealthQuote,
   type NivaHealthStep,
 } from './niva-health';
-import { exec, type QuoteRunResult } from './run-uiic-health';
-import { FillProgress, handedOver } from './hand-over';
+import { exec, type QuoteRunResult, reportStep } from './run-uiic-health';
+import { FillProgress, handedOver, readAgain } from './hand-over';
 
 /**
  * How far the run fills Niva Bupa's calculator, stage by stage (24 November 2026):
@@ -115,6 +114,11 @@ export interface NivaRunDeps {
   today: Date;
   /** In tests: how far to fill (NIVA_FILL_UNTIL). */
   fillUntil?: NivaFillStage;
+  /**
+   * The advisor changes the form before its PDF ("let me change it first"): the run stays on
+   * Customize Your Plan (it does not go on to Plan Summary).
+   */
+  adjust?: boolean;
   /**
    * Saves the run's trace for support (25 November 2026: why the plan dropdown fails live): each
    * step's result and, around the plan, how the page's boxes and lists are built. Returns the
@@ -240,11 +244,7 @@ async function runNiva(deps: NivaRunDeps, trace: TraceEntry[]): Promise<QuoteRun
     ...(failed ? ['Fill the rest, press Calculate Premium yourself and check the premium.'] : []),
   ];
   /** The result once Niva Bupa shows the premium (`kept.premium`). */
-  const compose = (
-    got: Record<string, string>,
-    /** Plan Summary, when the run went on to it: reached, and what is left there. */
-    summary?: { reached: boolean; left: string[] },
-  ): QuoteRunResult => {
+  const compose = (got: Record<string, string>): QuoteRunResult => {
     // "1 Year ₹15,073": the policy period and its premium, as Niva Bupa shows them.
     const shown = /^(.*?)\s*(₹\s?[\d,]+(?:\.\d+)?)\s*$/.exec(got.premium ?? '');
     const premium = shown
@@ -258,17 +258,11 @@ async function runNiva(deps: NivaRunDeps, trace: TraceEntry[]): Promise<QuoteRun
       outcome: 'ready',
       step: null,
       message: premium
-        ? `Niva Bupa worked the premium out: ${premium.amount} for ${premium.label}. ${
-            summary?.reached
-              ? "The app pressed Continue to Plan Summary and filled the customer's details there; it did not press Generate Quote."
-              : summary
-                ? 'Plan Summary did not open (see below).'
-                : "The app did not press Continue (the summary asking the customer's details)."
-          }`
+        ? `Niva Bupa worked the premium out: ${premium.amount} for ${premium.label}, on Customize Your Plan (the sum insured page). The app stops there: it does not go on to Plan Summary or press Generate Quote.`
         : `Niva Bupa: everything is filled, but the premium could not be read. Check it on Niva Bupa's page.`,
       problems: [],
       ...(premium ? { premium } : {}),
-      toDo: [...toDo(false), ...(summary?.left ?? [])],
+      toDo: toDo(false),
     };
   };
   // A box Niva Bupa does not take is left for the advisor, and the run goes on; anything else
@@ -321,6 +315,7 @@ async function runNiva(deps: NivaRunDeps, trace: TraceEntry[]): Promise<QuoteRun
           ? plan.steps.findIndex((s) => s.label === 'Continue')
           : -1;
   for (const [index, step] of plan.steps.entries()) {
+    reportStep(step.label);
     if (index === stopAt) {
       const picked = kept.plan ? ` (${kept.plan})` : '';
       page.focus();
@@ -405,50 +400,19 @@ async function runNiva(deps: NivaRunDeps, trace: TraceEntry[]): Promise<QuoteRun
       return handOver({ label: step.label, why: why ?? unexplained(step.label, result.detail) });
     }
   }
-  // Then on to Plan Summary (request of 24 November 2026): Continue, and the customer's name, email
-  // and mobile there. The premium is read and kept already: nothing here can lose it. Generate
-  // Quote is never pressed.
-  const summary = kept.premium ? await toPlanSummary(page) : undefined;
+  // The premium is read on Customize Your Plan (the sum insured page): the run stops there
+  // (request of 26 November 2026: "why go to the last page if the premium is on the sum insured
+  // page"; Plan Summary, asked for on 24 November, is no longer filled). Generate Quote is never
+  // pressed.
   page.focus();
-  return compose(kept, summary);
-
-  async function toPlanSummary(at: PortalPage): Promise<{ reached: boolean; left: string[] }> {
-    // The footer reads Continue at the top of Customize Your Plan (Calculate Premium while Key
-    // Add-Ons is in view): the page's panel is scrolled up there until it does.
-    const pressed = await exec(wc, {
-      op: 'revealButton',
-      text: 'Continue',
-      near: 'Customize Your Plan',
-      timeoutMs: 15000,
-    });
-    if (!pressed.ok) {
-      return { reached: false, left: ['Press Continue on Customize Your Plan (it did not show).'] };
-    }
-    const deadline = Date.now() + 20_000;
-    while (routeOf(at) !== NIVA_SUMMARY_ROUTE && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    if (routeOf(at) !== NIVA_SUMMARY_ROUTE) {
-      return {
-        reached: false,
-        left: ['Plan Summary did not open after Continue: check the page.'],
-      };
-    }
-    const { customer } = deps.client;
-    const left: string[] = [];
-    const fields: [string, string, string | undefined][] = [
-      ["customer's name", 'input[name="name"]', customer.name],
-      ["customer's email", 'input[name="emailId"]', customer.email],
-      ["customer's mobile", 'input[name="mobileno"]', customer.phone],
-    ];
-    for (const [what, selector, value] of fields) {
-      if (!value) {
-        left.push(`Plan Summary: the ${what} (the client's details have none)`);
-        continue;
-      }
-      const r = await exec(wc, { op: 'setField', selector, value });
-      if (!r.ok) left.push(`Plan Summary: the ${what} (${r.detail ?? 'not filled'})`);
-    }
-    return { reached: true, left };
-  }
+  return readAgain(compose(kept), {
+    page,
+    progress,
+    compose: (read) =>
+      compose({
+        ...kept,
+        premium: read.value ?? '',
+        ...(read.label ? { sumInsured: read.label } : {}),
+      }),
+  });
 }

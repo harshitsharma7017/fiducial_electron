@@ -7,8 +7,10 @@
   element acts on a click only when no pointer press came just before (else Flutter takes the press
   as a tap on the canvas: window.__canvasTaps counts those). Issue Quotes & Policy shows the
   products (and a saved quote also reading Private Car); Private Car sends the tab to PIE's
-  redirect page (the same port on 127.0.0.1, PIE's copy). ?popup=1: a message covers the page,
-  showing only Close.
+  redirect page (the same port on 127.0.0.1, PIE's copy). The products also list PIE's health
+  forms by their own tiles (named with more around them, "my:Optima Secure"), each sending PIE's
+  redirect on to its form; ?nohealth=1: only the motor products. ?popup=1: a message covers the
+  page, showing only Close.
 -->
 <html>
   <head>
@@ -82,23 +84,60 @@
       const show = (nodes) => {
         host.replaceChildren(...nodes);
       };
-      const toPie = () => {
+      const toPie = (to) => {
         const pie = location.origin.replace('localhost', '127.0.0.1');
         setTimeout(() => {
           // For the harness (this page is gone once PIE shows): what was tapped, and canvas taps.
           const tapped = encodeURIComponent(window.__tapped.join('|'));
           // ?hang=1: PIE's page keeps loading.
           const hang = new URLSearchParams(location.search).get('hang') === '1' ? '&hang=1' : '';
-          location.href = `${pie}/WrapperApi/RedirectToDashboardGet?data=synthetic&tapped=${tapped}&canvasTaps=${window.__canvasTaps}${hang}`;
+          const form = to ? `&to=${encodeURIComponent(to)}` : '';
+          location.href = `${pie}/WrapperApi/RedirectToDashboardGet?data=synthetic&tapped=${tapped}&canvasTaps=${window.__canvasTaps}${hang}${form}`;
         }, 300);
       };
-      const products = () =>
+      // 1up's products as the live trace of 26 November 2026 showed them: quick quotes (its
+      // Private Car opens 1up's own quote screen, not PIE), Policy Issuance, and PIE Dashboard,
+      // 1up's link to PIE (its sign-in redirect, then PIE's dashboard). ?nodash=1: without PIE
+      // Dashboard. ?old=1: the older screen (5 November), whose Private Car led to PIE.
+      const query = new URLSearchParams(location.search);
+      const quickQuote = () =>
+        show([
+          node('Private Car Quote', 20),
+          node('What is the Registration Number ?', 60),
+          node('Continue', 100, () => {}),
+          node('It’s a new car', 140, () => {}),
+          node('Dismiss', 180, () => {}),
+        ]);
+      const products = () => (query.get('old') === '1' ? oldProducts() : newProducts());
+      const newProducts = () =>
+        show([
+          node('Quotes & Policies', 20),
+          node('Create a quick quote for', 50),
+          node('NEW Health', 80, () => {}),
+          node('Private Car', 110, quickQuote),
+          node('Two-wheeler', 140, () => {}),
+          node('Private Car Synthetic Insured 12/11/2026', 170, () => {}),
+          node('Policy Issuance', 200),
+          node('Health', 230, () => {}),
+          node('Motor', 260, () => {}),
+          ...(query.get('nodash') === '1'
+            ? []
+            : [node('PIE Dashboard', 290, () => toPie('/Dashboard/Details'))]),
+        ]);
+      const oldProducts = () =>
         show([
           node('Motor', 20),
-          node('Private Car', 70, toPie),
+          node('Private Car', 70, () => toPie()),
           node('Two Wheeler', 120, () => {}),
           // A saved quote: its label starts with the product's, so only the exact one is right.
           node('Private Car Synthetic Insured 12/11/2026', 170, () => {}),
+          ...(new URLSearchParams(location.search).get('nohealth') === '1'
+            ? []
+            : [
+                node('Health', 220),
+                node('my:Optima Secure', 270, () => toPie('/OptimaSecure/CreateQuote')),
+                node('my:Optima Restore', 320, () => toPie('/OptimaRestore/CreateQuote')),
+              ]),
         ]);
       const home = () =>
         show(

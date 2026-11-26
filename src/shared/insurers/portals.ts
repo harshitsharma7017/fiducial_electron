@@ -104,6 +104,12 @@ export const insurerPortalSchema = z
      * starts from a form left half-way.
      */
     homeUrl: httpsUrl.optional(),
+    /**
+     * Home pages on the insurer's other sites: a tab on one of their origins is sent back to that
+     * one, not to homeUrl (request of 26 November 2026: HDFC ERGO's PIE dashboard, so PIE stays
+     * signed in and the next quote opens its form there, without going through 1up again).
+     */
+    siteHomeUrls: z.array(httpsUrl).max(3).optional(),
     /** The only origin the login form may be filled on. */
     loginOrigin: httpsOrigin,
     /** Origins the portal window may navigate to. */
@@ -143,6 +149,17 @@ export const insurerPortalSchema = z
   .refine(
     (p) => p.homeUrl === undefined || p.allowedOrigins.includes(new URL(p.homeUrl).origin),
     'homeUrl must be allowed',
+  )
+  .refine(
+    (p) =>
+      (p.siteHomeUrls ?? []).every((u) => {
+        const { origin, hostname } = new URL(u);
+        return (
+          p.allowedOrigins.includes(origin) ||
+          (p.allowedDomains ?? []).some((d) => hostname.endsWith(`.${d}`))
+        );
+      }),
+    'siteHomeUrls must be allowed',
   )
   .refine((p) => (p.automation === 'autofill') === (p.form !== undefined), 'autofill needs a form')
   .refine(
@@ -202,6 +219,8 @@ const PORTALS: readonly InsurerPortal[] = [
     displayName: 'HDFC ERGO',
     startUrl: 'https://1up.hdfcergo.com/',
     homeUrl: 'https://1up.hdfcergo.com/dashBoardScreen',
+    // A tab on PIE stays there (its dashboard, as in the recording of 5 November 2026).
+    siteHomeUrls: ['https://pie.hdfcergo.com/Dashboard/Details'],
     loginOrigin: 'https://1up.hdfcergo.com',
     allowedOrigins: ['https://1up.hdfcergo.com'],
     subframeOrigins: [],
@@ -222,6 +241,8 @@ const PORTALS: readonly InsurerPortal[] = [
     displayName: 'ICICI Lombard',
     startUrl: 'https://nysa.icicilombard.com/#/login',
     homeUrl: 'https://nysa.icicilombard.com/#/dashboard',
+    // A tab on the health site stays there (its dashboard), signed in for the next quote.
+    siteHomeUrls: ['https://nysa-health.icicilombard.com/health/dashboard'],
     loginOrigin: 'https://nysa.icicilombard.com',
     allowedOrigins: ['https://nysa.icicilombard.com'],
     // NYSA's dashboard tiles ask its server where to go (ProductRedirect) and are sent there:

@@ -12,7 +12,7 @@ import type { ClientInput } from '../../shared/contracts/client';
 import type { NiaHealthPolicy } from '../../shared/insurers/nia-health';
 import { niaHealthForm, planNiaHealthQuote, type NiaHealthStep } from './nia-health';
 import { FORM_PATH, openNiaForm, pathOf, type NiaFormToOpen } from './run-nia-motor';
-import { exec, runPause, type QuoteRunResult } from './run-uiic-health';
+import { exec, runPause, type QuoteRunResult, reportStep } from './run-uiic-health';
 import { FillProgress, handedOver } from './hand-over';
 
 /** The question New India asks on the dashboard before it opens some forms (text it starts with). */
@@ -168,6 +168,7 @@ export async function fillNiaForm(deps: {
     });
   };
   for (const [index, step] of deps.steps.entries()) {
+    reportStep(step.label);
     const result = await exec(wc, step.op);
     if (result.ok && step.keep && result.value) kept[step.keep] = result.value;
     if (!step.dialogOk) {

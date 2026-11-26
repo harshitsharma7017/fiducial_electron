@@ -2060,3 +2060,147 @@ label.check input {
   margin-left: var(--space-1);
   color: var(--text-3);
 }
+
+/* Compare insurers (quote/ComparePanel.tsx): the insurers chosen, then a card per insurer. */
+.compare-pick {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.compare-pick legend {
+  padding: 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+}
+
+.compare-pick-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+}
+
+.compare-pick-row .compare-hint {
+  grid-column: 2;
+}
+
+.compare-pick-product {
+  font-size: var(--text-sm);
+  color: var(--text-2);
+}
+
+.compare-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+}
+
+.compare-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: var(--space-3);
+}
+
+.compare-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.compare-card p,
+.compare-card ul {
+  margin: 0;
+}
+
+.compare-card ul {
+  padding-left: var(--space-5);
+}
+
+.compare-card header {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.compare-card header > div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.compare-card header > div span {
+  color: var(--text-2);
+}
+
+.compare-state {
+  font-weight: var(--weight-bold);
+  color: var(--text-2);
+}
+
+.compare-running {
+  border-top-color: var(--primary);
+}
+
+.compare-handed-over {
+  border-top-color: var(--warning, var(--primary));
+}
+
+.compare-handed-over .compare-state {
+  color: var(--warning, var(--primary));
+}
+
+.compare-ready {
+  border-top-color: var(--success);
+}
+
+.compare-ready .compare-state {
+  color: var(--success);
+}
+
+.compare-failed,
+.compare-refused {
+  border-top-color: var(--danger, var(--border));
+}
+
+.compare-step {
+  color: var(--text-2);
+}
+
+.compare-card .premium {
+  margin: 0;
+}
+
+.compare-card .premium strong {
+  font-size: var(--text-xl, var(--text-md));
+}
+
+.compare-amount {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.compare-amount label {
+  display: grid;
+  gap: 2px;
+}
+
+.compare-amount input {
+  width: 9rem;
+}
+
+.compare-pick-row .compare-adjust {
+  grid-column: 2;
+  font-size: var(--text-sm);
+}

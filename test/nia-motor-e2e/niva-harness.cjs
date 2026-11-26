@@ -195,7 +195,7 @@ const CASES = [
   },
   {
     traced: true,
-    name: "as the app runs now, family from UNO's home page: ReAssure 2.0 floater, ₹20 lakh, 2 years, add-ons, Tiered Network, on to Plan Summary",
+    name: "as the app runs now, family from UNO's home page: ReAssure 2.0 floater, ₹20 lakh, 2 years, add-ons, Tiered Network, premium read on Customize Your Plan (no Plan Summary)",
     start: '/uno/#/landing-page',
     client: FAMILY,
     run: RUN,
@@ -213,15 +213,14 @@ const CASES = [
       city: 'Ahmedabad',
       phone: '9876543210',
       answers: ['NO', 'NO', 'NO'],
-      route: '#/new-premiumcalculator/plan-summary',
-      customer: ['Synthetic Insured', '', '9876543210'],
+      route: '#/new-premiumcalculator/third-step',
       sum: '₹ 2,000,000',
       addOns: ['Safeguard', 'Prolonged treatment assistance cover'],
       tier: true,
       alertsOpen: 0,
       calculated: true,
-      // On to Plan Summary, the customer's details filled there; Generate Quote never pressed.
-      summary: true,
+      // The run stops on Customize Your Plan: never Plan Summary, never Generate Quote.
+      summary: false,
       generated: false,
     },
     toDo: ['check the ReAssure 2.0 options'],
@@ -250,8 +249,8 @@ const CASES = [
       addOns: [],
       tier: false,
       calculated: true,
-      // On to Plan Summary, the customer's details filled there; Generate Quote never pressed.
-      summary: true,
+      // The run stops on Customize Your Plan: never Plan Summary, never Generate Quote.
+      summary: false,
       generated: false,
     },
     toDo: ['add-on "Hospital Cash Plus" (not found'],
@@ -267,10 +266,10 @@ const CASES = [
       plan: 'ReAssure2.0 Individual',
       city: 'Ahmedabad',
       sum: '₹ 1,500,000',
-      route: '#/new-premiumcalculator/plan-summary',
+      route: '#/new-premiumcalculator/third-step',
       calculated: false,
-      // On to Plan Summary, the customer's details filled there; Generate Quote never pressed.
-      summary: true,
+      // The run stops on Customize Your Plan: never Plan Summary, never Generate Quote.
+      summary: false,
       generated: false,
     },
   },
@@ -336,8 +335,8 @@ const CASES = [
       plan: 'ReAssure2.0 Individual',
       planBox: 'ReAssure2.0 Individual',
       city: 'Ahmedabad',
-      route: '#/new-premiumcalculator/plan-summary',
-      summary: true,
+      route: '#/new-premiumcalculator/third-step',
+      summary: false,
       generated: false,
     },
   },

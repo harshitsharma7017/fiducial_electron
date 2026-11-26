@@ -35,6 +35,7 @@ import {
 } from './TravelProposalPanel';
 import { NiaTravelPanel } from './NiaTravelPanel';
 import { HdfcTravelPanel } from '../insurers/HdfcPanels';
+import { IciciTravelPanel } from '../quote/IciciNysaPanels';
 
 /** The passport number, kept apart (secret vault): the form only knows its last four characters. */
 interface PassportDraft {
@@ -317,6 +318,12 @@ export function TravellersPanel(): React.JSX.Element | null {
             )}
             {quote.product === 'nia-travel' && <NiaTravelPanel travellerId={quote.id} />}
             {quote.product === 'hdfc-travel' && <HdfcTravelPanel travellerId={quote.id} />}
+            {quote.product === 'icici-intl-travel' && (
+              <IciciTravelPanel travellerId={quote.id} form="international" />
+            )}
+            {quote.product === 'icici-student-travel' && (
+              <IciciTravelPanel travellerId={quote.id} form="student" />
+            )}
           </>
         )}
       </QuoteWorkspace>
@@ -351,6 +358,18 @@ const TRAVEL_OPTIONS: QuoteOption[] = [
     insurer: 'HDFC ERGO',
     label: 'Retail travel premium',
     description: 'Fills PIE and reads the premium',
+  },
+  {
+    key: 'icici-intl-travel',
+    insurer: 'ICICI Lombard',
+    label: 'International Travel premium (NYSA)',
+    description: 'Fills NYSA’s health site and reads the premium',
+  },
+  {
+    key: 'icici-student-travel',
+    insurer: 'ICICI Lombard',
+    label: 'Student Medical Travel premium (NYSA)',
+    description: 'Fills NYSA’s health site; you pick the plan if ICICI asks',
   },
 ];
 

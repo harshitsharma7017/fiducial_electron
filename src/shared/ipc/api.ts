@@ -10,6 +10,7 @@ import type {
   PortalTabsView,
   QuoteRunRequest,
   InsurerPortalList,
+  QuoteProgressView,
   QuoteRunResultView,
   SaveClientRequest,
   SaveLoginRequest,
@@ -61,14 +62,29 @@ export interface FqfApi {
     /** Motor: for a saved vehicle; health: for a client; travel: for a travel client. */
     run(request: QuoteRunRequest): Promise<AppResult<QuoteRunResultView>>;
     /** Stops the run in progress where it is (or the wait for a handed-over form's premium). */
-    cancel(): Promise<AppResult<{ cancelled: boolean }>>;
+    cancel(insurerId?: string): Promise<AppResult<{ cancelled: boolean }>>;
     /**
      * Finishes the form the last run handed over, once the advisor has the premium: read from the
      * insurer's page (waiting up to `waitMs`), or as typed (`amount`); saves the PDF.
      */
-    finish(request: { waitMs: number; amount?: string }): Promise<AppResult<QuoteRunResultView>>;
+    finish(request: {
+      waitMs: number;
+      amount?: string;
+      insurerId?: string;
+    }): Promise<AppResult<QuoteRunResultView>>;
     /** Opens a quote PDF the app saved (by its file name). */
     openPdf(name: string): Promise<AppResult<{ opened: boolean }>>;
+    /** Each insurer's latest quote, once something changed after `since` (or 20 seconds on). */
+    progress(since: number): Promise<AppResult<{ version: number; items: QuoteProgressView[] }>>;
+    /** One PDF comparing the premiums these insurers quoted for a health client. */
+    compare(request: {
+      clientId: string;
+      insurerIds: string[];
+    }): Promise<
+      AppResult<
+        { ok: true; pdf: { name: string }; insurers: number } | { ok: false; message: string }
+      >
+    >;
   };
   clients: {
     list(): Promise<AppResult<ClientListResponse>>;
@@ -140,7 +156,7 @@ export interface FqfApi {
 export const API_SHAPE = {
   app: ['getInfo'],
   insurers: ['list', 'saveLogin', 'forgetLogin', 'openPortal', 'signOut', 'record'],
-  quotes: ['run', 'cancel', 'finish', 'openPdf'],
+  quotes: ['run', 'cancel', 'finish', 'openPdf', 'progress', 'compare'],
   iciciApi: ['status', 'save', 'test'],
   clients: ['list', 'get', 'save', 'delete', 'exportAll'],
   portals: ['tabs', 'show', 'close', 'setBounds'],

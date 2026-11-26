@@ -8,7 +8,8 @@
 // calculator, and the recorder on its Ionic controls), npm run test:nia -- alive (keeping portals
 // signed in: the in-page agent), npm run test:nia -- pie (HDFC ERGO's PIE motor forms and MST),
 // npm run test:nia -- icici (ICICI Lombard's NYSA motor quote), npm run test:nia -- bajaj (Bajaj
-// Allianz's Personal Accident quote)
+// Allianz's Personal Accident quote), npm run test:nia -- nysa (ICICI Lombard's NYSA health site:
+// Elevate, International Travel, Student Medical Travel)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -51,6 +52,7 @@ const harness =
     pie: 'pie-harness.cjs',
     icici: 'icici-harness.cjs',
     bajaj: 'bajaj-harness.cjs',
+    nysa: 'nysa-harness.cjs',
   }[process.argv[2]] ?? 'harness.cjs';
 const child = spawn(electron, [join(HERE, harness)], { env, stdio: 'inherit' });
 child.on('exit', (code) => process.exit(code ?? 1));

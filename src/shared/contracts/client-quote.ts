@@ -27,6 +27,7 @@ import {
   type IciciApiHealthRun,
   type IciciHealthProduct,
 } from '../insurers/icici-api';
+import type { IciciElevateRun } from '../insurers/icici-nysa';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const years3 = z.union([z.literal(1), z.literal(2), z.literal(3)]);
@@ -108,6 +109,10 @@ export const clientQuoteChoicesSchema = z.strictObject({
       tenure: z.int().min(1).max(5).optional(),
       preExistingDisease: z.boolean().optional(),
       paymentOption: z.enum(['annual', 'monthly', 'quarterly']).optional(),
+      /** Elevate on NYSA (its own list: ₹7.5 to 50 lakh), apart from the partner API's sums. */
+      nysaSumInsured: z.int().min(100000).max(100_000_000).optional(),
+      /** The applicant's annual income (₹): Elevate on NYSA asks its band. */
+      annualIncome: z.int().positive().max(1_000_000_000).optional(),
     })
     .optional(),
   // Personal Accident (recording of 25 November 2026).
@@ -146,6 +151,7 @@ export const QUOTE_DEFAULTS = {
   iciciSumInsured: 500000,
   iciciDeductible: 500000,
   iciciTenure: 1,
+  iciciNysaSumInsured: 1000000,
   iciciPayment: 'annual',
 } as const;
 
@@ -265,6 +271,30 @@ export function hdfcRetailFromChoices(
 /** The sums insured the client form offers for an ICICI plan. */
 export const iciciSumsFor = (product: IciciHealthProduct): readonly number[] =>
   product === 'elevate' ? ICICI_ELEVATE_SUMS : [500000, 1000000, 2000000, 2500000, 5000000];
+
+/** Elevate on ICICI's NYSA health site, from the client's ICICI details. */
+export function iciciElevateFromChoices(
+  choices: ClientQuoteChoices | undefined,
+): FromChoices<IciciElevateRun> {
+  const c = choices?.['icici-lombard'] ?? {};
+  const missing: string[] = [];
+  if (c.annualIncome === undefined) {
+    missing.push(`the applicant's annual income ${where('icici-lombard')}`);
+  }
+  if (c.preExistingDisease === undefined) {
+    missing.push(`whether any member has a pre-existing disease ${where('icici-lombard')}`);
+  }
+  if (missing.length > 0) return { ok: false, missing };
+  return {
+    ok: true,
+    value: {
+      sumInsured: c.nysaSumInsured ?? QUOTE_DEFAULTS.iciciNysaSumInsured,
+      tenure: c.tenure ?? QUOTE_DEFAULTS.iciciTenure,
+      annualIncome: c.annualIncome!,
+      preExistingDisease: c.preExistingDisease!,
+    },
+  };
+}
 
 export function iciciHealthFromChoices(
   product: IciciHealthProduct,

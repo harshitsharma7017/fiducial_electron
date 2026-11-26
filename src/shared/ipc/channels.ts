@@ -40,6 +40,8 @@ export const IPC_CHANNELS = {
   quotesRun: 'quotes:run',
   quotesCancel: 'quotes:cancel',
   quotesFinish: 'quotes:finish',
+  quotesProgress: 'quotes:progress',
+  quotesCompare: 'quotes:compare',
   iciciApiStatus: 'icici-api:status',
   iciciApiSave: 'icici-api:save',
   iciciApiTest: 'icici-api:test',

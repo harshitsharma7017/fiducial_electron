@@ -11,20 +11,27 @@ const page = (params) =>
     ? PAGE.replace('</body>', '<iframe src="/hang" style="display:none"></iframe></body>')
     : PAGE;
 // PIE's sign-in redirect page, reached from 1up (?data=…): it sends the tab on by itself to the
-// product pressed there (Private Car) a second later, as recorded on 5 November 2026.
-const redirect = (params) =>
-  params?.get('data')
-    ? page(params).replace(
-        '</body>',
-        "<script>setTimeout(() => { location.href = '/PrivateCar/CreateQuote'; }, 1000);</script></body>",
-      )
-    : page(params);
+// product pressed there a second later (Private Car, or ?to= the health form whose tile was
+// pressed), as recorded on 5 November 2026.
+const redirect = (params) => {
+  if (!params?.get('data')) return page(params);
+  const to = /^\/[A-Za-z]+\/(CreateQuote|Details)$/.test(params.get('to') ?? '')
+    ? params.get('to')
+    : '/PrivateCar/CreateQuote';
+  return page(params).replace(
+    '</body>',
+    `<script>setTimeout(() => { location.href = '${to}'; }, 1000);</script></body>`,
+  );
+};
 module.exports = {
   '/WrapperApi/RedirectToDashboardGet': redirect,
   '/PrivateCar/CreateQuote': page,
   '/TwoWheelerBlaze/CreateQuote': page,
   '/MST/CreateQuote': page,
   '/OptimaSecure/CreateQuote': page,
+  '/OptimaRestore/CreateQuote': page,
+  // PIE's dashboard (1up's PIE Dashboard link lands there).
+  '/Dashboard/Details': page,
   '/Travel/CreateQuote': page,
   '/dashBoardScreen': () => ONE_UP,
 };

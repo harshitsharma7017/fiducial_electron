@@ -11,12 +11,13 @@
 //   and intermediary, presses View Premium and reads the premium if shown, and stops.
 // - Overseas Mediclaim e-proposals (B&H, SCHENGEN, Studies; plan: uiic-omp-proposal.ts): fill the
 //   trip, choose the plan, fill the proposer and insured, read the premium, and stop.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { WebContents } from 'electron';
 import type { PortalPage } from '../insurers/portal-host';
 import type { ClientInput } from '../../shared/contracts/client';
 import type { Vehicle } from '../../shared/contracts/vehicle';
 import { quotePageAgent, type PageOp, type PageOpResult } from './page-ops';
-import { FillProgress, handedOver, type HandOver } from './hand-over';
+import { FillProgress, handedOver, readAgain, type HandOver } from './hand-over';
 import { planUiicHealthQuote, type PlanStep } from './uiic-health';
 import {
   planUiicHealthProposal,
@@ -62,46 +63,102 @@ export interface QuoteRunResult {
   handOver?: HandOver;
 }
 
-/** Told of each page a run's step works in (the quote service brings it to the front). */
+/**
+ * A quote run's own state (request of 25 November 2026: several insurers' quotes run at the same
+ * time, each in its own tab): its cancel switch, the page its last step worked in, who follows its
+ * work (bringing the tab to the front), and who is told of its steps (the progress shown). A run
+ * started with runScoped carries its scope through every await (AsyncLocalStorage), so exec,
+ * runPause and lastWorkedPage act on that run only. beginRun/endRun/stopRun keep a single
+ * unscoped run, as before.
+ */
+interface RunScope {
+  controller: AbortController;
+  lastWorked: WebContents | null;
+  follower: ((wc: WebContents) => void) | null;
+  onStep: ((label: string) => void) | null;
+}
+const scopes = new AsyncLocalStorage<RunScope>();
+const newScope = (onStep: ((label: string) => void) | null = null): RunScope => ({
+  controller: new AbortController(),
+  lastWorked: null,
+  follower: null,
+  onStep,
+});
+/** The single unscoped run (beginRun), if any. */
+let single: RunScope | null = null;
+/** Who follows an unscoped run's work. */
 let workFollower: ((wc: WebContents) => void) | null = null;
+/** The page the unscoped run's last step worked in (kept after it ends). */
+let lastUnscoped: WebContents | null = null;
+const currentScope = (): RunScope | null => scopes.getStore() ?? single;
 
 /** While set, every page a step works in is reported, so the advisor sees the form being filled. */
 export function followWork(follower: ((wc: WebContents) => void) | null): void {
-  workFollower = follower;
+  const scope = scopes.getStore();
+  if (scope) scope.follower = follower;
+  else workFollower = follower;
 }
 
 /** Thrown out of a run when the advisor cancels it (the quote service turns it into the result). */
 export class QuoteRunStopped extends Error {}
 
-/** The run in progress, if any: aborted when the advisor cancels it. */
-let currentRun: AbortController | null = null;
-/** The page the run's last step worked in (where it read the premium, at the end). */
-let lastWorked: WebContents | null = null;
-
 export function beginRun(): void {
-  currentRun = new AbortController();
-  lastWorked = null;
+  single = newScope();
+  lastUnscoped = null;
 }
 
 /** The page the current or last run's last step worked in, if still open. */
 export function lastWorkedPage(): WebContents | null {
-  return lastWorked && !lastWorked.isDestroyed() ? lastWorked : null;
+  const scope = scopes.getStore();
+  const wc = scope ? scope.lastWorked : lastUnscoped;
+  return wc && !wc.isDestroyed() ? wc : null;
 }
 
 export function endRun(): void {
-  currentRun = null;
+  single = null;
 }
 
-/** Asks the run in progress to stop; false if there is none (or it is already stopping). */
+/** Asks the unscoped run in progress to stop; false if there is none (or it is already stopping). */
 export function stopRun(): boolean {
-  if (!currentRun || currentRun.signal.aborted) return false;
-  currentRun.abort();
+  if (!single || single.controller.signal.aborted) return false;
+  single.controller.abort();
   return true;
+}
+
+/** A run in its own scope: its result, its cancel, and the page its last step worked in. */
+export interface ScopedRun<T> {
+  done: Promise<T>;
+  /** Asks it to stop; false if it is already stopping. */
+  stop: () => boolean;
+  lastWorked: () => WebContents | null;
+}
+
+/** Runs `work` in a scope of its own (alongside other runs); `onStep` is told of its steps. */
+export function runScoped<T>(
+  work: () => Promise<T>,
+  onStep: ((label: string) => void) | null = null,
+): ScopedRun<T> {
+  const scope = newScope(onStep);
+  return {
+    done: scopes.run(scope, work),
+    stop: () => {
+      if (scope.controller.signal.aborted) return false;
+      scope.controller.abort();
+      return true;
+    },
+    lastWorked: () =>
+      scope.lastWorked && !scope.lastWorked.isDestroyed() ? scope.lastWorked : null,
+  };
+}
+
+/** Tells the run's watcher which step it is on (the progress shown while it runs). */
+export function reportStep(label: string): void {
+  currentScope()?.onStep?.(label);
 }
 
 /** `work`, abandoned as soon as the run is cancelled. */
 function orStopped<T>(work: Promise<T>, onStop?: () => void): Promise<T> {
-  const signal = currentRun?.signal;
+  const signal = currentScope()?.controller.signal;
   if (!signal) return work;
   return new Promise<T>((resolve, reject) => {
     const stop = () => {
@@ -127,10 +184,13 @@ export function runPause(ms: number): Promise<void> {
  * QuoteRunStopped once the run is cancelled, whatever step it is on, optional steps included.
  */
 export async function exec(wc: WebContents, op: PageOp): Promise<PageOpResult> {
-  if (currentRun?.signal.aborted) throw new QuoteRunStopped();
+  const scope = currentScope();
+  if (scope?.controller.signal.aborted) throw new QuoteRunStopped();
   if (wc.isDestroyed()) return { ok: false, detail: 'window-closed' };
-  workFollower?.(wc);
-  lastWorked = wc;
+  const store = scopes.getStore();
+  (store ? store.follower : workFollower)?.(wc);
+  if (store) store.lastWorked = wc;
+  else lastUnscoped = wc;
   try {
     const agent = wc.executeJavaScriptInIsolatedWorld(WORLD_ID, [
       { code: `(window.__fqfStop = false, (${AGENT_SOURCE})(${JSON.stringify(op)}))` },
@@ -273,6 +333,7 @@ async function runInCalculator(deps: {
     });
   };
   for (const [index, step] of deps.steps.entries()) {
+    reportStep(step.label);
     if (progress.stopBefore(index)) return handOver();
     const result = await exec(page.webContents, step.op);
     let errors = await exec(page.webContents, { op: 'errors' });
@@ -307,7 +368,12 @@ async function runInCalculator(deps: {
   if (progress.left.length > 0) return handOver();
   page.focus();
   // The same message may come from more than one step (each section opened lists it again).
-  return deps.compose(last, kept, [...new Set(notes)]);
+  return readAgain(deps.compose(last, kept, [...new Set(notes)]), {
+    page,
+    progress,
+    compose: (read) =>
+      deps.compose(read, read.value ? { ...kept, premium: read.value } : kept, [...new Set(notes)]),
+  });
 }
 
 export async function runUiicHealthQuote(deps: {
