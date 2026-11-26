@@ -8,7 +8,9 @@ import { RuralPanel } from './rural/RuralPanel';
 import { MarinePanel } from './marine/MarinePanel';
 import { PropertyPanel } from './property/PropertyPanel';
 import { InsurerPortals } from './insurers/InsurerPortals';
+import { ComparePage } from './quote/ComparePage';
 import { AppShell, type ViewId } from './shell/AppShell';
+import { isPagePaused } from '../../shared/insurers/availability';
 import { Overview, type AppStatus } from './shell/Overview';
 import { PageHeader } from './ui/PageHeader';
 import { FlaskConical } from 'lucide-react';
@@ -96,10 +98,13 @@ export function App(): React.JSX.Element {
         'marine',
         'properties',
         'vehicles',
+        'compare',
         'insurers',
       );
     if (dev) available.push('development');
-    const shown = available.includes(view) ? view : 'overview';
+    // Rural, Marine and Property clients are quoted with New India only: paused with it.
+    const offered = available.filter((v) => !isPagePaused(v));
+    const shown = offered.includes(view) ? view : 'overview';
     return (
       <AppShell
         view={shown}
@@ -135,6 +140,9 @@ export function App(): React.JSX.Element {
             </div>
             <div className="page" hidden={shown !== 'vehicles'}>
               <VehiclesPanel />
+            </div>
+            <div className="page" hidden={shown !== 'compare'}>
+              <ComparePage active={shown === 'compare'} />
             </div>
             <div className="page" hidden={shown !== 'insurers'}>
               <InsurerPortals />

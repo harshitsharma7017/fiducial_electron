@@ -7,6 +7,7 @@
 import { ExternalLink, FileDown, MousePointerClick } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { InsurerAvatar } from '../insurers/branding';
+import { isInsurerNamePaused } from '../../../shared/insurers/availability';
 import { usePortalTabs } from '../insurers/PortalTabs';
 import { Modal } from '../ui/Modal';
 import { onQuoteRun, openQuotePdf, showInsurerTab } from './run';
@@ -32,7 +33,9 @@ export function QuoteWorkspace(props: {
   /** The chosen product's panel. */
   children: ReactNode;
 }): React.JSX.Element {
-  const { options, selected } = props;
+  const { selected } = props;
+  // A paused insurer's products are not offered (shared/insurers/availability.ts).
+  const options = props.options.filter((o) => !isInsurerNamePaused(o.insurer));
   const [running, setRunning] = useState(false);
   const [ranFor, setRanFor] = useState<{
     insurerId: string;

@@ -46,6 +46,8 @@ export interface QuoteRunResult {
   premium?: { label: string; amount: string };
   /** Every plan the insurer quoted for the same request, with its premium, as shown there. */
   plans?: { name: string; amount: string }[];
+  /** Stop & make PDF found several plans: the advisor chooses which go in the PDF. */
+  choose?: boolean;
   /** What the plans' amounts are ("Premium (excluding GST)"). */
   amountLabel?: string;
   /** How the insurer made the premium up (an API's answer: IDV, OD, TP, GST…), as shown. */

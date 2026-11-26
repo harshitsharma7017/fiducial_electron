@@ -5,10 +5,20 @@
 //   Fetch Vehicle Data (ICICI looks the vehicle up in Vahan itself; a two-wheeler's number shows
 //   "…belongs to Two Wheeler. Switching to the Two Wheeler buying flow", answered OK) →
 //   /NysaMotor/premium: "Total Premium ₹2,533" and the IDV slider (its box and Update).
-// Only renewals of registered vehicles (Rollover) are automated: ICICI's New Business flow was not
-// recorded. It never presses Buy Now (it saves the quote, GenericSaveQuote), Share Quote, or
+// Renewals of registered vehicles (Rollover) are automated through to the premium. ICICI's New
+// Business flow was not recorded (the recording chose New and went back to Rollover): a new
+// vehicle is taken to NYSA's quote form with New Business chosen, then handed to the advisor, who
+// fills the vehicle there and presses Stop & make PDF once the premium shows (request of 26
+// November 2026: "ICICI is still locked"). It never presses Buy Now (it saves the quote, GenericSaveQuote), Share Quote, or
 // anything on the proposal.
+//
+// The Motor tile is on NYSA's own dashboard (nysa.icicilombard.com) only: after a health or travel
+// quote the tab is on NYSA's health site (nysa-health.icicilombard.com, its own dashboard has no
+// Motor tile), so NYSA's dashboard is opened first (26 November 2026: "why icici motor is not
+// working"). Each run is traced (diagnostics/icici-lombard-…json) when it does not end ready.
 import type { PortalPage } from '../insurers/portal-host';
+import { findPortal } from '../../shared/insurers/portals';
+import { traced, type RunTrace } from './run-trace';
 import type { Vehicle } from '../../shared/contracts/vehicle';
 import type { IciciMotorRun } from '../../shared/insurers/icici';
 import { exec, runPause, type QuoteRunResult } from './run-uiic-health';
@@ -38,22 +48,42 @@ const rupees = (n: number): string => n.toLocaleString('en-IN');
 /** Why this vehicle and run cannot be filled in (nothing is touched). */
 export function iciciMotorProblems(vehicle: Vehicle, run: IciciMotorRun): string[] {
   const problems: string[] = [];
-  if (vehicle.condition === 'new') {
-    problems.push(
-      'ICICI Lombard is automated for renewals of registered vehicles only (Rollover): its New Business form was not recorded. Quote a new vehicle on NYSA by hand.',
-    );
+  // A new vehicle needs no number: its form is handed over (New Business).
+  if (vehicle.condition !== 'new' && !run.registrationNumber) {
+    problems.push('Add the registration number.');
   }
-  if (!run.registrationNumber) problems.push('Add the registration number.');
   return problems;
 }
 
-export async function runIciciMotorQuote(deps: {
+/** NYSA's own dashboard, where the Motor tile is. */
+const NYSA_DASHBOARD =
+  findPortal('icici-lombard')?.homeUrl ?? 'https://nysa.icicilombard.com/#/dashboard';
+
+type MotorDeps = {
   /** ICICI Lombard's pages (tabs): its portal first. */
   windows: () => PortalPage[];
   vehicle: Vehicle;
   run: IciciMotorRun;
-}): Promise<QuoteRunResult> {
+  /** NYSA's dashboard (the harness serves its own copy). */
+  dashboardUrl?: string;
+  diagnose?: (name: string, data: unknown) => string | null;
+};
+
+export async function runIciciMotorQuote(deps: MotorDeps): Promise<QuoteRunResult> {
+  return traced(
+    deps.diagnose,
+    'icici-lombard',
+    'icici-motor',
+    deps.windows,
+    'How NYSA Motor was opened',
+    (trace) => runMotor(deps, trace),
+  );
+}
+
+async function runMotor(deps: MotorDeps, trace: RunTrace): Promise<QuoteRunResult> {
   const { vehicle, run } = deps;
+  /** What the quote is for, in its PDF: the registration number, or a new vehicle. */
+  const named = run.registrationNumber ?? 'new vehicle';
   const problems = iciciMotorProblems(vehicle, run);
   if (problems.length > 0) {
     return {
@@ -100,10 +130,29 @@ export async function runIciciMotorQuote(deps: {
         );
       }
     } else {
-      const dashboard = pages()[0];
+      const home = deps.dashboardUrl ?? NYSA_DASHBOARD;
+      const originOf = (url: string) => {
+        try {
+          return new URL(url).origin;
+        } catch {
+          return '';
+        }
+      };
+      const nysa = originOf(home);
+      let dashboard = pages().find((p) => originOf(p.webContents.getURL()) === nysa);
       if (!dashboard) {
-        return failed('Open the quote form', 'Open ICICI Lombard and sign in, then try again.');
+        // On NYSA's health site (or elsewhere): NYSA's own dashboard is opened in the tab.
+        dashboard = pages()[0];
+        if (!dashboard) {
+          return failed('Open the quote form', 'Open ICICI Lombard and sign in, then try again.');
+        }
+        trace.note("Opened NYSA's dashboard", { from: dashboard.webContents.getURL() });
+        await Promise.race([
+          Promise.resolve(dashboard.webContents.loadURL(home)).catch(() => undefined),
+          runPause(20_000),
+        ]);
       }
+      trace.note('Pressing the Motor tile', { on: dashboard.webContents.getURL() });
       const tile = await exec(dashboard.webContents, {
         op: 'clickText',
         text: 'Motor',
@@ -112,12 +161,13 @@ export async function runIciciMotorQuote(deps: {
       if (!tile.ok && !tile.detail?.startsWith('page-changed')) {
         return failed(
           'Open the quote form',
-          `The Motor tile was not found on NYSA's dashboard (${tile.detail}). Open Motor by hand, then press again.`,
+          `The Motor tile was not found on NYSA's dashboard (${tile.detail}; the tab is on ${dashboard.webContents.getURL()}). Open Motor by hand, then press again.`,
           dashboard,
         );
       }
     }
     page = await waitForPath((p) => p === ICICI_QUOTE_PATH, 30_000);
+    trace.note(page ? 'The quote form opened' : 'The quote form did not open');
     if (!page) {
       return failed(
         'Open the quote form',
@@ -145,7 +195,7 @@ export async function runIciciMotorQuote(deps: {
         message: `ICICI Lombard: the Total Premium shown is ₹${read.value ?? ''}.`,
         problems: [],
         premium: {
-          label: `ICICI Lombard motor, ${run.registrationNumber}`,
+          label: `ICICI Lombard motor, ${named}`,
           amount: (read.value ?? '').replace(/[^\d.]/g, ''),
         },
         amountLabel: 'Total premium',
@@ -177,6 +227,21 @@ export async function runIciciMotorQuote(deps: {
     timeoutMs: 20_000,
   });
   if (stop) return stop;
+  // A new vehicle: New Business chosen, then the form is the advisor's (its fields not recorded).
+  if (vehicle.condition === 'new') {
+    const nb = 'input[name="policyType"][value^="New"]';
+    for (const op of [
+      { op: 'clickSelector', selector: `label:has(> ${nb})`, timeoutMs: 10_000 },
+      { op: 'waitFor', selector: `${nb}:checked`, timeoutMs: 3000 },
+    ] as const) {
+      const s = await step('Policy type: New Business', op);
+      if (s) return s;
+    }
+    return handOver(
+      'Vehicle details (New Business)',
+      "ICICI's New Business form has not been recorded, so the app chose New Business and stops here. Fill the vehicle's details on NYSA and get the premium",
+    );
+  }
   // A number fetched before is locked behind its Edit button.
   await exec(wc, { op: 'clickSelector', selector: 'button[aria-label="Edit"]', timeoutMs: 500 });
   const policyType = 'input[name="policyType"][value^="Roll"]';
@@ -207,7 +272,7 @@ export async function runIciciMotorQuote(deps: {
   for (const [label, op] of [
     [
       'Registration number',
-      { op: 'setField', selector: REGISTRATION, value: run.registrationNumber },
+      { op: 'setField', selector: REGISTRATION, value: run.registrationNumber ?? '' },
     ],
     [
       'Fetch Vehicle Data',
@@ -296,7 +361,7 @@ export async function runIciciMotorQuote(deps: {
     note = ` ICICI kept the IDV at ₹${rupees(Number(idvShown))} (the vehicle's ₹${rupees(vehicle.idvRupees)} is outside what it allows).`;
   }
   page.focus();
-  const label = `ICICI Lombard motor, ${run.registrationNumber}${idvShown ? `, IDV ₹${rupees(Number(idvShown))}` : ''}`;
+  const label = `ICICI Lombard motor, ${named}${idvShown ? `, IDV ₹${rupees(Number(idvShown))}` : ''}`;
   return {
     outcome: 'ready',
     step: null,

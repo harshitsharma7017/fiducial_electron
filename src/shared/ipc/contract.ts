@@ -278,6 +278,12 @@ export const quoteRunResultSchema = z
       .optional(),
     /** E-proposals: what the advisor still fills by hand, and the insurer's messages about it. */
     toDo: z.array(z.string().max(400)).max(30).optional(),
+    /**
+     * Stop & make PDF found several plans on the page (request of 26 November 2026: "ask which
+     * one to show"): nothing is saved yet; the advisor chooses among `plans`, then finishes with
+     * them.
+     */
+    choose: z.boolean().optional(),
     /** Every plan quoted for the same request, and what their amounts are. */
     plans: z
       .array(z.object({ name: z.string().max(200), amount: z.string().max(40) }).strict())
@@ -679,6 +685,11 @@ export const ipcContract = {
           .transform((v) => v.replace(/[,\s₹]/g, ''))
           .pipe(z.string().regex(/^\d{1,9}(\.\d{1,2})?$/, 'an amount in rupees'))
           .optional(),
+        /**
+         * The plans to put in the PDF (by name), when the page showed several (the result asked
+         * which: `choose`); all of them if absent and only one was shown.
+         */
+        plans: z.array(z.string().min(1).max(200)).min(1).max(20).optional(),
       })
       .strict(),
     response: quoteRunResultSchema,
@@ -715,10 +726,23 @@ export const ipcContract = {
       .strict(),
   },
   [IPC_CHANNELS.quotesCompare]: {
-    /** One PDF comparing the premiums these insurers quoted for a health client. */
+    /**
+     * One PDF comparing the premiums these insurers quoted for a health client, a vehicle or a
+     * travel client (requests of 26 November 2026: "multiple quotes should also be for vehicle
+     * clients"; "also need comparison for travel clients").
+     */
     request: z
-      .object({ clientId: entityIdSchema, insurerIds: z.array(insurerIdSchema).min(1).max(10) })
-      .strict(),
+      .object({
+        clientId: entityIdSchema.optional(),
+        vehicleId: entityIdSchema.optional(),
+        travellerId: entityIdSchema.optional(),
+        insurerIds: z.array(insurerIdSchema).min(1).max(10),
+      })
+      .strict()
+      .refine(
+        (r) => [r.clientId, r.vehicleId, r.travellerId].filter((x) => x !== undefined).length === 1,
+        { message: 'a health client, a vehicle or a travel client' },
+      ),
     response: z.discriminatedUnion('ok', [
       z
         .object({

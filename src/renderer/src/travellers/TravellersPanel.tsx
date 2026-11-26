@@ -14,9 +14,16 @@ import type { MenuEntry } from '../ui/Menu';
 import { RecordPage, type RecordItem } from '../ui/RecordPage';
 import { toast } from '../ui/toast';
 import { QuoteWorkspace, type QuoteOption } from '../quote/QuoteWorkspace';
+import { isInsurerNamePaused } from '../../../shared/insurers/availability';
 import type { Gender, MaritalStatus } from '../../../shared/contracts/client';
 import { OMP_FORMS, type OmpForm, type TravelOccupation } from '../../../shared/contracts/travel';
-import type { TravellerRaw, TravellerSummary } from '../../../shared/contracts/traveller';
+import {
+  TRIP_DESTINATIONS,
+  type TravellerRaw,
+  type TravellerSummary,
+  type TripDestination,
+} from '../../../shared/contracts/traveller';
+import { ICICI_TRAVEL_DESTINATION_NAMES } from '../../../shared/insurers/icici-nysa';
 import {
   aadhaarChange,
   EMPTY_PROPOSAL,
@@ -61,7 +68,23 @@ interface Draft {
   expiryDate: string;
   proposal: ProposalDraft;
   aadhaar: AadhaarDraft;
+  /** The trip (Additional details): every travel quote and Compare quotes start from it. */
+  trip: TripDraft;
 }
+
+interface TripDraft {
+  departureDate: string;
+  returnDate: string;
+  destination: TripDestination | '';
+  student: boolean;
+}
+
+const EMPTY_TRIP: TripDraft = {
+  departureDate: '',
+  returnDate: '',
+  destination: '',
+  student: false,
+};
 
 const EMPTY: Draft = {
   id: null,
@@ -80,6 +103,7 @@ const EMPTY: Draft = {
   expiryDate: '',
   proposal: EMPTY_PROPOSAL,
   aadhaar: { lastFour: null, input: '', remove: false },
+  trip: EMPTY_TRIP,
 };
 
 function toInput(d: Draft): TravellerRaw {
@@ -107,6 +131,17 @@ function toInput(d: Draft): TravellerRaw {
     ...(d.occupation ? { occupation: d.occupation } : {}),
     proposal: proposalToInput(d.proposal, { occupation: false }),
     ...(Object.keys(passport).length > 0 ? { passport } : {}),
+    // Saved once it is complete (dates and where to); a half-given trip is checked on save.
+    ...(d.trip.departureDate || d.trip.returnDate || d.trip.destination
+      ? {
+          trip: {
+            departureDate: d.trip.departureDate,
+            returnDate: d.trip.returnDate,
+            destination: d.trip.destination as TripDestination,
+            ...(d.trip.student ? { student: true } : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -127,6 +162,14 @@ function describeField(path: string): string {
       }[field ?? ''] ?? 'passport'
     );
   if (section === 'proposal') return 'proposal details';
+  if (section === 'trip')
+    return (
+      {
+        departureDate: 'trip departure date',
+        returnDate: 'trip return date (on or after the departure)',
+        destination: 'trip destination',
+      }[field ?? ''] ?? 'trip'
+    );
   return (
     {
       pincode: 'pincode',
@@ -201,6 +244,14 @@ export function TravellersPanel(): React.JSX.Element | null {
       expiryDate: t.passport?.expiryDate ?? '',
       proposal: proposalFromRecord(t.proposal),
       aadhaar: { lastFour: result.data.aadhaarLastFour, input: '', remove: false },
+      trip: t.trip
+        ? {
+            departureDate: t.trip.departureDate,
+            returnDate: t.trip.returnDate,
+            destination: t.trip.destination,
+            student: t.trip.student ?? false,
+          }
+        : EMPTY_TRIP,
     });
   };
 
@@ -340,6 +391,7 @@ export function TravellersPanel(): React.JSX.Element | null {
 }
 
 /** What a travel client can be filled into, by insurer (the list's actions, in its order). */
+/** (Paused insurers' are left out: shared/insurers/availability.ts.) */
 const TRAVEL_OPTIONS: QuoteOption[] = [
   ...PROPOSALS.map((p) => ({
     key: p.key,
@@ -371,7 +423,7 @@ const TRAVEL_OPTIONS: QuoteOption[] = [
     label: 'Student Medical Travel premium (NYSA)',
     description: 'Fills NYSA’s health site; you pick the plan if ICICI asks',
   },
-];
+].filter((o) => !isInsurerNamePaused(o.insurer));
 
 function TravellerForm(props: {
   draft: Draft;
@@ -384,6 +436,8 @@ function TravellerForm(props: {
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<Draft>) => onChange({ ...d, ...patch });
   const pp = d.passportNumber;
+  // As a health client's form (request of 26 November 2026): Basic details, Additional details.
+  const [tab, setTab] = useState<'basic' | 'additional'>('basic');
   const setPassport = (patch: Partial<PassportDraft>) =>
     set({ passportNumber: { ...pp, ...patch } });
 
@@ -416,176 +470,281 @@ function TravellerForm(props: {
           ? `Check these details: ${[...new Set(fields.map((f) => describeField(f.path)))].join(', ')}.`
           : (result?.error.message ?? 'The travel client could not be saved.'),
       );
+      // Show the tab the first problem is on (the passport, Aadhaar and proposal details are the
+      // Additional details).
+      const first = fields?.[0]?.path.split('.') ?? [];
+      if (first.length > 0) {
+        const additional =
+          first[0] === 'passport' ||
+          first[0] === 'aadhaar' ||
+          first[1] === 'passport' ||
+          first[1] === 'proposal' ||
+          first[1] === 'trip';
+        setTab(additional ? 'additional' : 'basic');
+      }
     }
   };
 
   return (
     <form className="login-form client-form" onSubmit={(e) => void submit(e)}>
-      <label>
-        Name (as on the passport)
-        <input
-          value={d.name}
-          onChange={(e) => set({ name: e.target.value })}
-          maxLength={100}
-          required
-        />
-      </label>
-      <div className="member-row">
-        <label>
-          Mobile
-          <input
-            value={d.phone}
-            onChange={(e) => set({ phone: e.target.value })}
-            inputMode="tel"
-            maxLength={16}
-          />
-        </label>
-        <label>
-          E-mail
-          <input
-            type="email"
-            value={d.email}
-            onChange={(e) => set({ email: e.target.value })}
-            maxLength={254}
-          />
-        </label>
-      </div>
-      <div className="member-row">
-        <label>
-          Pincode
-          <input
-            value={d.pincode}
-            onChange={(e) => set({ pincode: e.target.value.replace(/\D/g, '') })}
-            inputMode="numeric"
-            maxLength={6}
-            required
-          />
-        </label>
-        <label>
-          Date of birth
-          <input
-            type="date"
-            value={d.dateOfBirth}
-            onChange={(e) => set({ dateOfBirth: e.target.value })}
-            required
-          />
-        </label>
-      </div>
-      <div className="member-row">
-        <label>
-          Gender
-          <select value={d.gender} onChange={(e) => set({ gender: e.target.value as Gender | '' })}>
-            <option value="">Not given</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="transgender">Transgender</option>
-          </select>
-        </label>
-        <label>
-          Marital status
-          <select
-            value={d.maritalStatus}
-            onChange={(e) => set({ maritalStatus: e.target.value as MaritalStatus | '' })}
-          >
-            <option value="">Not given</option>
-            {(Object.keys(MARITAL_LABELS) as MaritalStatus[]).map((k) => (
-              <option key={k} value={k}>
-                {MARITAL_LABELS[k]}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <label>
-        Occupation (as the travel forms list it)
-        <select
-          value={d.occupation}
-          onChange={(e) => set({ occupation: e.target.value as TravelOccupation | '' })}
+      <div className="form-tabs" role="tablist" aria-label="Travel client details">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'basic'}
+          onClick={() => setTab('basic')}
         >
-          <option value="">Not given</option>
-          {TRAVEL_OCCUPATION_LIST.map((o) => (
-            <option key={o} value={o}>
-              {TRAVEL_OCCUPATION_LABELS[o]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <fieldset>
-        <legend>Passport</legend>
-        <p className="insurer-note">
-          The passport number is kept apart, in the same secure vault as insurer passwords; after
-          saving, only its last four characters are shown.
-        </p>
-        <label>
-          Passport number
-          {pp.lastFour && !pp.remove && !pp.input ? (
-            <span className="insurer-mode">
-              Saved, ending {pp.lastFour}{' '}
-              <button type="button" onClick={() => setPassport({ remove: true })}>
-                Remove
-              </button>
-            </span>
-          ) : null}
-          {pp.remove && !pp.input ? (
-            <span className="insurer-mode">
-              Will be removed when you save.{' '}
-              <button type="button" onClick={() => setPassport({ remove: false })}>
-                Keep it
-              </button>
-            </span>
-          ) : null}
-          <input
-            value={pp.input}
-            onChange={(e) => setPassport({ input: e.target.value })}
-            maxLength={20}
-            autoComplete="off"
-            placeholder={pp.lastFour ? 'Type a new number to replace it' : 'for example Z1234567'}
-          />
-        </label>
-        <label>
-          Issuing authority
-          <input
-            value={d.issuingAuthority}
-            onChange={(e) => set({ issuingAuthority: e.target.value })}
-            maxLength={80}
-            placeholder="for example Passport Office, Bengaluru"
-          />
-        </label>
-        <div className="member-row">
+          Basic details
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'additional'}
+          onClick={() => setTab('additional')}
+        >
+          Additional details
+        </button>
+      </div>
+      {tab === 'basic' && (
+        <>
           <label>
-            Issue date
+            Name (as on the passport)
             <input
-              type="date"
-              value={d.issueDate}
-              onChange={(e) => set({ issueDate: e.target.value })}
+              value={d.name}
+              onChange={(e) => set({ name: e.target.value })}
+              maxLength={100}
+              required
             />
           </label>
+          <div className="member-row">
+            <label>
+              Mobile
+              <input
+                value={d.phone}
+                onChange={(e) => set({ phone: e.target.value })}
+                inputMode="tel"
+                maxLength={16}
+              />
+            </label>
+            <label>
+              E-mail
+              <input
+                type="email"
+                value={d.email}
+                onChange={(e) => set({ email: e.target.value })}
+                maxLength={254}
+              />
+            </label>
+          </div>
+          <div className="member-row">
+            <label>
+              Pincode
+              <input
+                value={d.pincode}
+                onChange={(e) => set({ pincode: e.target.value.replace(/\D/g, '') })}
+                inputMode="numeric"
+                maxLength={6}
+                required
+              />
+            </label>
+            <label>
+              Date of birth
+              <input
+                type="date"
+                value={d.dateOfBirth}
+                onChange={(e) => set({ dateOfBirth: e.target.value })}
+                required
+              />
+            </label>
+          </div>
+          <div className="member-row">
+            <label>
+              Gender
+              <select
+                value={d.gender}
+                onChange={(e) => set({ gender: e.target.value as Gender | '' })}
+              >
+                <option value="">Not given</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="transgender">Transgender</option>
+              </select>
+            </label>
+            <label>
+              Marital status
+              <select
+                value={d.maritalStatus}
+                onChange={(e) => set({ maritalStatus: e.target.value as MaritalStatus | '' })}
+              >
+                <option value="">Not given</option>
+                {(Object.keys(MARITAL_LABELS) as MaritalStatus[]).map((k) => (
+                  <option key={k} value={k}>
+                    {MARITAL_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <label>
-            Expiry date
-            <input
-              type="date"
-              value={d.expiryDate}
-              onChange={(e) => set({ expiryDate: e.target.value })}
+            Occupation (as the travel forms list it)
+            <select
+              value={d.occupation}
+              onChange={(e) => set({ occupation: e.target.value as TravelOccupation | '' })}
+            >
+              <option value="">Not given</option>
+              {TRAVEL_OCCUPATION_LIST.map((o) => (
+                <option key={o} value={o}>
+                  {TRAVEL_OCCUPATION_LABELS[o]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Notes (optional)
+            <textarea
+              value={d.notes}
+              onChange={(e) => set({ notes: e.target.value })}
+              maxLength={1000}
+              rows={2}
             />
           </label>
-        </div>
-      </fieldset>
-      <ProposalFields
-        value={d.proposal}
-        onChange={(proposal) => set({ proposal })}
-        aadhaar={d.aadhaar}
-        onAadhaarChange={(aadhaar) => set({ aadhaar })}
-        occupation={false}
-      />
-      <label>
-        Notes (optional)
-        <textarea
-          value={d.notes}
-          onChange={(e) => set({ notes: e.target.value })}
-          maxLength={1000}
-          rows={2}
-        />
-      </label>
+        </>
+      )}
+      {tab === 'additional' && (
+        <>
+          <p className="insurer-note">
+            The trip, passport and proposal details the travel quotes ask (United India&rsquo;s
+            Overseas Travel and Overseas Mediclaim, HDFC ERGO, ICICI Lombard). Compare quotes asks
+            only the plan: everything else comes from here. Stored encrypted.
+          </p>
+          <fieldset>
+            <legend>Trip</legend>
+            <p className="insurer-note">
+              Where to and when: Compare quotes fills every insurer&rsquo;s travel form from it.
+            </p>
+            <div className="member-row">
+              <label>
+                Departure
+                <input
+                  type="date"
+                  value={d.trip.departureDate}
+                  onChange={(e) => set({ trip: { ...d.trip, departureDate: e.target.value } })}
+                />
+              </label>
+              <label>
+                Return
+                <input
+                  type="date"
+                  value={d.trip.returnDate}
+                  min={d.trip.departureDate || undefined}
+                  onChange={(e) => set({ trip: { ...d.trip, returnDate: e.target.value } })}
+                />
+              </label>
+              <label>
+                Destination
+                <select
+                  value={d.trip.destination}
+                  onChange={(e) =>
+                    set({
+                      trip: { ...d.trip, destination: e.target.value as TripDestination | '' },
+                    })
+                  }
+                >
+                  <option value="">Choose…</option>
+                  {TRIP_DESTINATIONS.map((x) => (
+                    <option key={x} value={x}>
+                      {ICICI_TRAVEL_DESTINATION_NAMES[x]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={d.trip.student}
+                onChange={(e) => set({ trip: { ...d.trip, student: e.target.checked } })}
+              />
+              Travelling to study (ICICI&rsquo;s Student Medical Travel, United India&rsquo;s
+              Studies)
+            </label>
+            {(d.trip.departureDate || d.trip.returnDate || d.trip.destination) && (
+              <button type="button" onClick={() => set({ trip: EMPTY_TRIP })}>
+                Clear the trip
+              </button>
+            )}
+          </fieldset>
+          <fieldset>
+            <legend>Passport</legend>
+            <p className="insurer-note">
+              The passport number is kept apart, in the same secure vault as insurer passwords;
+              after saving, only its last four characters are shown.
+            </p>
+            <label>
+              Passport number
+              {pp.lastFour && !pp.remove && !pp.input ? (
+                <span className="insurer-mode">
+                  Saved, ending {pp.lastFour}{' '}
+                  <button type="button" onClick={() => setPassport({ remove: true })}>
+                    Remove
+                  </button>
+                </span>
+              ) : null}
+              {pp.remove && !pp.input ? (
+                <span className="insurer-mode">
+                  Will be removed when you save.{' '}
+                  <button type="button" onClick={() => setPassport({ remove: false })}>
+                    Keep it
+                  </button>
+                </span>
+              ) : null}
+              <input
+                value={pp.input}
+                onChange={(e) => setPassport({ input: e.target.value })}
+                maxLength={20}
+                autoComplete="off"
+                placeholder={
+                  pp.lastFour ? 'Type a new number to replace it' : 'for example Z1234567'
+                }
+              />
+            </label>
+            <label>
+              Issuing authority
+              <input
+                value={d.issuingAuthority}
+                onChange={(e) => set({ issuingAuthority: e.target.value })}
+                maxLength={80}
+                placeholder="for example Passport Office, Bengaluru"
+              />
+            </label>
+            <div className="member-row">
+              <label>
+                Issue date
+                <input
+                  type="date"
+                  value={d.issueDate}
+                  onChange={(e) => set({ issueDate: e.target.value })}
+                />
+              </label>
+              <label>
+                Expiry date
+                <input
+                  type="date"
+                  value={d.expiryDate}
+                  onChange={(e) => set({ expiryDate: e.target.value })}
+                />
+              </label>
+            </div>
+          </fieldset>
+          <ProposalFields
+            value={d.proposal}
+            onChange={(proposal) => set({ proposal })}
+            aadhaar={d.aadhaar}
+            onAadhaarChange={(aadhaar) => set({ aadhaar })}
+            occupation={false}
+          />
+        </>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}

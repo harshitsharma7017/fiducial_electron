@@ -143,6 +143,12 @@ document.getElementById('share').addEventListener('click', () => save({ shared: 
 `,
   );
 
+// NYSA's health site's dashboard: Elevate and travel, no Motor tile.
+const HEALTH_DASHBOARD = () =>
+  `<!doctype html><html><head><meta charset="utf-8"><title>NYSA Health</title></head><body>
+<h1>Health</h1><div class="card"><h3>Elevate</h3></div><div class="card"><h3>International Travel</h3></div>
+</body></html>`;
+
 const MY_QUOTE = () => SHELL('<h2>My Quote</h2><p>No saved quotes.</p>', '');
 
 module.exports = {
@@ -150,4 +156,5 @@ module.exports = {
   '/NysaMotor/quote': QUOTE,
   '/NysaMotor/premium': PREMIUM,
   '/NysaMotor/dashboard/my-quote': MY_QUOTE,
+  '/health/dashboard': HEALTH_DASHBOARD,
 };

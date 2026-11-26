@@ -1,6 +1,7 @@
 // The vehicle form's details, for motor quotes. Shows only the details the chosen vehicle class
 // needs (as United India's Motor calculator asks for them), and for private cars and
 // two-wheelers the further details New India's forms ask for.
+import { isInsurerPaused } from '../../../shared/insurers/availability';
 import type { FuelType, Vehicle, VehicleClass } from '../../../shared/contracts/vehicle';
 import { FUEL_TYPES, PREVIOUS_NCB, VEHICLE_CLASSES } from '../../../shared/contracts/vehicle';
 import { NIA_BODY_TYPES, NIA_COLOURS, NIA_FUEL } from '../../../shared/insurers/nia-motor';
@@ -74,7 +75,36 @@ export interface VehicleDraft {
   engineNumber: string;
   chassisNumber: string;
   invoiceValueRupees: string;
+  /** The quote details saved with the vehicle (its Additional details). */
+  quote: VehicleQuoteDraft;
 }
+
+/** The vehicle's quote details as typed (all optional). */
+export interface VehicleQuoteDraft {
+  registrationNumber: string;
+  rtoCity: string;
+  previousPolicyEnd: string;
+  previousPolicyType: '' | 'comprehensive' | 'tp';
+  previousInsurer: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerMobile: string;
+  cover: '' | 'comprehensive' | 'liability';
+  iciciIdv: '' | 'insurer' | 'vehicle';
+}
+
+export const EMPTY_QUOTE_DETAILS: VehicleQuoteDraft = {
+  registrationNumber: '',
+  rtoCity: '',
+  previousPolicyEnd: '',
+  previousPolicyType: '',
+  previousInsurer: '',
+  ownerName: '',
+  ownerEmail: '',
+  ownerMobile: '',
+  cover: '',
+  iciciIdv: '',
+};
 
 export const EMPTY_VEHICLE: VehicleDraft = {
   vehicleClass: 'private-car',
@@ -103,6 +133,7 @@ export const EMPTY_VEHICLE: VehicleDraft = {
   engineNumber: '',
   chassisNumber: '',
   invoiceValueRupees: '',
+  quote: EMPTY_QUOTE_DETAILS,
 };
 
 const num = (value: string) => (value.trim() === '' ? undefined : Number(value));
@@ -142,7 +173,17 @@ export function vehicleToInput(d: VehicleDraft): Record<string, unknown> {
         }
       : {}),
     ...(has(NEEDS.newIndia, c) ? newIndiaToInput(d, c) : {}),
+    ...quoteDetailsToInput(d.quote),
   };
+}
+
+/** The quote details given (none: nothing saved); a renewal's previous policy only when pre-owned. */
+function quoteDetailsToInput(q: VehicleQuoteDraft): Record<string, unknown> {
+  const given = Object.fromEntries(
+    Object.entries(q).filter(([, v]) => typeof v === 'string' && v.trim() !== ''),
+  ) as Record<string, string>;
+  for (const k of Object.keys(given)) given[k] = given[k]!.trim();
+  return Object.keys(given).length > 0 ? { quoteDetails: given } : {};
 }
 
 /** New India's details, those filled in (all optional: only New India's forms use them). */
@@ -194,6 +235,7 @@ export function vehicleFromRecord(v: Vehicle): VehicleDraft {
     engineNumber: v.engineNumber ?? '',
     chassisNumber: v.chassisNumber ?? '',
     invoiceValueRupees: text(v.invoiceValueRupees),
+    quote: { ...EMPTY_QUOTE_DETAILS, ...(v.quoteDetails ?? {}) },
   };
 }
 
@@ -356,7 +398,6 @@ export function VehicleFields(props: {
           Own damage for the whole liability period ({c === 'private-car' ? '3' : '5'} years)
         </label>
       )}
-      {has(NEEDS.newIndia, c) && <NewIndiaFields value={v} onChange={set} />}
       {v.condition === 'pre-owned' && (
         <>
           <label className="check">
@@ -391,7 +432,12 @@ export function VehicleFields(props: {
 const FUEL_LABELS: Record<FuelType, string> = { ...NIA_FUEL, 'mild-hybrid': 'Mild hybrid' };
 
 /** For New India's Private Car and Two Wheeler forms; optional for the other insurers. */
-function NewIndiaFields(props: {
+/** Whether New India's further details apply to this vehicle (and New India is offered). */
+export function asksNewIndiaDetails(v: VehicleDraft): boolean {
+  return has(NEEDS.newIndia, v.vehicleClass) && !isInsurerPaused('new-india');
+}
+
+export function NewIndiaFields(props: {
   value: VehicleDraft;
   onChange: (patch: Partial<VehicleDraft>) => void;
 }): React.JSX.Element {
@@ -495,6 +541,136 @@ function NewIndiaFields(props: {
           inputMode="numeric"
         />
       </label>
+    </fieldset>
+  );
+}
+
+/**
+ * The vehicle's quote details (its Additional details): what the motor quotes ask beyond the
+ * vehicle, saved with it so a quote asks nothing more (HDFC ERGO's PIE and ICICI start from them,
+ * and Compare quotes too).
+ */
+export function VehicleQuoteDetailsFields(props: {
+  value: VehicleDraft;
+  onChange: (patch: Partial<VehicleDraft>) => void;
+}): React.JSX.Element {
+  const v = props.value;
+  const q = v.quote;
+  const set = (patch: Partial<VehicleQuoteDraft>) => props.onChange({ quote: { ...q, ...patch } });
+  const renewal = v.condition === 'pre-owned';
+  return (
+    <fieldset>
+      <legend>Quote details</legend>
+      <p className="insurer-note">
+        What the motor quotes ask beyond the vehicle: given once here, every quote and Compare
+        quotes start from them (you can still change them there). All optional.
+      </p>
+      <div className="form-grid">
+        <label>
+          Registration number{renewal ? '' : ' (once registered)'}
+          <input
+            value={q.registrationNumber}
+            onChange={(e) => set({ registrationNumber: e.target.value })}
+            maxLength={15}
+            placeholder="MH01AB1234"
+            spellCheck={false}
+          />
+        </label>
+        <label>
+          RTO city (as HDFC&rsquo;s PIE lists it)
+          <input
+            value={q.rtoCity}
+            onChange={(e) => set({ rtoCity: e.target.value })}
+            maxLength={60}
+            placeholder="Mumbai"
+          />
+        </label>
+        <label>
+          Cover
+          <select
+            value={q.cover}
+            onChange={(e) => set({ cover: e.target.value as VehicleQuoteDraft['cover'] })}
+          >
+            <option value="">Comprehensive (default)</option>
+            <option value="comprehensive">Comprehensive</option>
+            <option value="liability">Liability only</option>
+          </select>
+        </label>
+        <label>
+          IDV for ICICI
+          <select
+            value={q.iciciIdv}
+            onChange={(e) => set({ iciciIdv: e.target.value as VehicleQuoteDraft['iciciIdv'] })}
+          >
+            <option value="">ICICI&rsquo;s own (default)</option>
+            <option value="insurer">ICICI&rsquo;s own</option>
+            <option value="vehicle">The vehicle&rsquo;s IDV</option>
+          </select>
+        </label>
+      </div>
+      {renewal && (
+        <div className="form-grid">
+          <label>
+            Previous policy ends
+            <input
+              type="date"
+              value={q.previousPolicyEnd}
+              onChange={(e) => set({ previousPolicyEnd: e.target.value })}
+            />
+          </label>
+          <label>
+            Previous policy
+            <select
+              value={q.previousPolicyType}
+              onChange={(e) =>
+                set({
+                  previousPolicyType: e.target.value as VehicleQuoteDraft['previousPolicyType'],
+                })
+              }
+            >
+              <option value="">Comprehensive (default)</option>
+              <option value="comprehensive">Comprehensive</option>
+              <option value="tp">Third party only</option>
+            </select>
+          </label>
+          <label>
+            Previous insurer
+            <input
+              value={q.previousInsurer}
+              onChange={(e) => set({ previousInsurer: e.target.value })}
+              maxLength={80}
+            />
+          </label>
+        </div>
+      )}
+      <div className="form-grid">
+        <label>
+          Owner&rsquo;s name
+          <input
+            value={q.ownerName}
+            onChange={(e) => set({ ownerName: e.target.value })}
+            maxLength={100}
+          />
+        </label>
+        <label>
+          Owner&rsquo;s email
+          <input
+            type="email"
+            value={q.ownerEmail}
+            onChange={(e) => set({ ownerEmail: e.target.value })}
+            maxLength={254}
+          />
+        </label>
+        <label>
+          Owner&rsquo;s mobile
+          <input
+            value={q.ownerMobile}
+            onChange={(e) => set({ ownerMobile: e.target.value.replace(/\D/g, '') })}
+            inputMode="numeric"
+            maxLength={10}
+          />
+        </label>
+      </div>
     </fieldset>
   );
 }

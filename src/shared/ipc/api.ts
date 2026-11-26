@@ -71,14 +71,18 @@ export interface FqfApi {
       waitMs: number;
       amount?: string;
       insurerId?: string;
+      /** The plans to put in the PDF, when the page showed several. */
+      plans?: string[];
     }): Promise<AppResult<QuoteRunResultView>>;
     /** Opens a quote PDF the app saved (by its file name). */
     openPdf(name: string): Promise<AppResult<{ opened: boolean }>>;
     /** Each insurer's latest quote, once something changed after `since` (or 20 seconds on). */
     progress(since: number): Promise<AppResult<{ version: number; items: QuoteProgressView[] }>>;
-    /** One PDF comparing the premiums these insurers quoted for a health client. */
+    /** One PDF comparing the premiums these insurers quoted for a client, vehicle or traveller. */
     compare(request: {
-      clientId: string;
+      clientId?: string;
+      vehicleId?: string;
+      travellerId?: string;
       insurerIds: string[];
     }): Promise<
       AppResult<

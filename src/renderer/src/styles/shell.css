@@ -341,13 +341,27 @@ html.theme-transition *::after {
 
 .topbar-run {
   display: inline-flex;
-  flex: none;
+  /* Gives way before the tabs do: its text ends in "…" (the full message is its tooltip). */
+  flex: 0 4 auto;
+  min-width: 0;
+  max-width: 320px;
   white-space: nowrap;
   align-items: center;
   gap: var(--space-2);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   color: var(--text-2);
+}
+
+.topbar-run > svg,
+.topbar-run > button {
+  flex: none;
+}
+
+.topbar-run-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar-context .status-dot {
@@ -396,10 +410,11 @@ html.theme-transition *::after {
 
 .portal-tabs {
   display: flex;
+  /* The tabs come first: the bar's other items give way to them. */
   flex: 1 1 auto;
   align-items: center;
   gap: 4px;
-  min-width: 0;
+  min-width: 200px;
   height: 100%;
   overflow-x: auto;
   overflow-y: hidden;

@@ -767,9 +767,19 @@ and requested again once if ICICI answers 401.
 Built from the recording `icici-lombard-2026-11-20T07-23-41-540Z` (a two-wheeler renewal through to
 the premium).
 
+**A new vehicle** (26 November 2026, "ICICI is still locked"): the recording chose New and went
+straight back to Rollover, so NYSA's New Business fields are not known. The app opens Motor's quote
+form, chooses **New Business** (no registration number needed) and hands the form to the advisor,
+who fills the vehicle on NYSA, gets the premium and presses Stop & make PDF. Offered on the
+vehicle's screen and in Compare quotes. A recording of a New Business quote would let it be filled
+through to the premium.
+
 **The flow:**
 1. On NYSA's dashboard, the **Motor** tile asks ICICI's server for the product's address
-   (ProductRedirect) and goes there: `/NysaMotor/quote`.
+   (ProductRedirect) and goes there: `/NysaMotor/quote`. The tile is on NYSA's own dashboard only:
+   when the tab is on NYSA's health site (`nysa-health.icicilombard.com`, where a health or travel
+   quote leaves it), the app opens `https://nysa.icicilombard.com/#/dashboard` first. A run that does
+   not end ready saves a trace (`diagnostics/icici-lombard-…json`).
 2. **Vehicle Details:** the app picks **Rollover**, answers the **ownership change** question (car
    flow only), types the **registration number** and presses **Fetch Vehicle Data**.
 3. ICICI looks the vehicle up in **Vahan itself**, so make, model, fuel, registration date and RTO
@@ -1128,3 +1138,89 @@ now closes every other open list before opening its own (backdrop, Escape on the
 closes it for sure. A relation is chosen by the names ICICI's lists may give it ("SPOUSE", "WIFE"/"HUSBAND", "EMPLOYEE
 SPOUSE"…). A value not offered is left for the advisor with what the list offers. The ICICI and HDFC traces also record
 each form step's result.
+
+## No PDF by itself: Stop & make PDF (26 November 2026)
+
+Every quote (single quotes from a client's Quote menu, and Compare quotes) fills the insurer's form and keeps it: no PDF
+is made by itself, and the app no longer watches a form to save one. The advisor checks the form in the insurer's tab,
+fills or changes anything, and presses **Stop & make PDF** (in the quote drawer, in the top bar while the insurer's page
+is shown, or on the insurer's card in Compare quotes). The app then reads the premium the page shows and saves the PDF,
+naming what the advisor changed on the form. When the page cannot be read again (ICICI's partner API has no page; a form
+whose reading was not recorded), the premium the run read is saved. The advisor may type the premium instead; Discard
+puts the form away without a PDF (the tab goes back home).
+
+**Compare quotes** is its own page in the sidebar (Quotes → Compare quotes), no longer an option in a client's quote
+drawer: choose a health client, then the insurers, and run them together. Each Stop & make PDF saves that insurer's PDF
+and makes the comparison PDF again from every insurer saved so far.
+
+**The kept form stays on screen** (26 November 2026: "the insurer resets and the user does not see the premium"). After a
+single quote that kept its form, the insurer's tab stays in front (it no longer switches back to the app), with **Stop &
+make PDF** in the top bar; the top bar offers it for whichever insurer's tab is in front with a kept form, Compare quotes'
+included (Compare quotes then makes the comparison PDF again). A run refused before filling anything leaves the tab as it
+is. The tab goes back home only after Stop & make PDF (once the PDF is saved) or Discard.
+
+**Combined runs: the insurers' tabs keep drawing** (26 November 2026: "Niva Bupa and HDFC broken in combined automation,
+fine alone"). Measured: a tab that loads a page while detached from the window draws no frame at all (0 animation frames a
+second, background throttling off or not), so 1up's Flutter never shows its buttons, Niva Bupa's Ionic loading overlay
+never closes, ICICI's Material dropdowns and calendars stall. A solo run brings its tab to the front, which is why it
+worked. Now the quote service tells the portal host which insurers are being filled (`setWorking`): their tabs stay
+attached at full size in the page area, the one in front on top and the others drawing behind it (measured: 60 frames a
+second, also after loading a new page); while any is filled, the page area shows one of them and the top bar says so.
+Checked by `npm run test:nia -- tabs`.
+
+**Several plans: the advisor chooses** (26 November 2026: "if there are multiple quotes, ask which one to show"). When Stop
+& make PDF reads several plans on the insurer's page (ICICI Elevate's Basic, Essential and Recommended; United India's
+calculator list), nothing is saved yet: the result asks (`choose`), and the app shows "Which plan for the PDF?" with each
+plan and its premium (quote/PlanChoice.tsx), wherever Stop was pressed. The PDF then holds only the plans ticked, the first
+of them (in the page's order) as its premium, and the comparison uses it. The reading the advisor chose from is kept, so
+the PDF is what they saw. Cancel keeps the form as it was.
+
+**Compare quotes for a vehicle** (26 November 2026): the Compare quotes page has tabs for a health client, a vehicle and a travel client. For a
+vehicle: United India and New India (motor forms; New India's for new private cars and two-wheelers only), HDFC ERGO (PIE),
+ICICI Lombard (NYSA, renewals; its partner API once set up). What the motor forms ask beyond the saved vehicle
+(registration number, RTO city, the previous policy for a renewal, the owner's name, email and mobile for PIE, the cover,
+ICICI's IDV) comes from the vehicle's Additional details (its quote details), read again when Run is pressed: the page
+asks only which insurers and each one's plan, as for a health client. An insurer that lacks something says what to add
+in the vehicle's Additional details, and is skipped. Then as for a health client: filled forms kept, Stop & make PDF per
+insurer, and the comparison PDF ("Motor insurance quotes compared", with the vehicle's details) made again after each.
+The page's working part is shared (`CompareRunner` in quote/ComparePanel.tsx; the vehicle's in quote/VehicleCompare.tsx).
+
+**Compare quotes for a travel client** (26 November 2026): a third tab, Travel client. The trip is saved with the travel
+client (Additional details → Trip: departure, return, destination as ICICI groups countries, and whether to study);
+without it the tab asks for it. The page asks only each insurer's plan:
+- **United India:** Overseas Travel by sum insured (destination: worldwide for USA / Canada, else worldwide excluding
+  USA and Canada; 500000 only worldwide), or the Overseas Mediclaim form that fits the trip (Studies to study,
+  SCHENGEN for Schengen, else B&H) by its plan's place, lowest first. Trips of a year or less.
+- **HDFC ERGO:** Retail Travel, Silver, Gold or Platinum (typed into PIE's plan box; a name PIE does not list hands the
+  form over).
+- **ICICI Lombard:** International Travel by ICICI's own plan names for the destination (its default first), or Student
+  Medical Travel when studying (the plan picked in NYSA). Needs the traveller's state (proposal details).
+New India's travel form is not offered here: it asks the advisor to confirm the traveller's health. The comparison PDF
+is "Travel insurance quotes compared". HDFC's and ICICI's own travel drawers start from the saved trip too
+(quote/TravelCompare.tsx).
+
+## Paused insurers: New India, Star Health, Tata AIG (26 November 2026)
+
+Taken out of the product "such that they can be brought back any time": one list, `PAUSED_INSURERS` in
+`src/shared/insurers/availability.ts`. A paused insurer is not listed on Insurer portals, its products are left out of
+every quote drawer and "Quote with" menu (health, travel, vehicles), of Compare quotes (health and vehicle) and of a
+client's Additional details tabs, and the quote service refuses its runs before touching its tab. Rural, Marine and
+Property clients are quoted with New India only: their sidebar pages and Overview cards are paused with it (the records
+stay saved). Nothing is deleted: the automation, the saved sign-ins, the clients' details and the tests stay as they are.
+
+**To bring one back**, remove its id from `PAUSED_INSURERS` (the pages that depend on New India come back with it).
+
+## Travel clients and vehicles: Basic details, Additional details (26 November 2026)
+
+As a health client's form ("the UI is very bad for other clients than health"): two tabs.
+
+- **Travel client:** Basic details (name, mobile, email, pincode, date of birth, gender, marital status, occupation,
+  notes); Additional details (the passport, the proposal details and Aadhaar the travel e-proposals ask).
+- **Vehicle:** Basic details (its name and the vehicle's details); Additional details: its **quote details**, saved with
+  it (`vehicle.quoteDetails`: registration number, RTO city, the previous policy for a renewal, the owner's name, email and
+  mobile, the cover, ICICI's IDV), and New India's further details when New India is offered. HDFC ERGO's and ICICI's
+  vehicle quotes and Compare quotes start from the quote details, so a quote asks nothing more (they can still be changed
+  there). Saved inside the vehicle's JSON: older vehicles load as they were.
+
+A problem in the other tab shows that tab, as on a health client. (Rural, Marine and Property clients, paused with New
+India, keep their single form.)

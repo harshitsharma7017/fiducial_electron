@@ -19,7 +19,7 @@ export function QuoteRunCancel(): React.JSX.Element | null {
   return (
     <span className="topbar-run" role="status">
       <Loader2 size={13} className="spin" aria-hidden="true" />
-      {cancelling ? 'Cancelling…' : 'Filling the form…'}
+      <span className="topbar-run-text">{cancelling ? 'Cancelling…' : 'Filling the form…'}</span>
       <button
         type="button"
         className="danger btn-sm"

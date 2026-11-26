@@ -1,5 +1,6 @@
 // Insurer sign-in details: the credential store on the real vault (with a fake OS backend), the
 // service behind the IPC channels, the IPC contract, and the fill-outcome mapping.
+import { PAUSED_INSURERS } from '../src/shared/insurers/availability';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -228,7 +229,9 @@ describe('the insurer service', () => {
     await insurers.openPortal('united-india');
     const list = await insurers.list();
     expect(list.enabled).toBe(true);
-    expect(list.portals).toHaveLength(8);
+    // Every insurer but the paused ones (shared/insurers/availability.ts).
+    expect(list.portals).toHaveLength(8 - PAUSED_INSURERS.length);
+    for (const id of PAUSED_INSURERS) expect(list.portals.some((p) => p.id === id)).toBe(false);
     expect(list.portals.find((p) => p.id === 'united-india')).toMatchObject({
       loginSaved: true,
       windowOpen: true,

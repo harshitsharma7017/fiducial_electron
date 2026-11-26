@@ -4,7 +4,7 @@
 // "Switching to the Two Wheeler buying flow" answered OK, and the Total Premium read at ICICI's
 // IDV or the vehicle's (kept within ICICI's limits). Checks that Buy Now and Share Quote are never
 // pressed, that a vehicle Vahan does not know stops with ICICI's message, and that a new vehicle
-// is refused before anything is touched. Contacts no insurer: the pages are served from
+// gets New Business chosen and its form handed over (New Business is not recorded further). Contacts no insurer: the pages are served from
 // 127.0.0.1. Exits 0 only if every check passes. Started by run.mjs icici
 // (npm run test:nia -- icici).
 const http = require('node:http');
@@ -44,6 +44,27 @@ const CASES = [
   {
     name: "a car from the dashboard's Motor tile: Rollover, ownership No, ICICI's IDV",
     start: '/',
+    vehicle: CAR,
+    run: RUN,
+    outcome: 'ready',
+    message: `ICICI Lombard worked the premium out: ₹${inr(premium(18568))} (Total Premium).`,
+    premium: {
+      label: 'ICICI Lombard motor, MH01AB1234, IDV ₹18,568',
+      amount: String(premium(18568)),
+    },
+    expect: {
+      policyType: 'Rollover',
+      ownership: 'no',
+      registration: 'MH01AB1234',
+      flow: 'car',
+      fetched: 1,
+      idv: 18568,
+    },
+  },
+  {
+    name: "the tab left on NYSA's health site (after a health quote): NYSA's dashboard is opened, then Motor",
+    start: '/health/dashboard',
+    onHealthSite: true,
     vehicle: CAR,
     run: RUN,
     outcome: 'ready',
@@ -109,21 +130,24 @@ const CASES = [
     expect: { registration: 'ZZ01AB1234', premium: undefined },
   },
   {
-    name: 'a new vehicle: refused before anything is touched',
+    name: 'a new vehicle: New Business chosen, the form handed over (no number typed)',
     start: '/NysaMotor/quote',
     vehicle: { ...CAR, condition: 'new' },
-    run: RUN,
-    outcome: 'refused',
-    message: 'cannot be quoted on ICICI Lombard automatically',
-    expect: { policyType: undefined, registration: undefined },
+    run: { ownershipChanged: false, idv: 'insurer' },
+    outcome: 'handed-over',
+    message: 'New Business',
+    expect: { policyType: 'New Business', registration: undefined, fetched: undefined },
   },
 ];
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-async function newWindow(origin) {
+async function newWindow(origins) {
   const ses = session.fromPartition(`icici-${Math.random()}`);
-  setSessionPolicy(ses, { navigate: (url) => url.startsWith(origin + '/'), popup: () => null });
+  setSessionPolicy(ses, {
+    navigate: (url) => origins.some((o) => url.startsWith(o + '/')),
+    popup: () => null,
+  });
   return new BrowserWindow({
     show: true,
     webPreferences: { session: ses, sandbox: true, contextIsolation: true },
@@ -133,15 +157,18 @@ async function newWindow(origin) {
 app.whenReady().then(async () => {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
+  // NYSA's health site stands on another origin (localhost): the run must open NYSA's dashboard.
+  const health = `http://localhost:${server.address().port}`;
   installNavigationPolicy(createLogger([]));
   let failures = 0;
   for (const c of CASES) {
-    const win = await newWindow(origin);
-    await win.loadURL(origin + c.start);
+    const win = await newWindow([origin, health]);
+    await win.loadURL((c.onHealthSite ? health : origin) + c.start);
     const result = await runIciciMotorQuote({
       windows: () => [win],
       vehicle: c.vehicle,
       run: c.run,
+      dashboardUrl: origin + '/',
     });
     const state = await win.webContents
       .executeJavaScript(`JSON.parse(sessionStorage.getItem('fqf') || '{}')`)

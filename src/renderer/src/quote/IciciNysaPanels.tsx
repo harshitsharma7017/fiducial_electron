@@ -112,14 +112,23 @@ export function IciciTravelPanel(props: {
   const [state, setState] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result>(null);
-  // The traveller's state, if saved with their details.
+  // The traveller's state and trip, if saved with their details (Additional details).
   useEffect(() => {
     let live = true;
     void window.fqf.travellers
       .get(props.travellerId)
       .then((r) => {
-        const saved = r.ok ? r.data.traveller.proposal?.state : undefined;
-        if (live && saved) setState((s) => s || saved);
+        if (!live || !r.ok) return;
+        const saved = r.data.traveller.proposal?.state;
+        if (saved) setState((s) => s || saved);
+        const trip = r.data.traveller.trip;
+        if (trip) {
+          setDeparture(trip.departureDate);
+          setRet(trip.returnDate);
+          setDestination(trip.destination);
+          setVisitingUsaCanada(trip.destination === 'usa-canada');
+          if (!student) setPlan(ICICI_INTL_TRAVEL_DEFAULT_PLAN[trip.destination]);
+        }
       })
       .catch(() => undefined);
     return () => {

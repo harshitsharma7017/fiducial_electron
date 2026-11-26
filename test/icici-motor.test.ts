@@ -34,9 +34,12 @@ describe('ICICI Lombard motor run', () => {
       expect(iciciMotorRunSchema.safeParse({ ...RUN, registrationNumber }).success).toBe(false);
   });
 
-  it('quotes renewals of registered vehicles only', () => {
+  it('needs the registration number for a renewal only (a new vehicle is handed over)', () => {
     expect(iciciMotorProblems(CAR, RUN)).toEqual([]);
-    expect(iciciMotorProblems({ ...CAR, condition: 'new' }, RUN)[0]).toMatch(/renewals/);
+    const { registrationNumber: _, ...noNumber } = RUN;
+    expect(iciciMotorProblems(CAR, noNumber)).toEqual(['Add the registration number.']);
+    expect(iciciMotorProblems({ ...CAR, condition: 'new' }, noNumber)).toEqual([]);
+    expect(iciciMotorRunSchema.safeParse(noNumber).success).toBe(true);
   });
 
   it('is a quote request of its own, for a saved vehicle', () => {

@@ -223,7 +223,20 @@ describe('the quote service', () => {
     const save = vi.fn((_doc: QuoteDocument, _title: string) =>
       Promise.resolve('United India health quote - Synthetic Couple.pdf'),
     );
-    const result = await service(windowsOf, save).run(request);
+    const quotes = service(windowsOf, save);
+    // The run reads the plans and keeps the form: no PDF until Stop & make PDF.
+    const filled = await quotes.run(request);
+    expect(filled).toMatchObject({ outcome: 'handed-over', plans: PLANS });
+    expect(save).not.toHaveBeenCalled();
+    // Several plans on the page: the advisor is asked which go in the PDF (nothing saved yet).
+    const asked = await quotes.finish({ waitMs: 0, insurerId: 'united-india' });
+    expect(asked).toMatchObject({ outcome: 'handed-over', choose: true, plans: PLANS });
+    expect(save).not.toHaveBeenCalled();
+    const result = await quotes.finish({
+      waitMs: 0,
+      insurerId: 'united-india',
+      plans: PLANS.map((p) => p.name),
+    });
     expect(result).toMatchObject({
       outcome: 'ready',
       premium: { label: 'Individual Family Medicare Policy', amount: '11948' },
@@ -245,6 +258,27 @@ describe('the quote service', () => {
     expect(doc.notes.join(' ')).toMatch(/exclude GST/);
   }, 20_000);
 
+  it('puts only the plan the advisor chose in the PDF, as its premium', async () => {
+    const { windowsOf } = pages(PLANS);
+    const save = vi.fn((_doc: QuoteDocument, _title: string) => Promise.resolve('one plan.pdf'));
+    const quotes = service(windowsOf, save);
+    await quotes.run(request);
+    await quotes.finish({ waitMs: 0, insurerId: 'united-india' });
+    const result = await quotes.finish({
+      waitMs: 0,
+      insurerId: 'united-india',
+      plans: ['Arogya Sanjeevani Policy'],
+    });
+    expect(result).toMatchObject({
+      outcome: 'ready',
+      premium: { label: 'Arogya Sanjeevani Policy', amount: '14605' },
+      plans: [{ name: 'Arogya Sanjeevani Policy', amount: '14605' }],
+    });
+    expect(save.mock.calls[0]![0].plans).toEqual([
+      { name: 'Arogya Sanjeevani Policy', amount: '14605' },
+    ]);
+  }, 20_000);
+
   it('saves nothing when no premium was fetched (the form is handed over instead)', async () => {
     const { windowsOf } = pages(null);
     const save = vi.fn(() => Promise.resolve('x.pdf'));
@@ -256,9 +290,13 @@ describe('the quote service', () => {
 
   it('keeps the quote when the PDF cannot be saved, and says so', async () => {
     const { windowsOf } = pages(PLANS);
-    const result = await service(windowsOf, () => Promise.reject(new Error('disk full'))).run(
-      request,
-    );
+    const quotes = service(windowsOf, () => Promise.reject(new Error('disk full')));
+    await quotes.run(request);
+    const result = await quotes.finish({
+      waitMs: 0,
+      insurerId: 'united-india',
+      plans: PLANS.map((p) => p.name),
+    });
     expect(result).toMatchObject({ outcome: 'ready', plans: PLANS });
     expect(result.pdf).toBeUndefined();
     expect(result.message).toMatch(/could not be saved as a PDF/);

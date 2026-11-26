@@ -20,6 +20,7 @@ import type { Logger } from '../logging/logger';
 import type { QuoteRunRequest } from '../../shared/ipc/contract';
 import { clientForInsurer } from '../../shared/contracts/client';
 import { findPortal, mayFillLogin } from '../../shared/insurers/portals';
+import { isInsurerPaused } from '../../shared/insurers/availability';
 import { GUESSED_READING, type HandOver } from './hand-over';
 import { formChanges, parseFormValues } from './form-changes';
 import type { PageOp, PageOpResult } from './page-ops';
@@ -93,7 +94,12 @@ export interface QuoteService {
    * the insurer's page (waiting up to `waitMs`), or takes the `amount` the advisor typed, and
    * saves the quote as a PDF. Presses nothing.
    */
-  finish(request: { waitMs: number; amount?: string; insurerId?: string }): Promise<QuoteRunResult>;
+  finish(request: {
+    waitMs: number;
+    amount?: string;
+    insurerId?: string;
+    plans?: string[];
+  }): Promise<QuoteRunResult>;
   /** Opens a quote PDF this app saved (by its name); false for any other. */
   openPdf(name: string): Promise<boolean>;
   /**
@@ -105,7 +111,12 @@ export interface QuoteService {
    * One PDF comparing the premiums the given insurers quoted for a health client (their latest
    * quotes with a premium), beside each insurer's own PDF.
    */
-  compare(request: { clientId: string; insurerIds: string[] }): Promise<QuoteCompareResult>;
+  compare(request: {
+    clientId?: string;
+    vehicleId?: string;
+    travellerId?: string;
+    insurerIds: string[];
+  }): Promise<QuoteCompareResult>;
 }
 
 /** One insurer's latest quote, for the screens' progress. */
@@ -153,6 +164,13 @@ interface Pending {
    */
   adjust: boolean;
   shown: [string, string][] | null;
+  /**
+   * The result the run read (its premium), for Stop & make PDF when the page cannot be read
+   * again (ICICI's partner API has no page; a form whose reading was not recorded).
+   */
+  stored: QuoteRunResult | null;
+  /** The reading that showed several plans, kept while the advisor chooses among them. */
+  choosing: QuoteRunResult | null;
 }
 
 /** A premium reading, short, as a poll: never "only after this step" (fresh). */
@@ -163,6 +181,30 @@ function pollOp(read: PageOp): PageOp {
 const readingKey = (r: PageOpResult): string =>
   r.plans?.length ? JSON.stringify(r.plans) : (r.value ?? '');
 const pauseMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * A result with only the plans the advisor chose (in the page's order), the first of them as its
+ * premium; the label names that plan instead of the one first shown.
+ */
+function onlyPlans(result: QuoteRunResult, names: string[]): QuoteRunResult {
+  const chosen = (result.plans ?? []).filter((plan) => names.includes(plan.name));
+  const first = chosen[0];
+  if (!first) return result;
+  const shownFirst = result.plans?.[0]?.name;
+  const label =
+    result.premium && shownFirst && result.premium.label.includes(shownFirst)
+      ? result.premium.label.replace(shownFirst, first.name)
+      : first.name;
+  return {
+    ...result,
+    plans: chosen,
+    premium: { label, amount: first.amount },
+    message:
+      chosen.length === 1
+        ? `${first.name}: ₹${first.amount} (the plan chosen for the PDF).`
+        : `${chosen.map((c) => `${c.name} ₹${c.amount}`).join('; ')} (the plans chosen for the PDF).`,
+  };
+}
 
 /** The kind of insurance, for the document's title. */
 const KIND: Partial<Record<QuoteRunRequest['product'], string>> = {
@@ -234,6 +276,11 @@ export function createQuoteService(deps: {
   now?: () => Date;
   /** Where fetched quotes are saved as PDFs; absent, none are saved. */
   pdfs?: QuotePdfs;
+  /**
+   * The insurer tabs' host: told which insurers are being filled, so their tabs keep drawing
+   * (a hidden tab draws nothing: combined runs, 26 November 2026).
+   */
+  portals?: { setWorking: (insurerIds: string[]) => void };
   /** Saves a run's trace for support (a file of the app's own); returns its name, or null. */
   diagnose?: (name: string, data: unknown) => string | null;
   /**
@@ -444,16 +491,20 @@ export function createQuoteService(deps: {
         }),
       };
     };
-    // "Let me change it first" (Compare insurers): a premium read is not the quote yet; the form
-    // stays for the advisor, and the premium shown when they press Generate PDF is.
-    const adjust = 'adjust' in request && request.adjust === true;
-    const keepForAdvisor = adjust && view.outcome === 'ready' && !!handOver;
+    // No PDF by itself (request of 26 November 2026: "the pdf generation should not be
+    // automatic", everywhere): a premium read is kept with the form; the advisor checks the
+    // insurer's tab, changes anything, and presses Stop & make PDF, when the premium shown then is
+    // read and saved. A run that read a premium is kept the same way.
+    const adjust = true;
+    const keepForAdvisor = view.outcome === 'ready' && !!view.premium;
     const finishable =
       keepForAdvisor ||
       view.outcome === 'handed-over' ||
       (!view.premium && (view.outcome === 'ready' || view.outcome === 'failed'));
-    if (!finishable) return withPdf(view, request, facts);
-    const how = handOver ?? fallback();
+    if (!finishable) return view;
+    // The form's own reading; a run that read its premium without one is not read by a guess
+    // (Stop & make PDF then saves what the run read).
+    const how = handOver ?? (keepForAdvisor ? null : fallback());
     const finish = view.finish ?? { button: null, guessed: how ? !how.known : true };
     let baseline: string | null = null;
     let shown: [string, string][] | null = null;
@@ -479,15 +530,17 @@ export function createQuoteService(deps: {
       done: null,
       adjust,
       shown,
+      stored: keepForAdvisor ? view : null,
+      choosing: null,
     });
     latestPending = insurerId;
     if (keepForAdvisor) {
       const insurer = findPortal(insurerId)?.displayName ?? insurerId;
-      const now = view.premium ? ` ${insurer} shows ₹${view.premium.amount} for now.` : '';
+      const now = view.premium ? ` ${insurer} shows ₹${view.premium.amount}.` : '';
       return {
         ...view,
         outcome: 'handed-over',
-        message: `The app filled ${insurer}'s form.${now} Change anything you need in ${insurer}'s tab and get the premium there, then press Generate PDF: the premium shown then is the quote.`,
+        message: `The app filled ${insurer}'s form.${now} Check it in ${insurer}'s tab (change anything you need), then press Stop & make PDF: the premium shown then is saved as the PDF.`,
         finish,
       };
     }
@@ -666,7 +719,29 @@ export function createQuoteService(deps: {
               clientName: subject.record.client.customer.name,
               ...healthFacts(subject.record.client, today),
             };
-      return await withPdf(result, request, facts);
+      if (result.outcome !== 'ready' || !result.premium) return result;
+      // No PDF by itself: kept until the advisor presses Stop & make PDF.
+      pendings.set(request.insurerId, {
+        insurerId: request.insurerId,
+        request,
+        facts,
+        handOver: null,
+        finish: { button: null, guessed: false },
+        baseline: null,
+        stopWatching: false,
+        done: null,
+        adjust: true,
+        shown: null,
+        stored: result,
+        choosing: null,
+      });
+      latestPending = request.insurerId;
+      return {
+        ...result,
+        outcome: 'handed-over',
+        message: `${result.message} Press Stop & make PDF to save it as a PDF.`,
+        finish: { button: null, guessed: false },
+      };
     } catch (err) {
       if (err instanceof IciciApiError) {
         deps.logger.log('warn', 'quote.run', {
@@ -724,7 +799,7 @@ export function createQuoteService(deps: {
       }
       return stopped;
     },
-    finish: async ({ waitMs, amount, insurerId }) => {
+    finish: async ({ waitMs, amount, insurerId, plans }) => {
       const p = pendings.get(insurerId ?? latestPending ?? '');
       if (!p) {
         return {
@@ -745,6 +820,24 @@ export function createQuoteService(deps: {
           amountLabel: 'Premium (as read by the advisor)',
         });
       }
+      // The plans the advisor chose, among those the page showed when they pressed Stop.
+      if (plans && p.choosing) return finished(p, onlyPlans(p.choosing, plans));
+      /**
+       * A reading with several plans: saved only once the advisor says which (request of 26
+       * November 2026); with their choice given already, those.
+       */
+      const settle = (result: QuoteRunResult): Promise<QuoteRunResult> | QuoteRunResult => {
+        if ((result.plans?.length ?? 0) < 2) return finished(p, result);
+        if (plans) return finished(p, onlyPlans(result, plans));
+        p.choosing = result;
+        return {
+          ...result,
+          outcome: 'handed-over',
+          choose: true,
+          message: 'Choose which plan(s) to put in the PDF.',
+          finish: p.finish,
+        };
+      };
       p.stopWatching = false;
       setProgress(p.insurerId, { state: 'handed-over', watching: true });
       const until = Date.now() + waitMs;
@@ -760,9 +853,14 @@ export function createQuoteService(deps: {
         }
         const read = await readPremium(p);
         if (p.done) return p.done;
-        if (read && p.handOver) return finished(p, p.handOver.compose(read));
+        if (read && p.handOver) return settle(p.handOver.compose(read));
         if (p.stopWatching || Date.now() >= until) break;
         await pauseMs(2000);
+      }
+      // Stop & make PDF on a form whose premium cannot be read now: what the run read.
+      if (waitMs === 0 && p.stored && pendings.get(p.insurerId) === p) {
+        setProgress(p.insurerId, { state: 'handed-over', watching: false });
+        return settle(p.stored);
       }
       if (pendings.get(p.insurerId) === p) {
         setProgress(p.insurerId, { state: 'handed-over', watching: false });
@@ -771,7 +869,7 @@ export function createQuoteService(deps: {
         outcome: 'handed-over',
         step: null,
         message: p.adjust
-          ? "The app could not read a premium on the insurer's page. Get the premium shown there (on the page the app filled), or type it in to save the PDF."
+          ? "The app could not read a premium on the insurer's page. Get the premium shown there (on the page the app filled) and press Stop & make PDF again, or type the premium in to save the PDF."
           : p.stopWatching
             ? 'Stopped watching for the premium. Type it in to save the PDF, or watch again.'
             : 'The premium has not shown yet. Finish the form, or type the premium in to save the PDF.',
@@ -782,6 +880,15 @@ export function createQuoteService(deps: {
     openPdf: (name) => deps.pdfs?.open(name) ?? Promise.resolve(false),
     run: async (request) => {
       const insurerId = request.insurerId;
+      // A paused insurer (shared/insurers/availability.ts): refused before its tab is touched.
+      if (isInsurerPaused(insurerId)) {
+        return {
+          outcome: 'refused',
+          step: null,
+          message: `${findPortal(insurerId)?.displayName ?? 'This insurer'} is paused in this version of the app.`,
+          problems: [],
+        };
+      }
       // One quote per insurer at a time (several insurers' quotes run at once, each in its tab).
       if (active.has(insurerId)) {
         return {
@@ -800,12 +907,14 @@ export function createQuoteService(deps: {
           const result = await runOnce(request);
           // Every quote ends back there too, whatever its outcome, unless a form is left for the
           // advisor to finish (it stays until they do, or stop watching).
-          if (resets && !result.finish) void resetPortal(insurerId);
+          // A refused run filled nothing: its tab is left as it is.
+          if (resets && !result.finish && result.outcome !== 'refused') void resetPortal(insurerId);
           return result;
         },
         (step) => setProgress(insurerId, { state: 'running', step }),
       );
       active.set(insurerId, run);
+      deps.portals?.setWorking([...active.keys()]);
       setProgress(insurerId, { state: 'running', product: request.product, step: 'Starting' });
       try {
         const result = await run.done;
@@ -819,6 +928,7 @@ export function createQuoteService(deps: {
         throw err;
       } finally {
         active.delete(insurerId);
+        deps.portals?.setWorking([...active.keys()]);
       }
     },
     progress: async (since) => {
@@ -833,7 +943,7 @@ export function createQuoteService(deps: {
       }
       return { version, items: [...progressOf.values()] };
     },
-    compare: async ({ clientId, insurerIds }) => {
+    compare: async ({ clientId, vehicleId, travellerId, insurerIds }) => {
       const quoted = insurerIds
         .map((id) => progressOf.get(id))
         .filter((p): p is QuoteProgress => !!p && p.state === 'ready' && !!p.premium);
@@ -841,18 +951,48 @@ export function createQuoteService(deps: {
         return { ok: false, message: 'No insurer has a premium yet: nothing to compare.' };
       }
       if (!deps.pdfs) return { ok: false, message: 'Quotes are not saved as PDFs here.' };
-      const record = await deps.clients.get(clientId);
       const issuedAt = (deps.now ?? (() => new Date()))();
-      const facts = healthFacts(record.client, issuedAt);
+      // Whose quotes: a health client's (members and cover), a vehicle's or a traveller's.
+      const subject = travellerId
+        ? await (async () => {
+            const record = await deps.clients.getTraveller(travellerId);
+            return {
+              kind: 'Travel',
+              name: record.traveller.customer.name,
+              facts: travellerFacts(record.traveller, issuedAt) as
+                QuoteFacts | Pick<QuoteFacts, 'details'>,
+            };
+          })()
+        : vehicleId
+          ? await (async () => {
+              const saved = (await deps.clients.getVehicle(vehicleId)).saved;
+              return {
+                kind: 'Motor',
+                name: saved.name,
+                facts: vehicleFacts(saved.vehicle) as QuoteFacts | Pick<QuoteFacts, 'details'>,
+              };
+            })()
+          : await (async () => {
+              const record = await deps.clients.get(clientId ?? '');
+              return {
+                kind: 'Health',
+                name: record.client.customer.name,
+                facts: healthFacts(record.client, issuedAt) as Pick<
+                  QuoteFacts,
+                  'details' | 'members'
+                >,
+              };
+            })();
+      const facts: Pick<QuoteFacts, 'details' | 'members'> = subject.facts;
       const name = (id: string) => findPortal(id)?.displayName ?? id;
       const missing = insurerIds.filter((id) => !quoted.some((q) => q.insurerId === id));
       const doc: QuoteDocument = {
-        title: 'Health insurance quotes compared',
+        title: `${subject.kind} insurance quotes compared`,
         insurer: quoted.map((q) => name(q.insurerId)).join(', '),
         product: 'Comparison',
         issuedAt,
         reference: quoteReference(issuedAt),
-        clientName: record.client.customer.name,
+        clientName: subject.name,
         details: facts.details,
         ...(facts.members ? { members: facts.members } : {}),
         // Cheapest first.
@@ -868,7 +1008,7 @@ export function createQuoteService(deps: {
           })),
         amountLabel: 'Premium, as each insurer showed it',
         notes: [
-          'Each premium as the insurer worked it out on its own page, for the details saved with the client; covers and terms differ between insurers.',
+          `Each premium as the insurer worked it out on its own page, for the details saved with the ${vehicleId ? 'vehicle' : travellerId ? 'travel client' : 'client'}; covers and terms differ between insurers.`,
           ...quoted
             .filter((q) => q.pdf)
             .map((q) => `${name(q.insurerId)}'s own quote: ${q.pdf!.name}.`),
@@ -878,10 +1018,7 @@ export function createQuoteService(deps: {
         ],
       };
       try {
-        const file = await deps.pdfs.save(
-          doc,
-          `Health quotes compared - ${record.client.customer.name}`,
-        );
+        const file = await deps.pdfs.save(doc, `${subject.kind} quotes compared - ${subject.name}`);
         return { ok: true, pdf: { name: file }, insurers: quoted.length };
       } catch {
         return { ok: false, message: 'The comparison could not be saved as a PDF.' };
@@ -1024,7 +1161,12 @@ export function createQuoteService(deps: {
                 ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
               })
             : request.product === 'icici-motor'
-              ? await runIciciMotorQuote({ windows, vehicle: subject.vehicle, run: request.run })
+              ? await runIciciMotorQuote({
+                  windows,
+                  vehicle: subject.vehicle,
+                  run: request.run,
+                  ...(deps.diagnose ? { diagnose: deps.diagnose } : {}),
+                })
               : newIndiaMotor
                 ? await runNiaMotorQuote({ windows, vehicle: subject.vehicle, today })
                 : await runUiicMotorQuote({ windows, vehicle: subject.vehicle, today });
@@ -1177,7 +1319,7 @@ export function createQuoteService(deps: {
                   // ICICI works its own IDV out (shown with the premium), so the vehicle's is
                   // not repeated; the registration number it was quoted for is.
                   details: [
-                    ['Registration number', request.run.registrationNumber],
+                    ['Registration number', request.run.registrationNumber ?? 'New vehicle'],
                     ...vehicleFacts(subject.vehicle).details.filter(
                       ([k]) => k !== 'Insured declared value',
                     ),

@@ -180,6 +180,20 @@ describe('finishing a handed-over form', () => {
             client: clientInputSchema.parse(CLIENT),
           }),
         aadhaarFor: () => Promise.resolve(null),
+        getTraveller: () =>
+          Promise.resolve({
+            id: 't1',
+            traveller: {
+              customer: { name: 'Synthetic Traveller' },
+              pincode: '560001',
+              dateOfBirth: '1986-04-12',
+              trip: {
+                departureDate: '2026-12-10',
+                returnDate: '2026-12-24',
+                destination: 'schengen',
+              },
+            },
+          }),
       } as never,
       windowsOf: windowsOf as never,
       logger: createLogger([]),
@@ -221,7 +235,7 @@ describe('finishing a handed-over form', () => {
     expect(save).not.toHaveBeenCalled();
     // The advisor fills the mobile and presses Check Premium on United India's page.
     setTimeout(() => (shown.premium = true), 300);
-    const result = await service.finish({ waitMs: 10_000 });
+    const result = await service.finish({ waitMs: 10_000, plans: PLANS.map((p) => p.name) });
     expect(result).toMatchObject({
       outcome: 'ready',
       plans: PLANS,
@@ -270,6 +284,21 @@ describe('finishing a handed-over form', () => {
     expect(doc.notes.at(-1)).toBe('Not compared (no premium yet): HDFC ERGO.');
   }, 20_000);
 
+  it('compares the quotes for a travel client in one PDF (Compare quotes, a travel client)', async () => {
+    const { save, service, request } = setup();
+    await service.run(request);
+    await service.finish({ waitMs: 0, amount: '4321', insurerId: 'united-india' });
+    const compared = await service.compare({ travellerId: 't1', insurerIds: ['united-india'] });
+    expect(compared).toMatchObject({ ok: true, insurers: 1 });
+    const doc = save.mock.calls.at(-1)![0];
+    expect(doc).toMatchObject({
+      title: 'Travel insurance quotes compared',
+      product: 'Comparison',
+      clientName: 'Synthetic Traveller',
+    });
+    expect(doc.notes[0]).toContain('saved with the travel client');
+  }, 20_000);
+
   it('lets the advisor change the form first: Generate PDF takes the premium shown then', async () => {
     const { shown, save, service, request } = setup();
     const result = await service.run({ ...request, adjust: true });
@@ -281,7 +310,11 @@ describe('finishing a handed-over form', () => {
     // The advisor changes the sum insured and gets the premium on United India's page.
     shown.sumInsured = '10 Lakh';
     shown.premium = true;
-    const done = await service.finish({ waitMs: 0, insurerId: 'united-india' });
+    const done = await service.finish({
+      waitMs: 0,
+      insurerId: 'united-india',
+      plans: PLANS.map((p) => p.name),
+    });
     expect(done).toMatchObject({ outcome: 'ready', premium: { amount: '11948' } });
     expect(save.mock.calls[0]![0].notes).toContain(
       "Changed by the advisor on United India's page before this premium: Sum Insured: 5 Lakh → 10 Lakh. The other details are as saved with the client.",
@@ -297,7 +330,11 @@ describe('finishing a handed-over form', () => {
     expect(result.outcome).toBe('handed-over');
     expect(save).not.toHaveBeenCalled();
     // Generate PDF with nothing changed: the premium shown is taken (no baseline to differ from).
-    const done = await service.finish({ waitMs: 0, insurerId: 'united-india' });
+    const done = await service.finish({
+      waitMs: 0,
+      insurerId: 'united-india',
+      plans: PLANS.map((p) => p.name),
+    });
     expect(done.outcome).toBe('ready');
     expect(save.mock.calls[0]![0].notes).toContain(
       "Checked by the advisor on United India's page before this premium (no change to the form was found).",
@@ -315,16 +352,15 @@ describe('finishing a handed-over form', () => {
     );
   }, 20_000);
 
-  it('stops watching when asked, and the premium can still be typed', async () => {
+  it('Discard puts the kept form away: no PDF, the tab sent home, nothing left to finish', async () => {
     const { shown, save, service, request } = setup();
     await service.run(request);
-    const waiting = service.finish({ waitMs: 60_000 });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(service.cancel()).toBe(true);
-    expect(await waiting).toMatchObject({ outcome: 'handed-over' });
-    // Cancelled: the tab goes back to United India's home page (after the start's).
+    expect(service.cancel('united-india')).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Discarded: the tab goes back to United India's home page (after the start's).
     expect(shown.sentHome.length).toBe(2);
-    expect((await service.finish({ waitMs: 0, amount: '9000' })).outcome).toBe('ready');
-    expect(save).toHaveBeenCalledTimes(1);
+    expect((await service.progress(0)).items[0]).toMatchObject({ state: 'cancelled' });
+    expect((await service.finish({ waitMs: 0, amount: '9000' })).outcome).toBe('refused');
+    expect(save).not.toHaveBeenCalled();
   }, 20_000);
 });

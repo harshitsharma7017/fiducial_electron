@@ -226,7 +226,7 @@ export function handedOver(options: {
           ? options.done
           : 'The app filled what it could.',
       `Finish the form in ${insurer}'s tab (see below), then press ${button ? `"${button}"` : "the insurer's button that works the premium out"} yourself.`,
-      'The app saves the quote as a PDF when the premium shows; you can also type the premium in the app.',
+      "When the premium shows, press Stop & make PDF in the app: it reads the premium on the insurer's page and saves the PDF (or type the premium in the app).",
     ].join(' '),
     problems: [],
     toDo: [...new Set([...progress.left, ...(options.toDo ?? [])])],

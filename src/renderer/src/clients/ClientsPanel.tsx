@@ -16,7 +16,7 @@ import { RecordPage, type RecordItem } from '../ui/RecordPage';
 import { toast } from '../ui/toast';
 import { IciciApiHealthPanel, useIciciApiReady } from '../quote/IciciApiPanels';
 import { QuoteWorkspace, type QuoteOption } from '../quote/QuoteWorkspace';
-import { ComparePanel } from '../quote/ComparePanel';
+import { isInsurerNamePaused, isInsurerPaused } from '../../../shared/insurers/availability';
 import { IciciElevatePanel } from '../quote/IciciNysaPanels';
 import {
   ageOn,
@@ -295,7 +295,9 @@ export function ClientsPanel(): React.JSX.Element | null {
   const toDelete = confirmDelete ? clients?.find((c) => c.id === confirmDelete) : undefined;
   const items: RecordItem[] | null =
     clients?.map((c) => {
-      const options = healthQuoteOptions(c, iciciApi);
+      const options = healthQuoteOptions(c, iciciApi).filter(
+        (o) => !isInsurerNamePaused(o.insurer),
+      );
       const menu: MenuEntry[] = [
         { heading: 'Quote with' },
         ...options.map((o) => ({
@@ -417,9 +419,6 @@ export function ClientsPanel(): React.JSX.Element | null {
       >
         {quote && quoteClient && (
           <>
-            {quote.product === 'compare' && (
-              <ComparePanel client={quoteClient} iciciApi={iciciApi} />
-            )}
             {quote.product === 'uiic-health' && <QuotePanel clientId={quote.id} />}
             {quote.product === 'nia-health' && <NiaHealthPanel clientId={quote.id} />}
             {quote.product === 'nia-pa' && <NiaPaPanel clientId={quote.id} />}
@@ -458,13 +457,6 @@ export function ClientsPanel(): React.JSX.Element | null {
 function healthQuoteOptions(c: ClientSummary, iciciApi: boolean): QuoteOption[] {
   const noMembers = c.memberCount > 0 ? {} : { unavailable: 'Add members to this client first.' };
   return [
-    {
-      key: 'compare',
-      insurer: 'Compare insurers',
-      label: 'Several insurers at once',
-      description: 'Runs them together, one PDF each and a comparison PDF',
-      ...noMembers,
-    },
     {
       key: 'uiic-health',
       insurer: 'United India',
@@ -903,7 +895,7 @@ function AdditionalDetails(props: {
         encrypted.
       </p>
       <div className="form-tabs small" role="tablist" aria-label="Insurer">
-        {QUOTE_CHOICE_INSURERS.map((i) => (
+        {QUOTE_CHOICE_INSURERS.filter((i) => !isInsurerPaused(i)).map((i) => (
           <button
             key={i}
             type="button"

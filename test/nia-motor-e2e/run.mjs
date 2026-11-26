@@ -53,6 +53,7 @@ const harness =
     icici: 'icici-harness.cjs',
     bajaj: 'bajaj-harness.cjs',
     nysa: 'nysa-harness.cjs',
+    tabs: 'tabs-harness.cjs',
   }[process.argv[2]] ?? 'harness.cjs';
 const child = spawn(electron, [join(HERE, harness)], { env, stdio: 'inherit' });
 child.on('exit', (code) => process.exit(code ?? 1));

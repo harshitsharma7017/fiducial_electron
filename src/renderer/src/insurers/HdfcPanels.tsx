@@ -2,7 +2,7 @@
 // a travel client (Retail Travel): the advisor's choices for one run, and the premium PIE works out.
 // The SP/POSP name or code is remembered on this computer (it is the advisor's, not the client's).
 // A health client's choices besides the product are its saved details (request of 24 November 2026).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { hdfcRetailFromChoices } from '../../../shared/contracts/client-quote';
 import {
   missingMessage,
@@ -156,6 +156,22 @@ export function HdfcTravelPanel(props: { travellerId: string }): React.JSX.Eleme
   const [plan, setPlan] = useState('Gold');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result>(null);
+  // The trip saved with the travel client (Additional details), if any.
+  useEffect(() => {
+    let live = true;
+    void window.fqf.travellers
+      .get(props.travellerId)
+      .then((r) => {
+        const trip = r.ok ? r.data.traveller.trip : undefined;
+        if (!live || !trip) return;
+        setDeparture(trip.departureDate);
+        setRet(trip.returnDate);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [props.travellerId]);
   const run = async () => {
     setBusy(true);
     setResult(null);

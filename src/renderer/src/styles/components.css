@@ -2204,3 +2204,28 @@ label.check input {
   grid-column: 2;
   font-size: var(--text-sm);
 }
+
+/* Compare quotes, its own page (quote/ComparePage.tsx): the client chosen, then the panel. */
+.compare-page {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.compare-client {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 28rem;
+}
+
+/* Which plan for the PDF (quote/PlanChoice.tsx). */
+.plan-choice {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.plan-choice-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+}

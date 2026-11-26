@@ -3,7 +3,8 @@
 // Used, ownership change, Registration Number) → Fetch Vehicle Data (ICICI reads the vehicle from
 // Vahan itself; a two-wheeler's number switches to the Two Wheeler flow after an OK) → the premium
 // page ("Total Premium", the IDV slider). Shared by the request contract and the screens; what is
-// filled is in src/main/quotes/run-icici-motor.ts.
+// filled is in src/main/quotes/run-icici-motor.ts. A new vehicle (New Business, not recorded) is
+// taken as far as NYSA's form with New Business chosen, then handed to the advisor.
 import { z } from 'zod';
 
 /**
@@ -26,7 +27,8 @@ export const iciciRegistrationNumber = z
 /** One ICICI Lombard motor run's choices, besides the saved vehicle (not kept by the app). */
 export const iciciMotorRunSchema = z
   .object({
-    registrationNumber: iciciRegistrationNumber,
+    /** Needed for a renewal (ICICI reads the vehicle from Vahan by it); not for a new vehicle. */
+    registrationNumber: iciciRegistrationNumber.optional(),
     /** NYSA's "ownership change" question (asked for cars renewed with ICICI). */
     ownershipChanged: z.boolean(),
     /**

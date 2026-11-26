@@ -193,6 +193,7 @@ function start(): void {
       clients,
       iciciApi: () => iciciApi.connect(),
       windowsOf: (id) => portalWindows.pagesOf(id),
+      portals: portalHost,
       logger,
       diagnose: createDiagnostics(join(app.getPath('userData'), 'diagnostics')),
       pdfs: createQuotePdfs({

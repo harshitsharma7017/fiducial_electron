@@ -6,7 +6,14 @@
 //   and its own session (partition): being drawn inside the app window gives it no access to the
 //   app's page, which is a separate WebContents with its own process;
 // - only the active tab's view is attached; the others stay alive but detached, and are not
-//   throttled while in the background (automation keeps running in them);
+//   throttled while in the background. Except the tabs of insurers being filled (setWorking): a
+//   tab that loads a page while detached never draws it (no animation frame at all: Flutter's
+//   1up shows no buttons, Ionic's and Material's overlays never close; measured 26 November
+//   2026), so while insurers are filled their tabs stay attached at full size in the page area,
+//   the one in front on top and the others drawing behind it. Filling them out of sight while the
+//   app's own screens show was tried (26 November 2026: the pages kept at full size with one pixel
+//   inside the window) and broke the real insurers' pages (Niva's UNO drew nothing): a page is
+//   filled where it can be seen;
 // - pop-ups the portal opens (calculators, e-proposal forms) are adopted as tabs of the same
 //   insurer (window.open's createWindow), so the advisor sees one window for everything.
 // The app's page reports where the insurer page goes (setBounds) and which tab it shows.
@@ -70,6 +77,11 @@ export interface PortalHost {
   closeInsurer(insurerId: string): void;
   /** Where the page area is in the app window. */
   setBounds(bounds: Bounds): void;
+  /**
+   * The insurers being filled now: their tabs are kept attached and drawing (behind the tab in
+   * front); while any is, the page area shows one of them (the app's own screens wait).
+   */
+  setWorking(insurerIds: string[]): void;
   state(): PortalTabsState;
   /** The state as soon as its version is past `since`, or after `timeoutMs` anyway. */
   waitForChange(since: number, timeoutMs: number): Promise<PortalTabsState>;
@@ -86,10 +98,22 @@ interface Entry {
 /** The page area until the app's page reports it: everything below a 48-pixel tab bar. */
 const TAB_BAR = 48;
 
+/**
+ * Whether a tab's page is still there. Once Electron has destroyed it (the app quitting, the page
+ * closing itself) the view's webContents is gone (undefined), not merely destroyed.
+ */
+const alive = (view: WebContentsView): boolean => {
+  const wc = view.webContents as WebContents | undefined;
+  return !!wc && !wc.isDestroyed();
+};
+
 export function createPortalHost(deps: { window: () => BrowserWindow | null }): PortalHost {
   const entries = new Map<string, Entry>();
   let active: string | null = null;
-  let attached: WebContentsView | null = null;
+  /** The views attached to the window, bottom first. */
+  let attached: WebContentsView[] = [];
+  /** The insurers being filled now (setWorking). */
+  let working: string[] = [];
   let bounds: Bounds | null = null;
   let counter = 0;
   let version = 1;
@@ -111,27 +135,44 @@ export function createPortalHost(deps: { window: () => BrowserWindow | null }): 
     return { x: 0, y: TAB_BAR, width, height: Math.max(0, height - TAB_BAR) };
   };
 
-  /** Attaches the active tab's view (only that one) where the page area is. */
+  /** The tabs of the insurers being filled, oldest first (their own page before pop-ups). */
+  const workingEntries = (): Entry[] =>
+    [...entries.values()].filter(
+      (e) => !e.hidden && working.includes(e.tab.insurerId) && alive(e.view),
+    );
+
+  /**
+   * Attaches the active tab's view where the page area is, and, while insurers are filled, their
+   * tabs too, at full size behind it (drawing; see above). With the app's own screens asked for
+   * while insurers are filled, one of their tabs is shown instead.
+   */
   const layout = (): void => {
     const win = deps.window();
     if (!win || win.isDestroyed()) return;
+    if (!active && working.length > 0) {
+      const first = workingEntries().find((e) => e.tab.kind === 'portal') ?? workingEntries()[0];
+      if (first) active = first.tab.id;
+    }
     const entry = active ? entries.get(active) : undefined;
-    const view = entry && !entry.view.webContents.isDestroyed() ? entry.view : null;
-    if (attached && attached !== view) {
-      win.contentView.removeChildView(attached);
-      attached = null;
-    }
-    if (view) {
-      if (attached !== view) {
-        win.contentView.addChildView(view);
-        attached = view;
+    const front = entry && alive(entry.view) ? entry.view : null;
+    const behind = workingEntries()
+      .map((e) => e.view)
+      .filter((v) => v !== front);
+    const wanted = [...behind, ...(front ? [front] : [])];
+    for (const view of attached) {
+      if (!wanted.includes(view) && alive(view)) {
+        win.contentView.removeChildView(view);
       }
-      view.setBounds(area(win));
-      view.webContents.focus();
-    } else {
-      // The app's own screens: give the keyboard back to them.
-      win.webContents.focus();
     }
+    // Added in order, each on top of the last (adding an attached view moves it to the top).
+    for (const view of wanted) {
+      win.contentView.addChildView(view);
+      view.setBounds(area(win));
+    }
+    attached = wanted;
+    if (front) front.webContents.focus();
+    // The app's own screens: give the keyboard back to them.
+    else win.webContents.focus();
   };
 
   const show = (tabId: string | null): void => {
@@ -146,11 +187,11 @@ export function createPortalHost(deps: { window: () => BrowserWindow | null }): 
     const entry = entries.get(tabId);
     if (!entry) return;
     entries.delete(tabId);
-    if (attached === entry.view) {
+    if (attached.includes(entry.view)) {
       deps.window()?.contentView.removeChildView(entry.view);
-      attached = null;
+      attached = attached.filter((v) => v !== entry.view);
     }
-    if (!entry.view.webContents.isDestroyed()) entry.view.webContents.close();
+    if (alive(entry.view)) entry.view.webContents.close();
     if (active === tabId) {
       // Back to the tab that opened it (the insurer's own page), else the app.
       const portal = [...entries.values()].find(
@@ -204,9 +245,7 @@ export function createPortalHost(deps: { window: () => BrowserWindow | null }): 
   };
 
   const ofInsurer = (insurerId: string): Entry[] =>
-    [...entries.values()].filter(
-      (e) => e.tab.insurerId === insurerId && !e.view.webContents.isDestroyed(),
-    );
+    [...entries.values()].filter((e) => e.tab.insurerId === insurerId && alive(e.view));
 
   return {
     openPortal: (insurerId, title, webPreferences) => {
@@ -256,6 +295,12 @@ export function createPortalHost(deps: { window: () => BrowserWindow | null }): 
       for (const e of [...entries.values()].filter((x) => x.tab.insurerId === insurerId)) {
         remove(e.tab.id);
       }
+    },
+    setWorking: (insurerIds) => {
+      const was = active;
+      working = [...insurerIds];
+      layout();
+      if (active !== was) changed();
     },
     setBounds: (next) => {
       bounds = {

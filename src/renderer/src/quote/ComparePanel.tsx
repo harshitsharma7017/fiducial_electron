@@ -1,12 +1,13 @@
-// Compare insurers (request of 25 November 2026): one health client quoted by several insurers
-// at once (United India, Niva Bupa, HDFC ERGO, New India, ICICI Lombard), or by one alone. Every
-// insurer chosen runs at the same time, each in its own tab; a card per insurer shows the step it
-// is on, its premium and its PDF. A form an insurer leaves for the advisor (handed over) shows what
-// to fill and a button to its tab, while the others keep going; the app then watches that form for
-// its premium (or takes the premium the advisor types). Once every insurer has finished, the app
-// makes one PDF comparing their premiums, beside each insurer's own PDF. Nothing is ever submitted.
+// Compare quotes (requests of 25 and 26 November 2026): its own page in the sidebar. One health
+// client (or, VehicleCompare.tsx, one vehicle) quoted by several insurers at once (United India,
+// Niva Bupa, HDFC ERGO, New India, ICICI Lombard), or by one alone. Every insurer chosen runs at the same time, each in its own
+// tab; a card per insurer shows the step it is on, then the form it filled and kept. No PDF is
+// made by itself: the advisor checks each insurer's form in its tab, changes anything, and
+// presses Stop & make PDF on its card; the app reads the premium that page shows then, saves the
+// insurer's PDF, and makes the comparison PDF again from every insurer saved so far. Nothing is
+// ever submitted.
 import { ExternalLink, FileDown, Square } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   hdfcMstFromChoices,
   hdfcRetailFromChoices,
@@ -38,11 +39,11 @@ import {
   type NivaHealthPlan,
 } from '../../../shared/insurers/niva-health';
 import { rememberedPosp } from '../insurers/hdfc-posp';
-import { showAppScreens } from '../insurers/PortalTabs';
 import { InsurerAvatar } from '../insurers/branding';
 import { readChoices, useSavedChoices } from '../clients/saved-choices';
-import { openQuotePdf, showInsurerTab } from './run';
+import { openQuotePdf, showInsurerTab, stopAndMakePdf } from './run';
 import { toast } from '../ui/toast';
+import { isInsurerPaused } from '../../../shared/insurers/availability';
 
 type CompareInsurer = 'united-india' | 'niva-bupa' | 'hdfc-ergo' | 'new-india' | 'icici-lombard';
 
@@ -82,7 +83,7 @@ function productsOf(insurer: CompareInsurer, iciciApi = false): [string, string]
   }
 }
 
-type Built = { ok: true; request: QuoteRunRequest } | { ok: false; missing: string[] };
+export type Built = { ok: true; request: QuoteRunRequest } | { ok: false; missing: string[] };
 
 /** The run for one insurer, from the client's saved details (the same as its own panel's). */
 function buildRequest(
@@ -90,12 +91,8 @@ function buildRequest(
   insurer: CompareInsurer,
   product: string,
   choices: ClientQuoteChoices | undefined,
-  /** "Let me change it first": the form is left for the advisor, even with a premium. */
-  adjust = false,
 ): Built {
-  const built = buildRun(clientId, insurer, product, choices);
-  if (!built.ok || !adjust || built.request.product === 'icici-api-health') return built;
-  return { ok: true, request: { ...built.request, adjust: true } as QuoteRunRequest };
+  return buildRun(clientId, insurer, product, choices);
 }
 
 function buildRun(
@@ -186,19 +183,16 @@ function buildRun(
   }
 }
 
-/** How long the app watches a handed-over form for its premium. */
-const WATCH_MS = 30 * 60_000;
-
 /** A run that ended (or never started) and why. */
 const SETTLED: QuoteProgressView['state'][] = ['ready', 'refused', 'failed', 'cancelled'];
 
 const STATE_NAMES: Record<QuoteProgressView['state'], string> = {
   running: 'Filling',
-  'handed-over': 'Needs you',
-  ready: 'Premium ready',
+  'handed-over': 'Filled: check it',
+  ready: 'PDF saved',
   refused: 'Not started',
   failed: 'Stopped',
-  cancelled: 'Cancelled',
+  cancelled: 'Discarded',
 };
 
 interface Started {
@@ -207,27 +201,41 @@ interface Started {
   error: string | null;
 }
 
-export function ComparePanel(props: {
-  client: ClientSummary;
-  iciciApi: boolean;
+/** One insurer on the compare page: its products ([key, name]) and why it cannot run, if so. */
+export interface CompareRow {
+  id: string;
+  name: string;
+  products: [string, string][];
+  /** Why it cannot be chosen for this client or vehicle (shown, the row disabled). */
+  blocked?: string | null;
+  /** What its run lacks for a product (shown when chosen; it is then skipped). */
+  missing?: (product: string) => string[];
+}
+
+/**
+ * The compare page's working part, for a health client or a vehicle: the insurers chosen run at
+ * once; a card each; Stop & make PDF per insurer; the comparison PDF made again after each.
+ */
+export function CompareRunner(props: {
+  intro: ReactNode;
+  rows: CompareRow[];
+  /** The run's request for an insurer and product (read fresh when Run is pressed). */
+  build: (insurerId: string, product: string) => Promise<Built>;
+  compareWith: { clientId: string } | { vehicleId: string } | { travellerId: string };
+  /** Why nothing can run (no members, say). */
+  blocked?: string | null;
+  /** Shared details above the insurers (a vehicle's quote details). */
+  details?: ReactNode;
 }): React.JSX.Element {
-  const clientId = props.client.id;
-  const insurers: CompareInsurer[] = [
-    'united-india',
-    'niva-bupa',
-    'hdfc-ergo',
-    'new-india',
-    'icici-lombard',
-  ];
-  const saved = useSavedChoices(clientId);
-  const [picked, setPicked] = useState<Partial<Record<CompareInsurer, boolean>>>({});
-  const [products, setProducts] = useState<Partial<Record<CompareInsurer, string>>>({});
-  const [adjusts, setAdjusts] = useState<Partial<Record<CompareInsurer, boolean>>>({});
-  const productsFor = (i: CompareInsurer) => productsOf(i, props.iciciApi);
-  const productOf = (i: CompareInsurer) => products[i] ?? productsFor(i)[0]![0];
+  const { rows } = props;
+  const nameOf = (id: string) => rows.find((r) => r.id === id)?.name ?? id;
+  const [picked, setPicked] = useState<Partial<Record<string, boolean>>>({});
+  const [products, setProducts] = useState<Partial<Record<string, string>>>({});
+  const productsFor = (id: string) => rows.find((r) => r.id === id)?.products ?? [];
+  const productOf = (id: string) => products[id] ?? productsFor(id)[0]?.[0] ?? '';
   const [batch, setBatch] = useState<{
     at: string;
-    started: Partial<Record<CompareInsurer, Started>>;
+    started: Partial<Record<string, Started>>;
   } | null>(null);
   const [progress, setProgress] = useState<QuoteProgressView[]>([]);
   const [comparison, setComparison] = useState<
@@ -237,9 +245,7 @@ export function ComparePanel(props: {
     | null
   >(null);
   const [amounts, setAmounts] = useState<Partial<Record<string, string>>>({});
-  const [generating, setGenerating] = useState<Partial<Record<string, boolean>>>({});
-  const watching = useRef(new Set<string>());
-  const compared = useRef(false);
+  const [stopping, setStopping] = useState<Partial<Record<string, boolean>>>({});
 
   // The insurers' progress, while this screen is open (a long poll: answers when something moves).
   useEffect(() => {
@@ -262,47 +268,35 @@ export function ComparePanel(props: {
     };
   }, []);
 
-  const startedIds = batch ? (Object.keys(batch.started) as CompareInsurer[]) : [];
+  const startedIds = batch ? Object.keys(batch.started) : [];
   /** This batch's progress for an insurer (not an earlier quote's). */
   const progressFor = (insurer: string): QuoteProgressView | null => {
     if (!batch) return null;
     const p = progress.find((x) => x.insurerId === insurer);
     return p && p.updatedAt >= batch.at ? p : null;
   };
-  const settled = (insurer: CompareInsurer): boolean => {
+  const settled = (insurer: string): boolean => {
     if (batch?.started[insurer]?.error) return true;
     const p = progressFor(insurer);
     return !!p && SETTLED.includes(p.state);
   };
-  const running = startedIds.some((i) => !settled(i));
-  const withPremium = startedIds.filter((i) => {
+  /** Still filling (or starting): not yet a form to check. */
+  const filling = startedIds.some((i) => {
+    if (batch?.started[i]?.error) return false;
+    const p = progressFor(i);
+    return !p || p.state === 'running';
+  });
+  const withPdf = startedIds.filter((i) => {
     const p = progressFor(i);
     return p?.state === 'ready' && !!p.premium;
   });
 
-  const watch = (insurerId: string) => {
-    if (watching.current.has(insurerId)) return;
-    watching.current.add(insurerId);
-    void window.fqf.quotes
-      .finish({ waitMs: WATCH_MS, insurerId })
-      .catch(() => null)
-      .finally(() => watching.current.delete(insurerId));
-  };
-
-  // A form handed over: the app watches it for the premium the advisor gets (keep going, come back).
-  useEffect(() => {
-    for (const i of startedIds) {
-      const p = progressFor(i);
-      // Not a form the advisor is changing: they press Generate PDF when it is right.
-      if (p?.state === 'handed-over' && p.finish && !p.watching && !p.adjust) watch(i);
-    }
-  });
-
+  /** The comparison PDF, from every insurer whose PDF is saved (made again each time). */
   const compare = async () => {
     if (!batch) return;
     setComparison({ phase: 'making' });
     const r = await window.fqf.quotes
-      .compare({ clientId, insurerIds: startedIds })
+      .compare({ ...props.compareWith, insurerIds: startedIds })
       .catch(() => null);
     if (r?.ok && r.data.ok) {
       setComparison({ phase: 'done', pdf: r.data.pdf.name, insurers: r.data.insurers });
@@ -321,28 +315,24 @@ export function ComparePanel(props: {
     }
   };
 
-  // Every insurer finished: back to the app (the tabs are done with), and the comparison PDF,
-  // once per batch, if any gave a premium.
+  // Each new insurer PDF (by its card's Stop, or the top bar's in the insurer's tab): the
+  // comparison PDF made again, from every insurer saved so far.
+  const savedKey = withPdf.join(',');
+  const [comparedKey, setComparedKey] = useState('');
   useEffect(() => {
-    if (!batch || running || compared.current) return;
-    compared.current = true;
-    showAppScreens();
-    if (withPremium.length > 0) void compare();
+    if (!batch || savedKey === '' || savedKey === comparedKey) return;
+    setComparedKey(savedKey);
+    void compare();
   });
 
   const start = async () => {
-    const chosen = insurers.filter((i) => picked[i]);
+    const chosen = rows.filter((r) => picked[r.id] && !r.blocked).map((r) => r.id);
     if (chosen.length === 0) return;
-    const read = await readChoices(clientId);
-    if ('error' in read) {
-      toast(read.error);
-      return;
-    }
     const at = new Date().toISOString();
-    const started: Partial<Record<CompareInsurer, Started>> = {};
-    const requests: [CompareInsurer, QuoteRunRequest][] = [];
+    const started: Partial<Record<string, Started>> = {};
+    const requests: [string, QuoteRunRequest][] = [];
     for (const i of chosen) {
-      const built = buildRequest(clientId, i, productOf(i), read.choices, !!adjusts[i]);
+      const built = await props.build(i, productOf(i));
       if (built.ok) {
         started[i] = { product: productOf(i), error: null };
         requests.push([i, built.request]);
@@ -353,8 +343,8 @@ export function ComparePanel(props: {
         };
       }
     }
-    compared.current = false;
     setComparison(null);
+    setComparedKey('');
     setAmounts({});
     setBatch({ at, started });
     // All at the same time; each insurer's result comes in through its progress.
@@ -386,92 +376,65 @@ export function ComparePanel(props: {
     }
   };
 
-  /** The premium shown now on the form the advisor changed: saved as the PDF. */
-  const generatePdf = async (insurerId: string) => {
-    setGenerating((g) => ({ ...g, [insurerId]: true }));
-    const r = await window.fqf.quotes.finish({ waitMs: 0, insurerId }).catch(() => null);
-    setGenerating((g) => ({ ...g, [insurerId]: false }));
-    if (!r) toast('The PDF could not be made.');
+  /**
+   * Stop & make PDF: the premium the insurer's page shows now (or what the run read, when its page
+   * cannot be read), saved as its PDF (the advisor choosing the plan when it shows several); the
+   * comparison follows.
+   */
+  const stopAndPdf = async (insurerId: string, amount?: string) => {
+    setStopping((g) => ({ ...g, [insurerId]: true }));
+    const r = await stopAndMakePdf(insurerId, amount);
+    setStopping((g) => ({ ...g, [insurerId]: false }));
+    // Null: the plan question was cancelled (the form stays kept).
+    if (!r) return;
     else if (!r.ok) toast(r.error.message);
     else if (r.data.outcome !== 'ready') toast(r.data.message);
+    else {
+      if (amount) setAmounts((a) => ({ ...a, [insurerId]: '' }));
+      toast(`${nameOf(insurerId)} PDF saved in Downloads.`);
+    }
   };
 
-  const typePremium = async (insurerId: string) => {
-    const amount = amounts[insurerId]?.trim();
-    if (!amount) return;
-    const r = await window.fqf.quotes.finish({ waitMs: 0, amount, insurerId }).catch(() => null);
-    if (r && !r.ok) toast(r.error.message);
-    else setAmounts((a) => ({ ...a, [insurerId]: '' }));
-  };
-
-  const missingFor = (i: CompareInsurer): string[] => {
-    if (saved === undefined || saved === null) return [];
-    const built = buildRequest(clientId, i, productOf(i), saved);
-    return built.ok ? [] : built.missing;
-  };
-
-  const noMembers = props.client.memberCount === 0;
-  const uiicNeeds = !props.client.hasPreferences
-    ? 'Add the quote details (cover, sum insured) first.'
-    : null;
-
+  const anyPicked = rows.some((r) => picked[r.id] && !r.blocked);
   return (
     <div className="quote-panel">
-      <p className="insurer-note">
-        <strong>Compare insurers.</strong> Choose one insurer or several: they all run at the same
-        time, each in its own tab, with the details saved with the client. A form that needs you
-        shows here with what to fill; the others keep going. Tick &ldquo;Let me change it before the
-        PDF&rdquo; to change an insurer&rsquo;s form yourself first: the app fills it, you change it
-        and get the premium, then press Generate PDF on its card. Each premium is saved as the
-        insurer&rsquo;s own PDF, and once all have finished, one PDF compares them. Nothing is ever
-        submitted. Sign in to each insurer first.
-      </p>
-      {noMembers && <p className="error">Add members to this client first.</p>}
-      <fieldset className="compare-pick" disabled={running || noMembers}>
+      {props.intro}
+      {props.blocked && <p className="error">{props.blocked}</p>}
+      {props.details}
+      <fieldset className="compare-pick" disabled={filling || !!props.blocked}>
         <legend>Insurers</legend>
-        {insurers.map((i) => {
-          const missing = picked[i] ? missingFor(i) : [];
-          const products = productsFor(i);
-          const blocked = i === 'united-india' ? uiicNeeds : null;
+        {rows.map((row) => {
+          const i = row.id;
+          const missing = picked[i] && row.missing ? row.missing(productOf(i)) : [];
+          const options = productsFor(i);
           return (
             <div key={i} className="compare-pick-row">
               <label className="check">
                 <input
                   type="checkbox"
-                  checked={!!picked[i] && !blocked}
-                  disabled={!!blocked}
+                  checked={!!picked[i] && !row.blocked}
+                  disabled={!!row.blocked}
                   onChange={(e) => setPicked((p) => ({ ...p, [i]: e.target.checked }))}
                 />
-                {INSURER_NAMES[i]}
+                {row.name}
               </label>
-              {products.length > 1 ? (
+              {options.length > 1 ? (
                 <select
-                  aria-label={`${INSURER_NAMES[i]} product`}
+                  aria-label={`${row.name} product`}
                   value={productOf(i)}
                   disabled={!picked[i]}
                   onChange={(e) => setProducts((p) => ({ ...p, [i]: e.target.value }))}
                 >
-                  {products.map(([key, name]) => (
+                  {options.map(([key, name]) => (
                     <option key={key} value={key}>
                       {name}
                     </option>
                   ))}
                 </select>
               ) : (
-                <span className="compare-pick-product">{products[0]![1]}</span>
+                <span className="compare-pick-product">{options[0]?.[1] ?? ''}</span>
               )}
-              {(i !== 'icici-lombard' || productOf(i) === 'nysa-elevate') && (
-                <label className="check compare-adjust">
-                  <input
-                    type="checkbox"
-                    checked={!!adjusts[i]}
-                    disabled={!picked[i] || !!blocked}
-                    onChange={(e) => setAdjusts((a) => ({ ...a, [i]: e.target.checked }))}
-                  />
-                  Let me change it before the PDF
-                </label>
-              )}
-              {blocked && <span className="compare-hint">{blocked}</span>}
+              {row.blocked && <span className="compare-hint">{row.blocked}</span>}
               {missing.length > 0 && (
                 <span className="compare-hint">
                   Needs {missing.join('; ')}. It will be skipped until then.
@@ -485,12 +448,14 @@ export function ComparePanel(props: {
         <button
           type="button"
           className="primary"
-          disabled={running || noMembers || !insurers.some((i) => picked[i])}
+          disabled={filling || !!props.blocked || !anyPicked}
           onClick={() => void start()}
         >
-          {running ? 'Working…' : `Run ${insurers.filter((i) => picked[i]).length || ''} selected`}
+          {filling
+            ? 'Filling…'
+            : `Run ${rows.filter((r) => picked[r.id] && !r.blocked).length || ''} selected`}
         </button>
-        {running && (
+        {filling && (
           <button type="button" onClick={cancelAll}>
             <Square size={14} aria-hidden="true" /> Cancel all
           </button>
@@ -506,12 +471,13 @@ export function ComparePanel(props: {
               ? 'refused'
               : (p?.state ?? 'waiting');
             const productName = productsFor(i).find(([k]) => k === s.product)?.[1] ?? s.product;
+            const kept = p?.state === 'handed-over';
             return (
               <section key={i} className={`compare-card compare-${state}`} aria-live="polite">
                 <header>
-                  <InsurerAvatar name={INSURER_NAMES[i]} />
+                  <InsurerAvatar name={nameOf(i)} />
                   <div>
-                    <strong>{INSURER_NAMES[i]}</strong>
+                    <strong>{nameOf(i)}</strong>
                     <span>{productName}</span>
                   </div>
                   <span className="compare-state">
@@ -523,16 +489,14 @@ export function ComparePanel(props: {
                 {!s.error && p && p.state !== 'running' && p.message && <p>{p.message}</p>}
                 {p?.premium && (
                   <p className="premium">
-                    {p.state === 'handed-over'
-                      ? `Shown for now: ${p.premium.label}`
-                      : p.premium.label}{' '}
+                    {kept ? `Shown now: ${p.premium.label}` : p.premium.label}{' '}
                     <strong>₹{p.premium.amount}</strong>
                   </p>
                 )}
-                {p?.state === 'handed-over' && p.toDo && p.toDo.length > 0 && (
+                {kept && p.toDo && p.toDo.length > 0 && (
                   <>
                     <p>
-                      <strong>Fill in the insurer&rsquo;s tab:</strong>
+                      <strong>Still to do in the insurer&rsquo;s tab:</strong>
                     </p>
                     <ul>
                       {p.toDo.map((t) => (
@@ -541,53 +505,36 @@ export function ComparePanel(props: {
                     </ul>
                   </>
                 )}
-                {p?.state === 'handed-over' && p.adjust && (
+                {kept && (
                   <p className="compare-hint">
-                    Open the tab, change what you need and get the premium there, then press
-                    Generate PDF: the premium shown then is the quote, and the PDF names what you
-                    changed.
-                  </p>
-                )}
-                {p?.state === 'handed-over' && !p.adjust && (
-                  <p className="compare-hint">
-                    {p.watching
-                      ? `Watching for the premium${p.finish?.button ? ` after you press ${p.finish.button}` : ''}: the PDF is saved by itself.`
-                      : 'Not watching: type the premium below, or watch again.'}
+                    Check the form in its tab and change anything you need, then press Stop &amp;
+                    make PDF: the premium shown then is saved, with what you changed.
                   </p>
                 )}
                 <div className="insurer-actions">
-                  {(state === 'running' || state === 'handed-over' || state === 'failed') && (
-                    <button
-                      type="button"
-
-                      onClick={() => void showInsurerTab(i)}
-                    >
-                      <ExternalLink size={14} aria-hidden="true" /> Open tab
-                    </button>
-                  )}
-                  {(state === 'running' || state === 'handed-over') && (
-                    <button
-                      type="button"
-
-                      onClick={() => void window.fqf.quotes.cancel(i).catch(() => null)}
-                    >
-                      {state === 'running' ? 'Cancel' : p?.adjust ? 'Discard' : 'Stop watching'}
-                    </button>
-                  )}
-                  {p?.state === 'handed-over' && p.adjust && (
+                  {kept && (
                     <button
                       type="button"
                       className="primary"
-                      disabled={!!generating[i]}
-                      onClick={() => void generatePdf(i)}
+                      disabled={!!stopping[i]}
+                      onClick={() => void stopAndPdf(i)}
                     >
-                      <FileDown size={14} aria-hidden="true" />{' '}
-                      {generating[i] ? 'Reading the premium…' : 'Generate PDF'}
+                      <Square size={14} aria-hidden="true" />{' '}
+                      {stopping[i] ? 'Reading the premium…' : 'Stop & make PDF'}
                     </button>
                   )}
-                  {p?.state === 'handed-over' && !p.watching && !p.adjust && (
-                    <button type="button" onClick={() => watch(i)}>
-                      Watch again
+                  {(state === 'running' || kept || state === 'failed') && (
+                    <button type="button" onClick={() => void showInsurerTab(i)}>
+                      <ExternalLink size={14} aria-hidden="true" /> Open tab
+                    </button>
+                  )}
+                  {(state === 'running' || kept) && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => void window.fqf.quotes.cancel(i).catch(() => null)}
+                    >
+                      {state === 'running' ? 'Cancel' : 'Discard'}
                     </button>
                   )}
                   {p?.pdf && (
@@ -603,12 +550,13 @@ export function ComparePanel(props: {
                     </button>
                   )}
                 </div>
-                {p?.state === 'handed-over' && (
+                {kept && (
                   <form
                     className="compare-amount"
                     onSubmit={(e) => {
                       e.preventDefault();
-                      void typePremium(i);
+                      const amount = amounts[i]?.trim();
+                      if (amount) void stopAndPdf(i, amount);
                     }}
                   >
                     <label>
@@ -620,7 +568,7 @@ export function ComparePanel(props: {
                         onChange={(e) => setAmounts((a) => ({ ...a, [i]: e.target.value }))}
                       />
                     </label>
-                    <button type="submit" disabled={!amounts[i]?.trim()}>
+                    <button type="submit" disabled={!amounts[i]?.trim() || !!stopping[i]}>
                       Save PDF
                     </button>
                   </form>
@@ -641,9 +589,7 @@ export function ComparePanel(props: {
                 ? `Saved in Downloads: ${comparison.pdf} (${comparison.insurers} insurer${comparison.insurers > 1 ? 's' : ''}).`
                 : comparison?.phase === 'error'
                   ? comparison.message
-                  : running
-                    ? `Made by itself once every insurer has finished (${withPremium.length} of ${startedIds.length} with a premium so far).`
-                    : 'No premium to compare yet.'}
+                  : `Made each time you press Stop & make PDF on an insurer (${withPdf.length} of ${startedIds.length} saved so far).`}
           </p>
           <div className="insurer-actions">
             {comparison?.phase === 'done' && (
@@ -660,15 +606,70 @@ export function ComparePanel(props: {
             )}
             <button
               type="button"
-
-              disabled={withPremium.length === 0 || comparison?.phase === 'making'}
+              disabled={withPdf.length === 0 || comparison?.phase === 'making'}
               onClick={() => void compare()}
             >
-              {comparison?.phase === 'done' ? 'Make it again' : 'Make it now'}
+              Make it again
             </button>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+/** A health client's insurers, each run built from the client's saved details. */
+export function ComparePanel(props: {
+  client: ClientSummary;
+  iciciApi: boolean;
+}): React.JSX.Element {
+  const { client, iciciApi } = props;
+  const saved = useSavedChoices(client.id);
+  const ids: CompareInsurer[] = [
+    'united-india',
+    'niva-bupa',
+    'hdfc-ergo',
+    'new-india',
+    'icici-lombard',
+  ];
+  // A paused insurer is not offered (shared/insurers/availability.ts).
+  const rows: CompareRow[] = ids
+    .filter((i) => !isInsurerPaused(i))
+    .map((i) => ({
+      id: i,
+      name: INSURER_NAMES[i],
+      products: productsOf(i, iciciApi),
+      blocked:
+        i === 'united-india' && !client.hasPreferences
+          ? 'Add the quote details (cover, sum insured) first.'
+          : null,
+      missing: (product) => {
+        if (saved === undefined || saved === null) return [];
+        const built = buildRequest(client.id, i, product, saved);
+        return built.ok ? [] : built.missing;
+      },
+    }));
+  const build = async (insurerId: string, product: string): Promise<Built> => {
+    const read = await readChoices(client.id);
+    if ('error' in read) return { ok: false, missing: [read.error] };
+    return buildRequest(client.id, insurerId as CompareInsurer, product, read.choices);
+  };
+  return (
+    <CompareRunner
+      intro={
+        <p className="insurer-note">
+          <strong>Compare quotes for {client.name}.</strong> Choose one insurer or several: they all
+          run at the same time, each in its own tab, with the details saved with the client. When an
+          insurer&rsquo;s form is filled, check it in its tab (change anything you need), then press
+          Stop &amp; make PDF on its card: the app reads the premium shown then, saves that
+          insurer&rsquo;s PDF and makes the comparison PDF again. No PDF is made until you do.
+          Nothing is ever submitted. Sign in to each insurer first.
+        </p>
+      }
+      rows={rows}
+      build={build}
+      compareWith={{ clientId: client.id }}
+      blocked={client.memberCount === 0 ? 'Add members to this client first.' : null}
+    />
   );
 }

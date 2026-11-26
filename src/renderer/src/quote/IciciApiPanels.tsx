@@ -19,6 +19,7 @@ import {
   type IciciHealthProduct,
 } from '../../../shared/insurers/icici-api';
 import { runQuote } from './run';
+import { useSavedQuoteDetails } from '../vehicles/saved-quote-details';
 
 /**
  * Whether ICICI's Partner API is set up (an environment chosen, with its login saved). Until it
@@ -120,6 +121,14 @@ export function IciciApiMotorSection(props: { vehicle: VehicleSummary }): React.
   const [tpEnd, setTpEnd] = useState('');
   const [tpInsurer, setTpInsurer] = useState('');
   const [idv, setIdv] = useState<IciciApiMotorRun['idv']>('avg');
+  // Started from the vehicle's saved quote details (its Additional details).
+  useSavedQuoteDetails(vehicle.id, (q) => {
+    if (q.cover === 'liability') setCover('liability');
+    if (q.registrationNumber) setRegistrationNumber(q.registrationNumber);
+    if (q.previousPolicyEnd) setPreviousExpiry(q.previousPolicyEnd);
+    if (q.previousPolicyType) setPreviousType(q.previousPolicyType);
+    if (q.iciciIdv === 'vehicle') setIdv('vehicle');
+  });
   const [addOns, setAddOns] = useState<string[]>([]);
   const [paCover, setPaCover] = useState(false);
   const [busy, setBusy] = useState(false);

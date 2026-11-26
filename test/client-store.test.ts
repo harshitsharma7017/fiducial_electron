@@ -520,6 +520,51 @@ describe('the client service and IPC channels', () => {
     clients.close();
   });
 
+  it("keeps a vehicle's quote details (its Additional details), and refuses ones not valid", async () => {
+    const { call, clients } = setup(true);
+    const vehicle = {
+      vehicleClass: 'private-car',
+      condition: 'pre-owned',
+      registrationDate: '2022-03-01',
+      zone: 'A',
+      idvRupees: 450000,
+      cubicCapacityCc: 1197,
+      claimLastYear: false,
+      previousNcbPercent: 20,
+      quoteDetails: {
+        registrationNumber: 'mh 01-ab 1234',
+        rtoCity: 'Mumbai',
+        previousPolicyEnd: '2026-12-20',
+        previousPolicyType: 'comprehensive',
+        ownerName: 'Synthetic Owner',
+        ownerEmail: 'owner@example.com',
+        ownerMobile: '9876543210',
+        cover: 'comprehensive',
+        iciciIdv: 'vehicle',
+      },
+    };
+    const id = idOf(await call('vehicles:save', { saved: { name: 'Synthetic Swift', vehicle } }));
+    expect(await call('vehicles:get', { id })).toMatchObject({
+      ok: true,
+      data: {
+        saved: {
+          vehicle: {
+            quoteDetails: { ...vehicle.quoteDetails, registrationNumber: 'MH01AB1234' },
+          },
+        },
+      },
+    });
+    expect(
+      await call('vehicles:save', {
+        saved: {
+          name: 'X',
+          vehicle: { ...vehicle, quoteDetails: { ownerMobile: '12345' } },
+        },
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } });
+    clients.close();
+  });
+
   // Travel clients, kept apart from health clients; passport and Aadhaar numbers in the vault.
   const TRAVELLER = {
     customer: { name: 'Synthetic Traveller', phone: '9876543210' },
@@ -570,6 +615,25 @@ describe('the client service and IPC channels', () => {
       ok: false,
       error: { code: 'VALIDATION_FAILED' },
     });
+    // The trip saved with them (Additional details), for Compare quotes; a return before the
+    // departure is refused.
+    const trip = {
+      departureDate: '2026-12-10',
+      returnDate: '2026-12-24',
+      destination: 'asia',
+      student: true,
+    };
+    await call('travellers:save', { id, traveller: { ...TRAVELLER, trip } });
+    expect(await call('travellers:get', { id })).toMatchObject({
+      ok: true,
+      data: { traveller: { trip } },
+    });
+    expect(
+      await call('travellers:save', {
+        id,
+        traveller: { ...TRAVELLER, trip: { ...trip, returnDate: '2026-12-01' } },
+      }),
+    ).toMatchObject({ ok: false, error: { code: 'VALIDATION_FAILED' } });
     // Updating keeps the numbers unless sent; deleting removes them with the travel client.
     await call('travellers:save', { id, traveller: { ...TRAVELLER, pincode: '400001' } });
     expect(await clients.passportFor(id)).toBe('Z1234567');

@@ -466,9 +466,17 @@ describe('ICICI Lombard premiums through the quote service', () => {
     run: { ...RUN, registrationNumber: 'mh 01 ab 1234' },
   });
 
-  it('quotes a car without any portal open, and saves a PDF with the breakdown', async () => {
+  it('quotes a car without any portal open, and saves a PDF with the breakdown on Stop & make PDF', async () => {
     const { service, save, icici, records } = await setup(MOTOR_ANSWER);
-    const result = await service.run(request);
+    const quoted = await service.run(request);
+    // No PDF by itself: the premium is kept until the advisor presses Stop & make PDF.
+    expect(quoted).toMatchObject({
+      outcome: 'handed-over',
+      premium: { amount: '11863' },
+    });
+    expect(quoted).not.toHaveProperty('pdf');
+    expect(save).not.toHaveBeenCalled();
+    const result = await service.finish({ waitMs: 0, insurerId: 'icici-lombard' });
     expect(result).toMatchObject({
       outcome: 'ready',
       premium: {
@@ -494,6 +502,23 @@ describe('ICICI Lombard premiums through the quote service', () => {
     expect(JSON.stringify(records)).not.toMatch(/ENC==secret|partner-uat|MH01AB1234|jwt-/);
   });
 
+  it('compares the quotes for a vehicle in one PDF (Compare quotes, a vehicle)', async () => {
+    const { service, save } = await setup(MOTOR_ANSWER);
+    await service.run(request);
+    await service.finish({ waitMs: 0, insurerId: 'icici-lombard' });
+    const compared = await service.compare({ vehicleId: 'v1', insurerIds: ['icici-lombard'] });
+    expect(compared).toMatchObject({ ok: true, insurers: 1 });
+    const [doc, title] = save.mock.calls.at(-1)!;
+    expect(title).toBe('Motor quotes compared - Swift');
+    expect(doc).toMatchObject({
+      title: 'Motor insurance quotes compared',
+      product: 'Comparison',
+      clientName: 'Swift',
+    });
+    expect(doc.plans[0]!.amount).toBe('11863');
+    expect(doc.notes[0]).toContain('saved with the vehicle');
+  });
+
   it("gives ICICI's own reason when it does not quote", async () => {
     const { service, save } = await setup({
       Success: false,
@@ -515,7 +540,7 @@ describe('ICICI Lombard premiums through the quote service', () => {
 
   it('quotes Elevate for a health client, with the zone and tax in the PDF', async () => {
     const { service, save, icici } = await setup(HEALTH_ANSWER);
-    const result = await service.run(
+    const quoted = await service.run(
       quoteRunRequestSchema.parse({
         product: 'icici-api-health',
         clientId: 'c1',
@@ -529,6 +554,9 @@ describe('ICICI Lombard premiums through the quote service', () => {
         },
       }),
     );
+    expect(quoted.outcome).toBe('handed-over');
+    expect(save).not.toHaveBeenCalled();
+    const result = await service.finish({ waitMs: 0, insurerId: 'icici-lombard' });
     expect(result).toMatchObject({
       outcome: 'ready',
       premium: { amount: '7065', label: 'ICICI Lombard Elevate, ₹5,00,000, 1 year' },

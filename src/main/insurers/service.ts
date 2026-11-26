@@ -3,6 +3,7 @@
 // FQF_INSURER_PORTALS=1 while the automations were being built). Switched off, list() reports it
 // disabled and every other call is refused, so nothing is stored or opened.
 import { findPortal, INSURER_PORTALS, usesSavedLogin } from '../../shared/insurers/portals';
+import { isInsurerPaused } from '../../shared/insurers/availability';
 import type { InsurerPortalList, SaveLoginRequest } from '../../shared/ipc/contract';
 import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
@@ -59,7 +60,8 @@ export function createInsurerService(deps: {
       return {
         enabled: true,
         vaultError,
-        portals: INSURER_PORTALS.map((portal) => {
+        // A paused insurer is not offered (shared/insurers/availability.ts).
+        portals: INSURER_PORTALS.filter((portal) => !isInsurerPaused(portal.id)).map((portal) => {
           const window = deps.windows.state(portal.id);
           return {
             id: portal.id,

@@ -9,6 +9,7 @@ import { Modal } from '../ui/Modal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { RecordPage, type RecordItem } from '../ui/RecordPage';
 import { toast } from '../ui/toast';
+import { isInsurerPaused } from '../../../shared/insurers/availability';
 import { QuoteWorkspace } from '../quote/QuoteWorkspace';
 import type { VehicleSummary } from '../../../shared/contracts/vehicle';
 import type { QuoteRunResultView } from '../../../shared/ipc/contract';
@@ -24,11 +25,15 @@ import {
   EMPTY_VEHICLE,
   VEHICLE_CLASS_LABELS,
   VehicleFields,
+  VehicleQuoteDetailsFields,
+  NewIndiaFields,
+  asksNewIndiaDetails,
   vehicleFromRecord,
   vehicleToInput,
   type VehicleDraft,
 } from './VehicleFields';
 import { runQuote } from '../quote/run';
+import { useSavedQuoteDetails } from './saved-quote-details';
 import { IciciApiMotorSection, useIciciApiReady } from '../quote/IciciApiPanels';
 
 interface Draft {
@@ -144,7 +149,9 @@ export function VehiclesPanel(): React.JSX.Element | null {
       empty={{
         icon: Car,
         title: 'No vehicles yet',
-        text: 'Add a vehicle to quote United India and New India motor policies, or import a list.',
+        text: isInsurerPaused('new-india')
+          ? 'Add a vehicle to quote motor policies, or import a list.'
+          : 'Add a vehicle to quote United India and New India motor policies, or import a list.',
       }}
       alerts={
         error && (
@@ -181,7 +188,9 @@ export function VehiclesPanel(): React.JSX.Element | null {
             key: 'motor',
             insurer: 'United India',
             label: 'Motor quote',
-            description: 'United India premium, and New India for new cars and two-wheelers',
+            description: isInsurerPaused('new-india')
+              ? 'United India premium'
+              : 'United India premium, and New India for new cars and two-wheelers',
           },
         ]}
         selected="motor"
@@ -211,6 +220,8 @@ function VehicleForm(props: {
   const { draft: d, onChange } = props;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // As a health client's form (request of 26 November 2026): Basic details, Additional details.
+  const [tab, setTab] = useState<'basic' | 'additional'>('basic');
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -224,26 +235,78 @@ function VehicleForm(props: {
       .catch(() => null);
     setBusy(false);
     if (result?.ok) props.onSaved();
-    else
+    else {
+      const paths =
+        result?.ok === false
+          ? ((result.error.details?.['issues'] as { path: string }[] | undefined) ?? []).map(
+              (i) => i.path,
+            )
+          : [];
+      // A quote detail (or New India's) not valid: its tab is shown.
+      const inAdditional = paths.some((p) =>
+        /quoteDetails|make|model|variant|manufactureYear|fuelType|bodyType|colour|engineNumber|chassisNumber|invoiceValueRupees/.test(
+          p,
+        ),
+      );
+      if (paths.length > 0) setTab(inAdditional ? 'additional' : 'basic');
       setError(
         result?.ok === false && result.error.code === 'VALIDATION_FAILED'
-          ? 'Check the vehicle details: a required detail is missing or not valid.'
+          ? inAdditional
+            ? 'Check the Additional details: a detail is not valid (the registration number, email or 10-digit mobile).'
+            : 'Check the vehicle details: a required detail is missing or not valid.'
           : (result?.error.message ?? 'The vehicle could not be saved.'),
       );
+    }
   };
 
   return (
     <form className="login-form client-form" onSubmit={(e) => void submit(e)}>
-      <label>
-        Name (for you to find it, for example &ldquo;Swift &ndash; Ramesh&rdquo;)
-        <input
-          value={d.name}
-          onChange={(e) => onChange({ ...d, name: e.target.value })}
-          maxLength={100}
-          required
-        />
-      </label>
-      <VehicleFields value={d.vehicle} onChange={(vehicle) => onChange({ ...d, vehicle })} />
+      <div className="form-tabs" role="tablist" aria-label="Vehicle details">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'basic'}
+          onClick={() => setTab('basic')}
+        >
+          Basic details
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'additional'}
+          onClick={() => setTab('additional')}
+        >
+          Additional details
+        </button>
+      </div>
+      {tab === 'basic' && (
+        <>
+          <label>
+            Name (for you to find it, for example &ldquo;Swift &ndash; Ramesh&rdquo;)
+            <input
+              value={d.name}
+              onChange={(e) => onChange({ ...d, name: e.target.value })}
+              maxLength={100}
+              required
+            />
+          </label>
+          <VehicleFields value={d.vehicle} onChange={(vehicle) => onChange({ ...d, vehicle })} />
+        </>
+      )}
+      {tab === 'additional' && (
+        <>
+          <VehicleQuoteDetailsFields
+            value={d.vehicle}
+            onChange={(patch) => onChange({ ...d, vehicle: { ...d.vehicle, ...patch } })}
+          />
+          {asksNewIndiaDetails(d.vehicle) && (
+            <NewIndiaFields
+              value={d.vehicle}
+              onChange={(patch) => onChange({ ...d, vehicle: { ...d.vehicle, ...patch } })}
+            />
+          )}
+        </>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -276,11 +339,12 @@ function MotorQuotePanel(props: { vehicle: VehicleSummary }): React.JSX.Element 
     );
     setBusy(null);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
-    // The premium is shown here: come back from the calculator's tab (left open to check it).
-    if (r?.ok && r.data.premium) showAppScreens();
+    // A form kept for the advisor stays in front (Stop & make PDF); a saved PDF comes back here.
+    if (r?.ok && r.data.pdf) showAppScreens();
   };
   // New India: the Private Car and Two Wheeler forms, new vehicles (src/main/quotes/nia-motor.ts).
   const newIndia =
+    !isInsurerPaused('new-india') &&
     (vehicle.vehicleClass === 'private-car' || vehicle.vehicleClass === 'two-wheeler') &&
     vehicle.condition === 'new';
   const niaForm = vehicle.vehicleClass === 'private-car' ? 'Private Car' : 'Two Wheeler';
@@ -365,6 +429,18 @@ function HdfcMotorSection(props: { vehicle: VehicleSummary }): React.JSX.Element
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [mobile, setMobile] = useState('');
+  // Started from the vehicle's saved quote details (its Additional details).
+  useSavedQuoteDetails(vehicle.id, (q) => {
+    if (q.cover) setCover(q.cover);
+    if (q.rtoCity) setRtoCity(q.rtoCity);
+    if (q.registrationNumber) setRegistrationNumber(q.registrationNumber);
+    if (q.previousInsurer) setPreviousInsurer(q.previousInsurer);
+    if (q.previousPolicyEnd) setPreviousEnd(q.previousPolicyEnd);
+    if (q.previousPolicyType) setPreviousType(q.previousPolicyType);
+    if (q.ownerName) setName(q.ownerName);
+    if (q.ownerEmail) setEmail(q.ownerEmail);
+    if (q.ownerMobile) setMobile(q.ownerMobile);
+  });
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
   if (!product) return null;
@@ -401,7 +477,7 @@ function HdfcMotorSection(props: { vehicle: VehicleSummary }): React.JSX.Element
     }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
-    if (r?.ok && r.data.premium) showAppScreens();
+    if (r?.ok && r.data.pdf) showAppScreens();
   };
   return (
     <>
@@ -534,23 +610,22 @@ function HdfcMotorSection(props: { vehicle: VehicleSummary }): React.JSX.Element
 
 /**
  * ICICI Lombard: NYSA's motor quote for a registered vehicle (renewal), by its registration number:
- * ICICI reads the vehicle from Vahan itself (src/main/quotes/run-icici-motor.ts).
+ * ICICI reads the vehicle from Vahan itself (src/main/quotes/run-icici-motor.ts). A new vehicle is
+ * taken to NYSA's form with New Business chosen and handed to the advisor (not recorded further).
  */
 function IciciMotorSection(props: { vehicle: VehicleSummary }): React.JSX.Element {
   const { vehicle } = props;
   const [registrationNumber, setRegistrationNumber] = useState('');
   const [ownershipChanged, setOwnershipChanged] = useState(false);
   const [idv, setIdv] = useState<IciciMotorRun['idv']>('insurer');
+  // Started from the vehicle's saved quote details (its Additional details).
+  useSavedQuoteDetails(vehicle.id, (q) => {
+    if (q.registrationNumber) setRegistrationNumber(q.registrationNumber);
+    if (q.iciciIdv) setIdv(q.iciciIdv);
+  });
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QuoteRunResultView | { error: string } | null>(null);
-  if (vehicle.condition === 'new') {
-    return (
-      <p className="insurer-note">
-        <strong>ICICI Lombard, motor.</strong> Automated for renewals of registered vehicles only:
-        quote a new vehicle on NYSA by hand.
-      </p>
-    );
-  }
+  const isNew = vehicle.condition === 'new';
   const run = async () => {
     setBusy(true);
     setResult(null);
@@ -558,54 +633,73 @@ function IciciMotorSection(props: { vehicle: VehicleSummary }): React.JSX.Elemen
       product: 'icici-motor',
       vehicleId: vehicle.id,
       insurerId: 'icici-lombard',
-      run: { registrationNumber, ownershipChanged, idv },
+      run: {
+        ...(!isNew || registrationNumber.trim() ? { registrationNumber } : {}),
+        ownershipChanged,
+        idv,
+      },
     }).catch(() => null);
     setBusy(false);
     setResult(r?.ok ? r.data : { error: r ? r.error.message : 'The quote could not be started.' });
-    if (r?.ok && r.data.premium) showAppScreens();
+    if (r?.ok && r.data.pdf) showAppScreens();
   };
   return (
     <>
-      <p className="insurer-note">
-        <strong>ICICI Lombard, motor (NYSA, Rollover).</strong> Sign in to ICICI Lombard and leave
-        it on its dashboard. The app opens Motor, enters the registration number, presses Fetch
-        Vehicle Data (ICICI reads the vehicle from Vahan) and reads the Total Premium. It never
-        presses Buy Now.
-      </p>
-      <div className="form-grid">
-        <label>
-          Registration number{' '}
-          <input
-            value={registrationNumber}
-            onChange={(e) => setRegistrationNumber(e.target.value)}
-            placeholder="MH01AB1234"
-          />
-        </label>
-        <label>
-          Ownership changed in the last year{' '}
-          <select
-            value={ownershipChanged ? 'yes' : 'no'}
-            onChange={(e) => setOwnershipChanged(e.target.value === 'yes')}
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
-        </label>
-        <label>
-          IDV{' '}
-          <select value={idv} onChange={(e) => setIdv(e.target.value as IciciMotorRun['idv'])}>
-            <option value="insurer">ICICI&rsquo;s own IDV</option>
-            <option value="vehicle">The vehicle&rsquo;s saved IDV</option>
-          </select>
-        </label>
-      </div>
+      {isNew ? (
+        <p className="insurer-note">
+          <strong>ICICI Lombard, motor (NYSA, New Business).</strong> Sign in to ICICI Lombard. The
+          app opens Motor and chooses New Business, then hands the form to you: ICICI&rsquo;s New
+          Business form has not been recorded yet, so fill the vehicle&rsquo;s details on NYSA, get
+          the premium, and press Stop &amp; make PDF. It never presses Buy Now.
+        </p>
+      ) : (
+        <p className="insurer-note">
+          <strong>ICICI Lombard, motor (NYSA, Rollover).</strong> Sign in to ICICI Lombard and leave
+          it on its dashboard. The app opens Motor, enters the registration number, presses Fetch
+          Vehicle Data (ICICI reads the vehicle from Vahan) and reads the Total Premium. It never
+          presses Buy Now.
+        </p>
+      )}
+      {!isNew && (
+        <div className="form-grid">
+          <label>
+            Registration number{' '}
+            <input
+              value={registrationNumber}
+              onChange={(e) => setRegistrationNumber(e.target.value)}
+              placeholder="MH01AB1234"
+            />
+          </label>
+          <label>
+            Ownership changed in the last year{' '}
+            <select
+              value={ownershipChanged ? 'yes' : 'no'}
+              onChange={(e) => setOwnershipChanged(e.target.value === 'yes')}
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </label>
+          <label>
+            IDV{' '}
+            <select value={idv} onChange={(e) => setIdv(e.target.value as IciciMotorRun['idv'])}>
+              <option value="insurer">ICICI&rsquo;s own IDV</option>
+              <option value="vehicle">The vehicle&rsquo;s saved IDV</option>
+            </select>
+          </label>
+        </div>
+      )}
       <div className="insurer-actions">
         <button
           type="button"
-          disabled={busy || registrationNumber.trim() === ''}
+          disabled={busy || (!isNew && registrationNumber.trim() === '')}
           onClick={() => void run()}
         >
-          {busy ? 'Working on NYSA…' : 'Get ICICI Lombard premium'}
+          {busy
+            ? 'Working on NYSA…'
+            : isNew
+              ? 'Open ICICI Lombard New Business'
+              : 'Get ICICI Lombard premium'}
         </button>
       </div>
       {result && 'error' in result && (

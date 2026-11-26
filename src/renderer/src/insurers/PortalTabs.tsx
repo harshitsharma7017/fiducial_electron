@@ -4,6 +4,7 @@
 import { Loader2, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PortalTabsView } from '../../../shared/ipc/contract';
+import { findPortal } from '../../../shared/insurers/portals';
 
 /** The tabs, kept up to date: the main process answers as soon as they change. */
 export function usePortalTabs(enabled: boolean): PortalTabsView | null {
@@ -48,6 +49,17 @@ export function tabLabel(title: string): string {
   return shown.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase());
 }
 
+/**
+ * What a tab is called: its page's title, or, while a pop-up has none yet ("Opening…"), whose it
+ * is ("United India · opening"), so tabs being opened are told apart.
+ */
+function tabName(tab: PortalTabsView['tabs'][number]): string {
+  const title = tab.title.trim();
+  if (title && !/^opening/i.test(title)) return tabLabel(title);
+  const insurer = findPortal(tab.insurerId)?.displayName ?? 'Insurer';
+  return tab.kind === 'popup' ? `${insurer} · opening` : insurer;
+}
+
 export function PortalTabStrip(props: { state: PortalTabsView }): React.JSX.Element {
   const { state } = props;
   const strip = useRef<HTMLElement>(null);
@@ -80,7 +92,7 @@ export function PortalTabStrip(props: { state: PortalTabsView }): React.JSX.Elem
             onClick={() => void window.fqf.portals.show(tab.id).catch(() => undefined)}
           >
             {tab.loading && <Loader2 size={13} className="spin" aria-label="Loading" />}
-            <span className="portal-tab-title">{tabLabel(tab.title)}</span>
+            <span className="portal-tab-title">{tabName(tab)}</span>
           </button>
           <button
             type="button"

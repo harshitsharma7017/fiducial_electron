@@ -1,6 +1,7 @@
 // Home: saved records by kind, recent activity (the records changed most recently), quick
 // actions, the insurers' connection status and build details. Read-only: it calls the same list
 // endpoints the other screens use, every time it is shown.
+import { isPagePaused } from '../../../shared/insurers/availability';
 import {
   ArrowRight,
   Building2,
@@ -216,27 +217,33 @@ export function Overview(props: {
               note="Travel quotes and e-proposals"
               onOpen={() => onNavigate('travellers')}
             />
-            <KpiCard
-              icon={Flame}
-              label="Property clients"
-              value={counts?.properties}
-              note="New India fire"
-              onOpen={() => onNavigate('properties')}
-            />
-            <KpiCard
-              icon={Tractor}
-              label="Rural clients"
-              value={counts?.rural}
-              note="New India rural"
-              onOpen={() => onNavigate('rural')}
-            />
-            <KpiCard
-              icon={Ship}
-              label="Marine clients"
-              value={counts?.marine}
-              note="New India Specific Voyage"
-              onOpen={() => onNavigate('marine')}
-            />
+            {!isPagePaused('properties') && (
+              <KpiCard
+                icon={Flame}
+                label="Property clients"
+                value={counts?.properties}
+                note="New India fire"
+                onOpen={() => onNavigate('properties')}
+              />
+            )}
+            {!isPagePaused('rural') && (
+              <KpiCard
+                icon={Tractor}
+                label="Rural clients"
+                value={counts?.rural}
+                note="New India rural"
+                onOpen={() => onNavigate('rural')}
+              />
+            )}
+            {!isPagePaused('marine') && (
+              <KpiCard
+                icon={Ship}
+                label="Marine clients"
+                value={counts?.marine}
+                note="New India Specific Voyage"
+                onOpen={() => onNavigate('marine')}
+              />
+            )}
             <KpiCard
               icon={Car}
               label="Saved vehicles"

@@ -50,6 +50,38 @@ export type FuelType = (typeof FUEL_TYPES)[number];
  * A vehicle's details, for motor quotes. Which of the optional details a quote needs depends on
  * the class (the insurer's form says; see src/main/quotes/uiic-motor.ts).
  */
+/** The vehicle's quote details (its Additional details): see `quoteDetails` below. */
+export const vehicleQuoteDetailsSchema = z.strictObject({
+  /** As on the RC; spaces and dashes dropped, in capitals. */
+  registrationNumber: z
+    .string()
+    .trim()
+    .transform((v) => v.toUpperCase().replace(/[\s-]/g, ''))
+    .pipe(z.string().regex(/^[A-Z0-9]{4,15}$/, 'a registration number'))
+    .optional(),
+  /** The RTO / registration city (HDFC's PIE lists it as "CITY - STATE"). */
+  rtoCity: singleLineText(60).optional(),
+  /** The policy being renewed (a pre-owned vehicle). */
+  previousPolicyEnd: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  previousPolicyType: z.enum(['comprehensive', 'tp']).optional(),
+  previousInsurer: singleLineText(80).optional(),
+  /** The owner, as PIE asks before it works the premium out. */
+  ownerName: singleLineText(100).optional(),
+  ownerEmail: z.string().trim().max(254).pipe(z.email()).optional(),
+  ownerMobile: z
+    .string()
+    .trim()
+    .regex(/^[6-9]\d{9}$/, 'a 10-digit mobile number')
+    .optional(),
+  cover: z.enum(['comprehensive', 'liability']).optional(),
+  /** ICICI: its own IDV, or the vehicle's. */
+  iciciIdv: z.enum(['insurer', 'vehicle']).optional(),
+});
+export type VehicleQuoteDetails = z.infer<typeof vehicleQuoteDetailsSchema>;
+
 export const vehicleSchema = z.strictObject({
   vehicleClass: vehicleClassSchema,
   condition: z.enum(['new', 'pre-owned']),
@@ -87,6 +119,12 @@ export const vehicleSchema = z.strictObject({
   engineNumber: singleLineText(30).optional(),
   chassisNumber: singleLineText(30).optional(),
   invoiceValueRupees: z.int().positive().max(1_000_000_000).optional(),
+  /**
+   * What the motor quotes ask beyond the vehicle, saved with it (the vehicle's Additional details,
+   * request of 26 November 2026), so a quote asks nothing more: HDFC ERGO's PIE and ICICI start
+   * from these, and Compare quotes too. All optional; each insurer says what it still lacks.
+   */
+  quoteDetails: vehicleQuoteDetailsSchema.optional(),
 });
 
 export type Vehicle = z.infer<typeof vehicleSchema>;

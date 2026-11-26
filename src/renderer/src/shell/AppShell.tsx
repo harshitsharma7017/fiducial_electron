@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plane,
+  Scale,
   ShieldCheck,
   Ship,
   Tractor,
@@ -25,6 +26,8 @@ import { Toaster } from '../ui/toast';
 import { PortalArea, PortalTabStrip, showAppScreens, usePortalTabs } from '../insurers/PortalTabs';
 import { QuoteRunCancel } from '../quote/QuoteRunCancel';
 import { QuoteFinishStatus } from '../quote/QuoteFinish';
+import { isPagePaused } from '../../../shared/insurers/availability';
+import { PlanChoiceDialog } from '../quote/PlanChoice';
 
 export type ViewId =
   | 'overview'
@@ -34,6 +37,7 @@ export type ViewId =
   | 'marine'
   | 'properties'
   | 'vehicles'
+  | 'compare'
   | 'insurers'
   | 'development';
 
@@ -67,6 +71,11 @@ const NAV: NavGroup[] = [
       { id: 'marine', label: 'Marine clients', icon: Ship },
       { id: 'vehicles', label: 'Vehicles', icon: Car },
     ],
+  },
+  {
+    label: 'Quotes',
+    automation: true,
+    items: [{ id: 'compare', label: 'Compare quotes', icon: Scale }],
   },
   {
     label: 'Insurers',
@@ -103,9 +112,10 @@ export function AppShell(props: {
 }): React.JSX.Element {
   const { view, onViewChange, automation, development, version, children } = props;
   const [collapsed, setCollapsed] = useState(readCollapsed);
-  const groups = [...NAV, ...(development ? [DEVELOPMENT_GROUP] : [])].filter(
-    (g) => automation || !g.automation,
-  );
+  const groups = [...NAV, ...(development ? [DEVELOPMENT_GROUP] : [])]
+    .filter((g) => automation || !g.automation)
+    // Pages paused with their insurer (shared/insurers/availability.ts).
+    .map((g) => ({ ...g, items: g.items.filter((item) => !isPagePaused(item.id)) }));
   const allItems = groups.flatMap((g) => g.items.map((item) => ({ item, group: g.label })));
   const current = allItems.find(({ item }) => item.id === view) ?? allItems[0];
   const portals = usePortalTabs(automation);
@@ -205,7 +215,8 @@ export function AppShell(props: {
           <span className="topbar-spacer" />
           <QuoteRunCancel />
           <QuoteFinishStatus />
-          {signedIn > 0 && (
+          {/* The tabs already show the insurers open: the count only when they are not shown. */}
+          {signedIn > 0 && !hasTabs && (
             <span className="topbar-context" title="Insurer portals open as tabs">
               <span className="status-dot" aria-hidden="true" />
               {signedIn === 1 ? '1 insurer open' : `${signedIn} insurers open`}
@@ -219,6 +230,7 @@ export function AppShell(props: {
         {portalShown && <PortalArea />}
       </div>
       <Toaster />
+      <PlanChoiceDialog />
     </div>
   );
 }

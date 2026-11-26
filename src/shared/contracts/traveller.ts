@@ -27,6 +27,30 @@ export const passportDetailsSchema = z.strictObject({
   expiryDate: dateOfBirthSchema.optional(),
 });
 
+/** Where the trip goes, as ICICI's travel form groups countries (the other forms follow from it). */
+export const TRIP_DESTINATIONS = ['usa-canada', 'schengen', 'asia', 'other'] as const;
+export type TripDestination = (typeof TRIP_DESTINATIONS)[number];
+
+const tripDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/**
+ * The trip saved with a travel client (its Additional details, request of 26 November 2026: the
+ * travel compare asks only the plan): every travel quote and Compare quotes start from it.
+ */
+export const travellerTripSchema = z
+  .strictObject({
+    departureDate: tripDay,
+    returnDate: tripDay,
+    destination: z.enum(TRIP_DESTINATIONS),
+    /** Travelling to study (ICICI's Student Medical Travel, United India's Studies). */
+    student: z.boolean().optional(),
+  })
+  .refine((t) => t.departureDate <= t.returnDate, {
+    message: 'the return is after the departure',
+    path: ['returnDate'],
+  });
+export type TravellerTrip = z.output<typeof travellerTripSchema>;
+
 export const travellerSchema = z
   .strictObject({
     customer: customerSchema,
@@ -39,6 +63,7 @@ export const travellerSchema = z
     occupation: z.enum(TRAVEL_OCCUPATIONS).optional(),
     proposal: travellerProposalSchema.optional(),
     passport: passportDetailsSchema.optional(),
+    trip: travellerTripSchema.optional(),
   })
   .refine(
     (t) =>
