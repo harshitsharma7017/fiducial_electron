@@ -69,6 +69,10 @@ const api: FqfApi = {
       ipcRenderer.invoke(IPC_CHANNELS.quotesCancel, insurerId ? { insurerId } : {}) as Promise<
         AppResult<{ cancelled: boolean }>
       >,
+    resetAll: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.quotesResetAll, {}) as Promise<
+        AppResult<{ stopped: number; discarded: number; closedTabs: number; sentHome: number }>
+      >,
     finish: (request) =>
       ipcRenderer.invoke(IPC_CHANNELS.quotesFinish, request) as Promise<
         AppResult<QuoteRunResultView>

@@ -53,6 +53,7 @@ export const LOG_EVENTS = [
   'quote.run',
   'quote.pdf-failed',
   'quote.finished',
+  'quote.reset',
   'icici-api.signed-in',
   'import.previewed',
   'import.saved',
@@ -113,6 +114,11 @@ const FIELD_SCHEMAS = {
    * values): for telling where a choice was lost (26 November 2026, ICICI's not kept).
    */
   choiceFields: z.array(token(/^[a-z]+(-[a-z]+)*\.[A-Za-z]{1,40}$/)).max(80),
+  /** What the sidebar's Reset did: how many quotes, kept forms, pop-up tabs, insurers (counts). */
+  stopped: z.number().int().min(0).max(100),
+  discarded: z.number().int().min(0).max(100),
+  closedTabs: z.number().int().min(0).max(1000),
+  sentHome: z.number().int().min(0).max(100),
 } as const;
 
 export type LogFields = { [K in keyof typeof FIELD_SCHEMAS]?: z.infer<(typeof FIELD_SCHEMAS)[K]> };

@@ -16,8 +16,13 @@ export function Modal(props: {
   subtitle?: string;
   onClose: () => void;
   variant?: 'dialog' | 'drawer';
-  /** Width: narrow (confirmations), default, or wide (tables). */
-  size?: 'narrow' | 'default' | 'wide';
+  /** Width: narrow (confirmations), default, wide (tables), or xl (long forms: fixed height). */
+  size?: 'narrow' | 'default' | 'wide' | 'xl';
+  /**
+   * The content lays itself out to the body's full height (its own fixed bar, scrolling area and
+   * footer) instead of the body scrolling: one scroll area, the footer always in reach.
+   */
+  fill?: boolean;
   /** Kept for older callers: the same as size="wide". */
   wide?: boolean;
   /**
@@ -122,7 +127,9 @@ export function Modal(props: {
             <X size={18} aria-hidden="true" />
           </button>
         </header>
-        <div className="modal-body">{content.children}</div>
+        <div className={props.fill ? 'modal-body modal-body-fill' : 'modal-body'}>
+          {content.children}
+        </div>
       </div>
     </div>,
     document.body,

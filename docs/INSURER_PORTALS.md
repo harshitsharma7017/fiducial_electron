@@ -1224,3 +1224,17 @@ As a health client's form ("the UI is very bad for other clients than health"): 
 
 A problem in the other tab shows that tab, as on a health client. (Rural, Marine and Property clients, paused with New
 India, keep their single form.)
+
+## Reset (sidebar, 26 November 2026)
+
+**Reset**, at the foot of the sidebar, puts everything back to a clean start after asking first:
+- every quote being filled is stopped (and waited for, up to 15 seconds);
+- every form kept for Stop & make PDF is put away: no PDF is saved, and its card shows it was reset;
+- every insurer's pop-up tabs (calculators, e-proposal forms) are closed; each insurer's own tab
+  stays, signed in;
+- every open insurer goes back to its main home page (ICICI's NYSA dashboard even when the tab was
+  on its health site), and the app's own screens are shown.
+
+Saved clients, vehicles, travellers and PDFs are not touched. The log records only how many of each
+were reset (`quote.reset`). Code: `resetAll` in `src/main/quotes/service.ts`, `closePopups` in
+`src/main/insurers/portal-host.ts`, the button in `src/renderer/src/shell/AppShell.tsx`.

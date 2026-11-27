@@ -145,6 +145,7 @@ const unusedQuotes = {
   progress: () => Promise.resolve({ version: 0, items: [] }),
   compare: () => Promise.resolve({ ok: false as const, message: 'not used' }),
   finish: () => Promise.reject(new Error('not used')),
+  resetAll: () => Promise.reject(new Error('not used')),
 };
 
 describe('the client store', () => {

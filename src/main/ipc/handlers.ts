@@ -110,6 +110,12 @@ export function createHandlers(deps: {
     'imports:commit': ({ token, includeDuplicates }) => imports().commit(token, includeDuplicates),
     'quotes:run': (request) => deps.quotes.run(request),
     'quotes:cancel': ({ insurerId }) => ({ cancelled: deps.quotes.cancel(insurerId) }),
+    'quotes:reset-all': async () => {
+      const done = await deps.quotes.resetAll();
+      // Back to the app's own screens, where the advisor pressed Reset.
+      deps.portals?.show(null);
+      return done;
+    },
     'quotes:progress': ({ since }) => deps.quotes.progress(since),
     'quotes:compare': (request) => deps.quotes.compare(request),
     'quotes:finish': (request) => deps.quotes.finish(request),

@@ -760,6 +760,21 @@ export const ipcContract = {
     /** False when no run was in progress to stop. */
     response: z.object({ cancelled: z.boolean() }).strict(),
   },
+  [IPC_CHANNELS.quotesResetAll]: {
+    /**
+     * The sidebar's Reset: every quote being filled stopped, every form kept for Stop & make PDF
+     * put away (no PDF), the insurers' pop-up tabs closed, every open insurer sent home.
+     */
+    request: z.object({}).strict(),
+    response: z
+      .object({
+        stopped: z.int().min(0),
+        discarded: z.int().min(0),
+        closedTabs: z.int().min(0),
+        sentHome: z.int().min(0),
+      })
+      .strict(),
+  },
   [IPC_CHANNELS.portalsTabs]: {
     /** Answers once the tabs changed after version `since` (or after 20 seconds anyway). */
     request: z.object({ since: z.int().min(0) }).strict(),

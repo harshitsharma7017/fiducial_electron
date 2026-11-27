@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plane,
+  RotateCcw,
   Scale,
   ShieldCheck,
   Ship,
@@ -28,6 +29,9 @@ import { QuoteRunCancel } from '../quote/QuoteRunCancel';
 import { QuoteFinishStatus } from '../quote/QuoteFinish';
 import { isPagePaused } from '../../../shared/insurers/availability';
 import { PlanChoiceDialog } from '../quote/PlanChoice';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { toast } from '../ui/toast';
+import { resetEverything } from '../quote/run';
 
 export type ViewId =
   | 'overview'
@@ -112,6 +116,25 @@ export function AppShell(props: {
 }): React.JSX.Element {
   const { view, onViewChange, automation, development, version, children } = props;
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  /** The sidebar's Reset: asked first (it puts away kept forms), then busy while it runs. */
+  const [reset, setReset] = useState<'idle' | 'asking' | 'busy'>('idle');
+  const runReset = async () => {
+    setReset('busy');
+    const r = await resetEverything().catch(() => null);
+    setReset('idle');
+    if (!r?.ok) {
+      toast(r ? r.error.message : 'The reset could not be done.');
+      return;
+    }
+    const { stopped, discarded, closedTabs, sentHome } = r.data;
+    const done = [
+      stopped && `${stopped} quote${stopped > 1 ? 's' : ''} stopped`,
+      discarded && `${discarded} kept form${discarded > 1 ? 's' : ''} put away`,
+      closedTabs && `${closedTabs} extra tab${closedTabs > 1 ? 's' : ''} closed`,
+      sentHome && `${sentHome} insurer${sentHome > 1 ? 's' : ''} back on the home page`,
+    ].filter(Boolean);
+    toast(done.length > 0 ? `Reset: ${done.join(', ')}.` : 'Reset: nothing was running.');
+  };
   const groups = [...NAV, ...(development ? [DEVELOPMENT_GROUP] : [])]
     .filter((g) => automation || !g.automation)
     // Pages paused with their insurer (shared/insurers/availability.ts).
@@ -173,6 +196,22 @@ export function AppShell(props: {
           ))}
         </nav>
         <div className="sidebar-footer">
+          {automation && (
+            <button
+              type="button"
+              className="nav-item"
+              title="Stop every quote, close the extra tabs and send every insurer home"
+              disabled={reset === 'busy'}
+              onClick={() => setReset('asking')}
+            >
+              <RotateCcw
+                size={18}
+                aria-hidden="true"
+                className={reset === 'busy' ? 'spin' : undefined}
+              />
+              <span className="nav-text">{reset === 'busy' ? 'Resetting…' : 'Reset'}</span>
+            </button>
+          )}
           <div className="sidebar-status" title="Client data is encrypted on this computer">
             <Lock size={14} aria-hidden="true" />
             <span className="sidebar-status-text">
@@ -231,6 +270,14 @@ export function AppShell(props: {
       </div>
       <Toaster />
       <PlanChoiceDialog />
+      <ConfirmDialog
+        open={reset === 'asking'}
+        title="Reset everything?"
+        message="Every quote being filled is stopped, every form waiting for Stop & make PDF is put away (no PDF is saved), the insurers' extra tabs are closed and every insurer goes back to its home page. You stay signed in; saved clients and PDFs are not touched."
+        confirmLabel="Reset"
+        onConfirm={() => void runReset()}
+        onCancel={() => setReset('idle')}
+      />
     </div>
   );
 }

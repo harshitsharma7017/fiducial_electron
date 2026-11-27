@@ -73,6 +73,16 @@ app.whenReady().then(async () => {
     host.state().active === null && win.contentView.children.length === 0,
     `${host.state().active}, ${win.contentView.children.length}`,
   );
+  // Reset: the pop-up tabs closed, each insurer's own page kept.
+  host.adoptPopup('niva-bupa', {});
+  host.adoptPopup('hdfc-ergo', {});
+  const closed = host.closePopups();
+  const kinds = host.state().tabs.map((t) => t.kind);
+  check(
+    "Reset closes the pop-up tabs and keeps each insurer's own page",
+    closed === 2 && kinds.length === 2 && kinds.every((k) => k === 'portal'),
+    `${closed} closed, left ${kinds.join(',')}`,
+  );
   console.log(
     `\n${problems.length ? 'FAIL' : 'all'} tab checks ${problems.length ? `failed: ${problems.join('; ')}` : 'passed'}`,
   );

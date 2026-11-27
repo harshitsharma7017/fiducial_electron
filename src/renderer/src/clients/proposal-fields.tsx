@@ -1,6 +1,8 @@
 // Proposal details for e-proposal forms (PAN, address, high risk, nominee, intermediary…), as
 // health clients (per insurer, in their Additional details) and travel clients keep them, and the
-// Aadhaar number (kept apart, in the secret vault: the form only knows its last four digits).
+// Aadhaar number (kept apart, in the secret vault: the form only knows its last four digits). Shown
+// as section cards (Proposer, Address, Nominee, Intermediary), each only when its insurer asks any
+// of its fields.
 import {
   HIGH_RISK_TYPES,
   NOMINEE_RELATIONSHIPS,
@@ -8,6 +10,7 @@ import {
   type HighRiskType,
   type NomineeRelationship,
 } from '../../../shared/contracts/client';
+import { FormGrid, FormSection } from '../ui/FormSection';
 import {
   HIGH_RISK_LABELS,
   NOMINEE_LABELS,
@@ -30,7 +33,7 @@ export function ProposalFields(props: {
   occupations?: readonly string[];
   /** Only these fields (an insurer's); all when absent. */
   fields?: readonly string[];
-  legend?: string;
+  /** A note above the sections; null for none (absent: the general one). */
   note?: React.ReactNode;
 }): React.JSX.Element {
   const a = props.aadhaar;
@@ -45,9 +48,10 @@ export function ProposalFields(props: {
     key: ProposalTextKey,
     label: string,
     extra: React.InputHTMLAttributes<HTMLInputElement> = {},
+    full = false,
   ) =>
     has(key) ? (
-      <label>
+      <label className={full ? 'span-full' : undefined}>
         {label}
         <input
           value={p[key]}
@@ -57,135 +61,168 @@ export function ProposalFields(props: {
         />
       </label>
     ) : null;
-  const nominee = ['nomineeName', 'nomineeRelationship', 'nomineeAddress', 'nomineeContact'].some(
-    has,
-  );
+  const any = (...keys: string[]) => keys.some(has);
+  const occupation = props.occupation !== false && has('occupation');
+  const proposer =
+    !!a ||
+    occupation ||
+    any(
+      'pan',
+      'landlineStdCode',
+      'landlineNumber',
+      'ckycNumber',
+      'eInsuranceAccountNumber',
+      'highRiskCustomer',
+    );
   return (
-    <fieldset>
-      <legend>{props.legend ?? 'Proposal details (for e-proposal forms)'}</legend>
-      {props.note ?? (
+    <>
+      {props.note !== undefined ? (
+        props.note
+      ) : (
         <p className="insurer-note">
           Everything here is optional and stored encrypted. The Aadhaar number is kept apart, in the
           same secure vault as insurer passwords; after saving, only its last four digits are shown.
         </p>
       )}
-      <h4>Proposer</h4>
-      {text('pan', 'PAN', { maxLength: 10, placeholder: 'ABCDE1234F' })}
-      {a && (
-        <label>
-          Aadhaar number
-          {a.lastFour && !a.remove && !a.input ? (
-            <span className="insurer-mode">
-              Saved, ending {a.lastFour}{' '}
-              <button type="button" onClick={() => setAadhaar({ remove: true })}>
-                Remove
-              </button>
-            </span>
-          ) : null}
-          {a.remove && !a.input ? (
-            <span className="insurer-mode">
-              Will be removed when you save.{' '}
-              <button type="button" onClick={() => setAadhaar({ remove: false })}>
-                Keep it
-              </button>
-            </span>
-          ) : null}
-          <input
-            value={a.input}
-            onChange={(e) => setAadhaar({ input: e.target.value })}
-            inputMode="numeric"
-            maxLength={14}
-            autoComplete="off"
-            placeholder={a.lastFour ? 'Type a new number to replace it' : '12 digits'}
-          />
-        </label>
-      )}
-      {text('address', 'Address', { maxLength: 200 })}
-      {(has('state') || has('city')) && (
-        <div className="member-row">
-          {text('state', 'State (as the insurer lists it)', { maxLength: 60 })}
-          {text('city', 'City (as the insurer lists it)', { maxLength: 80 })}
-        </div>
-      )}
-      {text('village', 'Village or locality (as the insurer lists it for the pincode)', {
-        maxLength: 100,
-      })}
-      {props.occupation !== false && has('occupation') && (
-        <label>
-          Occupation
-          <select value={p.occupation} onChange={(e) => set({ occupation: e.target.value })}>
-            <option value="">Not given</option>
-            {/* A saved occupation this list does not have is still shown (as saved). */}
-            {p.occupation && !occupations.includes(p.occupation) && (
-              <option value={p.occupation}>{p.occupation}</option>
+      {proposer && (
+        <FormSection title="Proposer" description="Identity and contact, as the forms ask them.">
+          <FormGrid>
+            {text('pan', 'PAN', { maxLength: 10, placeholder: 'ABCDE1234F' })}
+            {a && (
+              <label>
+                Aadhaar number
+                {a.lastFour && !a.remove && !a.input ? (
+                  <span className="insurer-mode">
+                    Saved, ending {a.lastFour}{' '}
+                    <button type="button" onClick={() => setAadhaar({ remove: true })}>
+                      Remove
+                    </button>
+                  </span>
+                ) : null}
+                {a.remove && !a.input ? (
+                  <span className="insurer-mode">
+                    Will be removed when you save.{' '}
+                    <button type="button" onClick={() => setAadhaar({ remove: false })}>
+                      Keep it
+                    </button>
+                  </span>
+                ) : null}
+                <input
+                  value={a.input}
+                  onChange={(e) => setAadhaar({ input: e.target.value })}
+                  inputMode="numeric"
+                  maxLength={14}
+                  autoComplete="off"
+                  placeholder={a.lastFour ? 'Type a new number to replace it' : '12 digits'}
+                />
+              </label>
             )}
-            {occupations.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </select>
-        </label>
+            {occupation && (
+              <label>
+                Occupation
+                <select value={p.occupation} onChange={(e) => set({ occupation: e.target.value })}>
+                  <option value="">Not given</option>
+                  {/* A saved occupation this list does not have is still shown (as saved). */}
+                  {p.occupation && !occupations.includes(p.occupation) && (
+                    <option value={p.occupation}>{p.occupation}</option>
+                  )}
+                  {occupations.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {text('ckycNumber', 'CKYC number (14 digits)', {
+              inputMode: 'numeric',
+              maxLength: 16,
+            })}
+            {text('eInsuranceAccountNumber', 'E-insurance account number', { maxLength: 20 })}
+            {text('landlineStdCode', 'Landline STD code', { inputMode: 'numeric', maxLength: 6 })}
+            {text('landlineNumber', 'Landline number', { inputMode: 'numeric', maxLength: 10 })}
+            {has('highRiskCustomer') && (
+              <label className="check span-full">
+                <input
+                  type="checkbox"
+                  checked={p.highRiskCustomer}
+                  onChange={(e) => set({ highRiskCustomer: e.target.checked })}
+                />
+                High-risk customer (high-net-worth individual, politically exposed person, NRI who
+                is also HNI, or trust/NGO)
+              </label>
+            )}
+            {has('highRiskCustomer') && p.highRiskCustomer && (
+              <label>
+                Type of high risk
+                <select
+                  value={p.highRiskType}
+                  onChange={(e) => set({ highRiskType: e.target.value as HighRiskType | '' })}
+                >
+                  <option value="">Not given</option>
+                  {HIGH_RISK_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {HIGH_RISK_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </FormGrid>
+        </FormSection>
       )}
-      {(has('landlineStdCode') || has('landlineNumber')) && (
-        <div className="member-row">
-          {text('landlineStdCode', 'Landline STD code', { inputMode: 'numeric', maxLength: 6 })}
-          {text('landlineNumber', 'Landline number', { inputMode: 'numeric', maxLength: 10 })}
-        </div>
+      {any('address', 'state', 'city', 'village') && (
+        <FormSection title="Address" description="As the insurer lists the places for the pincode.">
+          <FormGrid>
+            {text('address', 'Address', { maxLength: 200 }, true)}
+            {text('state', 'State (as the insurer lists it)', { maxLength: 60 })}
+            {text('city', 'City (as the insurer lists it)', { maxLength: 80 })}
+            {text(
+              'village',
+              'Village or locality (as the insurer lists it for the pincode)',
+              { maxLength: 100 },
+              true,
+            )}
+          </FormGrid>
+        </FormSection>
       )}
-      {text('ckycNumber', 'CKYC number (14 digits)', { inputMode: 'numeric', maxLength: 16 })}
-      {text('eInsuranceAccountNumber', 'E-insurance account number', { maxLength: 20 })}
-      {has('highRiskCustomer') && (
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={p.highRiskCustomer}
-            onChange={(e) => set({ highRiskCustomer: e.target.checked })}
-          />
-          High-risk customer (high-net-worth individual, politically exposed person, NRI who is also
-          HNI, or trust/NGO)
-        </label>
+      {any('nomineeName', 'nomineeRelationship', 'nomineeAddress', 'nomineeContact') && (
+        <FormSection title="Nominee">
+          <FormGrid>
+            {text('nomineeName', "Nominee's name", { maxLength: 100 })}
+            {has('nomineeRelationship') && (
+              <label>
+                Nominee relationship
+                <select
+                  value={p.nomineeRelationship}
+                  onChange={(e) =>
+                    set({ nomineeRelationship: e.target.value as NomineeRelationship | '' })
+                  }
+                >
+                  <option value="">Not given</option>
+                  {NOMINEE_RELATIONSHIPS.map((r) => (
+                    <option key={r} value={r}>
+                      {NOMINEE_LABELS[r]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {text('nomineeAddress', "Nominee's address", { maxLength: 200 })}
+            {text('nomineeContact', "Nominee's contact number", {
+              inputMode: 'tel',
+              maxLength: 14,
+            })}
+          </FormGrid>
+        </FormSection>
       )}
-      {has('highRiskCustomer') && p.highRiskCustomer && (
-        <label>
-          Type of high risk
-          <select
-            value={p.highRiskType}
-            onChange={(e) => set({ highRiskType: e.target.value as HighRiskType | '' })}
-          >
-            <option value="">Not given</option>
-            {HIGH_RISK_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {HIGH_RISK_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </label>
+      {has('intermediaryPlace') && (
+        <FormSection title="Intermediary">
+          <FormGrid>
+            {text('intermediaryPlace', 'Place of signing (your town or city)', { maxLength: 60 })}
+          </FormGrid>
+        </FormSection>
       )}
-      {nominee && <h4>Nominee</h4>}
-      {text('nomineeName', "Nominee's name", { maxLength: 100 })}
-      {has('nomineeRelationship') && (
-        <label>
-          Nominee relationship
-          <select
-            value={p.nomineeRelationship}
-            onChange={(e) =>
-              set({ nomineeRelationship: e.target.value as NomineeRelationship | '' })
-            }
-          >
-            <option value="">Not given</option>
-            {NOMINEE_RELATIONSHIPS.map((r) => (
-              <option key={r} value={r}>
-                {NOMINEE_LABELS[r]}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {text('nomineeAddress', "Nominee's address", { maxLength: 200 })}
-      {text('nomineeContact', "Nominee's contact number", { inputMode: 'tel', maxLength: 14 })}
-      {has('intermediaryPlace') && <h4>Intermediary</h4>}
-      {text('intermediaryPlace', 'Place of signing (your town or city)', { maxLength: 60 })}
-    </fieldset>
+    </>
   );
 }

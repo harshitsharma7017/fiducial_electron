@@ -120,6 +120,8 @@ describe('finishing a handed-over form', () => {
       sentHome: [] as number[],
       // What the form's Sum Insured box shows (the advisor may change it).
       sumInsured: '5 Lakh',
+      // The page stops answering (a run still filling when Reset is pressed).
+      hang: false,
     };
     let opened = false;
     const wc = (id: number, url: string) => ({
@@ -133,6 +135,9 @@ describe('finishing a handed-over form', () => {
       },
       executeJavaScriptInIsolatedWorld: (_world: number, scripts: { code: string }[]) => {
         const code = scripts[0]!.code;
+        if (shown.hang && code !== 'window.__fqfStop = true') {
+          return new Promise(() => undefined);
+        }
         if (code.includes('"op":"clickLink"')) opened = true;
         const press = /"op":"clickButton","text":"([^"]+)"/.exec(code);
         if (press) shown.pressed.push(press[1]!);
@@ -163,9 +168,14 @@ describe('finishing a handed-over form', () => {
       focus: () => undefined,
       webContents: wc(2, 'https://www.uiic.in/CustomerAppLive/data/HealthPolicyNewQuote.html'),
     };
-    return { shown, windowsOf: () => (opened ? [home, calculator] : [home]) };
+    // United India's pages only: no other insurer is open.
+    return {
+      shown,
+      windowsOf: (insurerId: string) =>
+        insurerId !== 'united-india' ? [] : opened ? [home, calculator] : [home],
+    };
   };
-  const setup = () => {
+  const setup = (extra: Partial<Parameters<typeof createQuoteService>[0]> = {}) => {
     const { shown, windowsOf } = portal();
     const save = vi.fn((_doc: QuoteDocument, _title: string) => Promise.resolve('quote.pdf'));
     const service = createQuoteService({
@@ -199,6 +209,7 @@ describe('finishing a handed-over form', () => {
       logger: createLogger([]),
       now: () => AT,
       pdfs: { save, open: () => Promise.resolve(true) },
+      ...extra,
     });
     const request = {
       clientId: 'c1',
@@ -297,6 +308,42 @@ describe('finishing a handed-over form', () => {
       clientName: 'Synthetic Traveller',
     });
     expect(doc.notes[0]).toContain('saved with the travel client');
+  }, 20_000);
+
+  it('Reset puts a kept form away (no PDF), closes the pop-ups and sends the insurer home', async () => {
+    const closePopups = vi.fn(() => 2);
+    const { shown, save, service, request } = setup({
+      portals: { setWorking: () => undefined, closePopups },
+    });
+    expect((await service.run(request)).outcome).toBe('handed-over');
+    shown.sentHome.length = 0;
+    expect(await service.resetAll()).toEqual({
+      stopped: 0,
+      discarded: 1,
+      closedTabs: 2,
+      sentHome: 1,
+    });
+    expect(closePopups).toHaveBeenCalledTimes(1);
+    expect(shown.sentHome.length).toBeGreaterThan(0);
+    expect((await service.progress(0)).items[0]).toMatchObject({ state: 'cancelled' });
+    // Nothing is left to finish, and no PDF was made.
+    expect(await service.finish({ waitMs: 0, insurerId: 'united-india' })).toMatchObject({
+      outcome: 'refused',
+    });
+    expect(save).not.toHaveBeenCalled();
+  }, 20_000);
+
+  it('Reset stops a quote still being filled', async () => {
+    const { shown, service, request } = setup({ portals: { setWorking: () => undefined } });
+    shown.hang = true;
+    const running = service.run(request);
+    await new Promise((r) => setTimeout(r, 300));
+    shown.hang = false;
+    const done = await service.resetAll();
+    expect(done.stopped).toBe(1);
+    expect((await running).outcome).toBe('cancelled');
+    // A new quote can start at once (nothing is left running).
+    expect((await service.run(request)).outcome).toBe('handed-over');
   }, 20_000);
 
   it('lets the advisor change the form first: Generate PDF takes the premium shown then', async () => {

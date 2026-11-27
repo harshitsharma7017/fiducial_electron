@@ -64,6 +64,13 @@ export interface FqfApi {
     /** Stops the run in progress where it is (or the wait for a handed-over form's premium). */
     cancel(insurerId?: string): Promise<AppResult<{ cancelled: boolean }>>;
     /**
+     * Reset: stops every quote, puts away every kept form (no PDF), closes the pop-up tabs and
+     * sends every open insurer home.
+     */
+    resetAll(): Promise<
+      AppResult<{ stopped: number; discarded: number; closedTabs: number; sentHome: number }>
+    >;
+    /**
      * Finishes the form the last run handed over, once the advisor has the premium: read from the
      * insurer's page (waiting up to `waitMs`), or as typed (`amount`); saves the PDF.
      */
@@ -160,7 +167,7 @@ export interface FqfApi {
 export const API_SHAPE = {
   app: ['getInfo'],
   insurers: ['list', 'saveLogin', 'forgetLogin', 'openPortal', 'signOut', 'record'],
-  quotes: ['run', 'cancel', 'finish', 'openPdf', 'progress', 'compare'],
+  quotes: ['run', 'cancel', 'resetAll', 'finish', 'openPdf', 'progress', 'compare'],
   iciciApi: ['status', 'save', 'test'],
   clients: ['list', 'get', 'save', 'delete', 'exportAll'],
   portals: ['tabs', 'show', 'close', 'setBounds'],

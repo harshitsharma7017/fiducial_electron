@@ -54,6 +54,16 @@ async function activeTabOf(insurerId: string): Promise<string | null> {
   return active?.insurerId === insurerId ? active.id : null;
 }
 
+/**
+ * Reset (the sidebar's): every quote stopped, every kept form put away (no PDF), the insurers'
+ * pop-up tabs closed and every open insurer sent home; the drawer's kept form is forgotten too.
+ */
+export async function resetEverything(): ReturnType<typeof window.fqf.quotes.resetAll> {
+  const result = await window.fqf.quotes.resetAll();
+  if (result.ok) setFinish({ phase: 'idle' });
+  return result;
+}
+
 /** Stops the run in progress; false if there was none to stop. */
 export async function cancelQuoteRun(): Promise<boolean> {
   const result = await window.fqf.quotes.cancel().catch(() => null);

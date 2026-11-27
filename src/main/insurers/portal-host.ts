@@ -75,6 +75,8 @@ export interface PortalHost {
   close(tabId: string): void;
   /** Closes every page of the insurer (its session ended). */
   closeInsurer(insurerId: string): void;
+  /** Closes every insurer's pop-up tabs (their own pages stay); returns how many. */
+  closePopups(): number;
   /** Where the page area is in the app window. */
   setBounds(bounds: Bounds): void;
   /**
@@ -188,7 +190,9 @@ export function createPortalHost(deps: { window: () => BrowserWindow | null }): 
     if (!entry) return;
     entries.delete(tabId);
     if (attached.includes(entry.view)) {
-      deps.window()?.contentView.removeChildView(entry.view);
+      // While the app quits, the window goes before its tabs: nothing to detach from then.
+      const win = deps.window();
+      if (win && !win.isDestroyed()) win.contentView.removeChildView(entry.view);
       attached = attached.filter((v) => v !== entry.view);
     }
     if (alive(entry.view)) entry.view.webContents.close();
@@ -290,6 +294,11 @@ export function createPortalHost(deps: { window: () => BrowserWindow | null }): 
       if (active === tabId) active = null;
       layout();
       changed();
+    },
+    closePopups: () => {
+      const popups = [...entries.values()].filter((e) => e.tab.kind === 'popup');
+      for (const e of popups) remove(e.tab.id);
+      return popups.length;
     },
     closeInsurer: (insurerId) => {
       for (const e of [...entries.values()].filter((x) => x.tab.insurerId === insurerId)) {

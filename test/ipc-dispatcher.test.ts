@@ -67,6 +67,7 @@ const insurerStubs: Omit<IpcHandlers, 'app:get-info'> = {
   'portals:set-bounds': () => ({ set: true }),
   'quotes:run': () => ({ outcome: 'refused', step: null, message: 'x', problems: [] }),
   'quotes:cancel': () => ({ cancelled: false }),
+  'quotes:reset-all': () => ({ stopped: 0, discarded: 0, closedTabs: 0, sentHome: 0 }),
   'icici-api:status': () => ({ mode: null, saved: { uat: false, production: false } }),
   'icici-api:save': () => ({ mode: null, saved: { uat: false, production: false } }),
   'icici-api:test': () => ({ ok: false, message: 'x' }),

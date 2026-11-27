@@ -6,9 +6,11 @@
 // and so on, as each insurer's forms ask them); the Aadhaar number is kept apart, in the secret
 // vault, and only its last four digits are ever shown. Vehicles are not part of a client: see
 // ../vehicles/VehiclesPanel.tsx.
-import { HeartPulse, MapPin, Pencil, Trash2, Users, Zap } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { HeartPulse, MapPin, Pencil, Plus, Trash2, Users, Zap } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { FormGrid, FormSection, Optional } from '../ui/FormSection';
+import { InsurerAvatar } from '../insurers/branding';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { plural } from '../ui/format';
 import type { MenuEntry } from '../ui/Menu';
@@ -393,8 +395,10 @@ export function ClientsPanel(): React.JSX.Element | null {
       <Modal
         open={draft !== null}
         title={draft?.id ? 'Edit client' : 'New client'}
-        subtitle="Health client"
+        subtitle={draft?.id && draft.name ? `Health client · ${draft.name}` : 'Health client'}
         onClose={() => setDraft(null)}
+        size="xl"
+        fill
       >
         {draft && (
           <ClientForm
@@ -597,9 +601,13 @@ function ClientForm(props: {
   const [tab, setTab] = useState<'basic' | 'additional'>('basic');
   const [insurer, setInsurer] = useState<QuoteChoiceInsurer>('united-india');
   const set = (patch: Partial<Draft>) => onChange({ ...d, ...patch });
-  const setMember = (i: number, patch: Partial<MemberDraft>) =>
-    set({ members: d.members.map((m, j) => (j === i ? { ...m, ...patch } : m)) });
-  const hasSelf = d.members.some((m) => m.relationship === 'self');
+  // Back to the top of the form when the tab or insurer changes (one scroll area for both).
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    body.current?.scrollTo({ top: 0 });
+  }, [tab, insurer]);
+  const insurers = QUOTE_CHOICE_INSURERS.filter((i) => !isInsurerPaused(i));
+  const filled = insurers.filter((i) => insurerMarked(d, i)).length;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -633,15 +641,21 @@ function ClientForm(props: {
   };
 
   return (
-    <form className="login-form client-form" onSubmit={(e) => void submit(e)}>
-      <div className="form-tabs" role="tablist" aria-label="Client details">
+    <form className="client-form cf" onSubmit={(e) => void submit(e)}>
+      <div className="cf-tabs" role="tablist" aria-label="Client details">
         <button
           type="button"
           role="tab"
           aria-selected={tab === 'basic'}
           onClick={() => setTab('basic')}
         >
-          Basic details
+          <span className="cf-tab-step" aria-hidden="true">
+            1
+          </span>
+          <span className="cf-tab-text">
+            Basic details
+            <small>Client, members, quote details</small>
+          </span>
         </button>
         <button
           type="button"
@@ -649,21 +663,77 @@ function ClientForm(props: {
           aria-selected={tab === 'additional'}
           onClick={() => setTab('additional')}
         >
-          Additional details
+          <span className="cf-tab-step" aria-hidden="true">
+            2
+          </span>
+          <span className="cf-tab-text">
+            Additional details
+            <small>
+              Per insurer · {filled} of {insurers.length} filled
+            </small>
+          </span>
         </button>
       </div>
-      {tab === 'additional' && (
-        <AdditionalDetails
-          draft={d}
-          insurer={insurer}
-          onInsurer={setInsurer}
-          onChange={(details) => set({ details })}
-          onChoices={(choices) => set({ choices })}
-          onAadhaarChange={(aadhaar) => set({ aadhaar })}
-        />
-      )}
-      {tab === 'basic' && (
-        <>
+      <div className="cf-body" ref={body}>
+        {tab === 'basic' && <BasicDetails draft={d} set={set} />}
+        {tab === 'additional' && (
+          <AdditionalDetails
+            draft={d}
+            insurers={insurers}
+            insurer={insurer}
+            onInsurer={setInsurer}
+            onChange={(details) => set({ details })}
+            onChoices={(choices) => set({ choices })}
+            onAadhaarChange={(aadhaar) => set({ aadhaar })}
+          />
+        )}
+      </div>
+      <footer className="cf-footer">
+        <div className="cf-footer-status">
+          {error ? (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          ) : (
+            <p className="muted">Stored encrypted on this computer.</p>
+          )}
+        </div>
+        <div className="cf-footer-actions">
+          <button type="button" onClick={props.onCancel}>
+            Cancel
+          </button>
+          <button type="submit" className="primary" disabled={busy}>
+            {busy ? 'Saving…' : 'Save client'}
+          </button>
+        </div>
+      </footer>
+    </form>
+  );
+}
+
+/** Whether an insurer has anything given (its details or quote choices): marked in its tab. */
+function insurerMarked(d: Draft, i: QuoteChoiceInsurer): boolean {
+  return (
+    Object.values(d.choices[i] ?? {}).some((v) => v !== undefined) ||
+    ((CLIENT_DETAIL_INSURERS as readonly string[]).includes(i) &&
+      hasInsurerDetails(i as ClientDetailInsurer, d.details[i as ClientDetailInsurer]))
+  );
+}
+
+/** The Basic details tab: the client, the members to insure, the quote details and notes. */
+function BasicDetails(props: {
+  draft: Draft;
+  set: (patch: Partial<Draft>) => void;
+}): React.JSX.Element {
+  const { draft: d, set } = props;
+  const setMember = (i: number, patch: Partial<MemberDraft>) =>
+    set({ members: d.members.map((m, j) => (j === i ? { ...m, ...patch } : m)) });
+  const hasSelf = d.members.some((m) => m.relationship === 'self');
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    <div className="cf-stack">
+      <FormSection title="Client details" description="Who the quotes are for.">
+        <FormGrid columns={4}>
           <label>
             Client name
             <input
@@ -674,7 +744,9 @@ function ClientForm(props: {
             />
           </label>
           <label>
-            Mobile (optional)
+            <span>
+              Mobile <Optional />
+            </span>
             <input
               value={d.phone}
               onChange={(e) => set({ phone: e.target.value })}
@@ -683,7 +755,9 @@ function ClientForm(props: {
             />
           </label>
           <label>
-            Email (optional)
+            <span>
+              Email <Optional />
+            </span>
             <input
               value={d.email}
               onChange={(e) => set({ email: e.target.value })}
@@ -701,10 +775,45 @@ function ClientForm(props: {
               required
             />
           </label>
-          <fieldset>
-            <legend>Members to insure</legend>
-            {d.members.map((m, i) => (
-              <div className="member-row" key={i}>
+        </FormGrid>
+      </FormSection>
+
+      <FormSection
+        title="Members to insure"
+        description={`${plural(d.members.length, 'member', 'members')}. A date of birth sets the age.`}
+        actions={
+          d.members.length < 12 && (
+            <button
+              type="button"
+              className="btn-sm"
+              onClick={() =>
+                set({
+                  members: [
+                    ...d.members,
+                    { relationship: 'spouse', age: '', dateOfBirth: '', gender: '' },
+                  ],
+                })
+              }
+            >
+              <Plus size={14} aria-hidden="true" /> Add member
+            </button>
+          )
+        }
+      >
+        <div className="cf-members" role="group" aria-label="Members to insure">
+          <div className="cf-member cf-member-head" aria-hidden="true">
+            <span>#</span>
+            <span>Relationship</span>
+            <span>Date of birth</span>
+            <span>Age</span>
+            <span>Gender</span>
+            <span />
+          </div>
+          {d.members.map((m, i) => (
+            <div className="cf-member" key={i}>
+              <span className="cf-member-num">{i + 1}</span>
+              <label>
+                <span className="cf-cell-label">Relationship</span>
                 <select
                   aria-label={`Member ${i + 1} relationship`}
                   value={m.relationship}
@@ -716,12 +825,15 @@ function ClientForm(props: {
                     </option>
                   ))}
                 </select>
+              </label>
+              <label>
+                <span className="cf-cell-label">Date of birth</span>
                 <input
                   aria-label={`Member ${i + 1} date of birth`}
                   type="date"
                   value={m.dateOfBirth}
                   min="1900-01-01"
-                  max={new Date().toISOString().slice(0, 10)}
+                  max={today}
                   onChange={(e) => {
                     const dateOfBirth = e.target.value;
                     // The age follows the date of birth.
@@ -731,6 +843,9 @@ function ClientForm(props: {
                     });
                   }}
                 />
+              </label>
+              <label>
+                <span className="cf-cell-label">Age</span>
                 <input
                   aria-label={`Member ${i + 1} age`}
                   value={m.age}
@@ -741,6 +856,9 @@ function ClientForm(props: {
                   required
                   readOnly={!!m.dateOfBirth}
                 />
+              </label>
+              <label>
+                <span className="cf-cell-label">Gender</span>
                 <select
                   aria-label={`Member ${i + 1} gender`}
                   value={m.gender}
@@ -751,58 +869,61 @@ function ClientForm(props: {
                   <option value="female">Female</option>
                   <option value="transgender">Transgender</option>
                 </select>
+              </label>
+              <span className="cf-member-remove">
                 {d.members.length > 1 && (
                   <button
                     type="button"
+                    className="icon-button"
+                    aria-label={`Remove member ${i + 1}`}
+                    title="Remove"
                     onClick={() => set({ members: d.members.filter((_, j) => j !== i) })}
                   >
-                    Remove
+                    <Trash2 size={15} aria-hidden="true" />
                   </button>
                 )}
-              </div>
-            ))}
-            {hasSelf && (
-              <label>
-                Proposer&rsquo;s marital status
-                <select
-                  value={d.maritalStatus}
-                  onChange={(e) => set({ maritalStatus: e.target.value as MaritalStatus | '' })}
-                >
-                  <option value="">Not given</option>
-                  {(Object.keys(MARITAL_LABELS) as MaritalStatus[]).map((k) => (
-                    <option key={k} value={k}>
-                      {MARITAL_LABELS[k]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {d.members.length < 12 && (
-              <button
-                type="button"
-                onClick={() =>
-                  set({
-                    members: [
-                      ...d.members,
-                      { relationship: 'spouse', age: '', dateOfBirth: '', gender: '' },
-                    ],
-                  })
-                }
+              </span>
+            </div>
+          ))}
+        </div>
+        {hasSelf && (
+          <FormGrid columns={4}>
+            <label>
+              Proposer&rsquo;s marital status
+              <select
+                value={d.maritalStatus}
+                onChange={(e) => set({ maritalStatus: e.target.value as MaritalStatus | '' })}
               >
-                Add member
-              </button>
-            )}
-          </fieldset>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={d.withPreferences}
-              onChange={(e) => set({ withPreferences: e.target.checked })}
-            />
-            Save quote details (needed to fetch quotes)
-          </label>
-          {d.withPreferences && (
-            <>
+                <option value="">Not given</option>
+                {(Object.keys(MARITAL_LABELS) as MaritalStatus[]).map((k) => (
+                  <option key={k} value={k}>
+                    {MARITAL_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </FormGrid>
+        )}
+      </FormSection>
+
+      <div className="cf-pair">
+        <FormSection
+          title="Quote details"
+          description="Needed to fetch quotes."
+          actions={
+            <label className="cf-switch">
+              <input
+                type="checkbox"
+                role="switch"
+                checked={d.withPreferences}
+                onChange={(e) => set({ withPreferences: e.target.checked })}
+              />
+              Save quote details
+            </label>
+          }
+        >
+          {d.withPreferences ? (
+            <FormGrid columns={3}>
               <label>
                 Cover type
                 <select
@@ -836,42 +957,50 @@ function ClientForm(props: {
                   ))}
                 </select>
               </label>
-            </>
+            </FormGrid>
+          ) : (
+            <p className="insurer-note">
+              Not saved: switch on to give the cover type, sum insured and policy term the quotes
+              need.
+            </p>
           )}
-          <label>
-            Notes (optional)
-            <textarea
-              value={d.notes}
-              onChange={(e) => set({ notes: e.target.value })}
-              maxLength={1000}
-              rows={2}
-            />
-          </label>
-        </>
-      )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="insurer-actions">
-        <button type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Save client'}
-        </button>
-        <button type="button" onClick={props.onCancel}>
-          Cancel
-        </button>
+        </FormSection>
+        <FormSection title="Notes">
+          <FormGrid columns={2}>
+            <label className="span-full">
+              <span className="visually-hidden">Notes</span>
+              <textarea
+                aria-label="Notes"
+                value={d.notes}
+                onChange={(e) => set({ notes: e.target.value })}
+                maxLength={1000}
+                rows={3}
+                placeholder="Optional"
+              />
+            </label>
+          </FormGrid>
+        </FormSection>
       </div>
-    </form>
+    </div>
   );
 }
 
+/** What each insurer's quote choices are used by, under its name (insurers without details). */
+const CHOICES_USE: Partial<Record<QuoteChoiceInsurer, string>> = {
+  'hdfc-ergo': 'Used by HDFC ERGO’s PIE health forms (MST, Optima Secure, Optima Restore, Energy).',
+  'icici-lombard':
+    'Used by ICICI Lombard’s Elevate on NYSA and its partner API health quotes (Elevate, Activate Booster).',
+  'bajaj-allianz': 'Used by Bajaj Allianz’s Personal Accident form.',
+};
+
 /**
- * The Additional details tab: one sub-tab per insurer, each with the details its forms use and the
- * choices its quotes use besides the product.
+ * The Additional details tab: the insurers in a list (each marked once it has details), and the
+ * chosen insurer's details its forms use and the choices its quotes use besides the product. Each
+ * insurer's are kept apart: nothing is copied from one to another.
  */
 function AdditionalDetails(props: {
   draft: Draft;
+  insurers: readonly QuoteChoiceInsurer[];
   insurer: QuoteChoiceInsurer;
   onInsurer: (insurer: QuoteChoiceInsurer) => void;
   onChange: (details: Draft['details']) => void;
@@ -882,58 +1011,69 @@ function AdditionalDetails(props: {
   const withForms = (CLIENT_DETAIL_INSURERS as readonly string[]).includes(insurer)
     ? (insurer as ClientDetailInsurer)
     : null;
-  const marked = (i: QuoteChoiceInsurer): boolean =>
-    Object.values(d.choices[i] ?? {}).some((v) => v !== undefined) ||
-    ((CLIENT_DETAIL_INSURERS as readonly string[]).includes(i) &&
-      hasInsurerDetails(i as ClientDetailInsurer, d.details[i as ClientDetailInsurer]));
+  const name = QUOTE_CHOICE_INSURER_NAMES[insurer];
   return (
-    <>
-      <p className="insurer-note">
-        Each insurer&rsquo;s details are filled in separately, as its forms and quotes ask them;
-        nothing is copied from one insurer to another, and a quote or proposal uses only that
-        insurer&rsquo;s. A quote asks only the product: everything else comes from here. Stored
-        encrypted.
-      </p>
-      <div className="form-tabs small" role="tablist" aria-label="Insurer">
-        {QUOTE_CHOICE_INSURERS.filter((i) => !isInsurerPaused(i)).map((i) => (
-          <button
-            key={i}
-            type="button"
-            role="tab"
-            aria-selected={insurer === i}
-            onClick={() => props.onInsurer(i)}
-          >
-            {QUOTE_CHOICE_INSURER_NAMES[i]}
-            {marked(i) && (
-              <span className="tab-mark" aria-label="(has details)">
-                •
-              </span>
-            )}
-          </button>
-        ))}
+    <div className="cf-additional">
+      <nav className="cf-insurers" aria-label="Insurers">
+        <p className="cf-insurers-note">
+          Each insurer is filled in separately; a quote uses only that insurer&rsquo;s details.
+        </p>
+        <div role="tablist" aria-label="Insurer" aria-orientation="vertical">
+          {props.insurers.map((i) => {
+            const marked = insurerMarked(d, i);
+            return (
+              <button
+                key={i}
+                type="button"
+                role="tab"
+                aria-selected={insurer === i}
+                onClick={() => props.onInsurer(i)}
+              >
+                <InsurerAvatar name={QUOTE_CHOICE_INSURER_NAMES[i]} />
+                <span className="cf-insurer-text">
+                  {QUOTE_CHOICE_INSURER_NAMES[i]}
+                  <small data-state={marked ? 'filled' : 'empty'}>
+                    {marked ? 'Details added' : 'Not filled'}
+                  </small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+      <div className="cf-insurer-pane" role="tabpanel" aria-label={name}>
+        <header className="cf-insurer-head">
+          <InsurerAvatar name={name} />
+          <div>
+            <h3>{name}</h3>
+            <p>{withForms ? DETAILS_USE[withForms] : CHOICES_USE[insurer]}</p>
+          </div>
+        </header>
+        <div className="cf-stack">
+          {withForms && (
+            <ProposalFields
+              key={withForms}
+              // The note on Aadhaar's keeping only where it is asked (United India).
+              {...(withForms === 'united-india' ? {} : { note: null })}
+              value={d.details[withForms]}
+              onChange={(value) => props.onChange({ ...d.details, [withForms]: value })}
+              fields={INSURER_DETAIL_FIELDS[withForms]}
+              occupations={OCCUPATIONS[withForms]}
+              // The Aadhaar number is one per client, asked by United India's e-proposals.
+              {...(withForms === 'united-india'
+                ? { aadhaar: d.aadhaar, onAadhaarChange: props.onAadhaarChange }
+                : {})}
+            />
+          )}
+          <QuoteChoicesFields
+            key={`choices-${insurer}`}
+            insurer={insurer}
+            value={d.choices}
+            onChange={props.onChoices}
+          />
+        </div>
       </div>
-      {withForms && (
-        <ProposalFields
-          key={withForms}
-          legend={`${CLIENT_DETAIL_INSURER_NAMES[withForms]}’s details`}
-          note={<p className="insurer-note">{DETAILS_USE[withForms]}</p>}
-          value={d.details[withForms]}
-          onChange={(value) => props.onChange({ ...d.details, [withForms]: value })}
-          fields={INSURER_DETAIL_FIELDS[withForms]}
-          occupations={OCCUPATIONS[withForms]}
-          // The Aadhaar number is one per client, asked by United India's e-proposals.
-          {...(withForms === 'united-india'
-            ? { aadhaar: d.aadhaar, onAadhaarChange: props.onAadhaarChange }
-            : {})}
-        />
-      )}
-      <QuoteChoicesFields
-        key={`choices-${insurer}`}
-        insurer={insurer}
-        value={d.choices}
-        onChange={props.onChoices}
-      />
-    </>
+    </div>
   );
 }
 

@@ -19,7 +19,7 @@ import { AppException } from '../ipc/dispatcher';
 import type { Logger } from '../logging/logger';
 import type { QuoteRunRequest } from '../../shared/ipc/contract';
 import { clientForInsurer } from '../../shared/contracts/client';
-import { findPortal, mayFillLogin } from '../../shared/insurers/portals';
+import { findPortal, INSURER_PORTALS, mayFillLogin } from '../../shared/insurers/portals';
 import { isInsurerPaused } from '../../shared/insurers/availability';
 import { GUESSED_READING, type HandOver } from './hand-over';
 import { formChanges, parseFormValues } from './form-changes';
@@ -89,6 +89,12 @@ export interface QuoteService {
    */
   cancel(insurerId?: string): boolean;
   /**
+   * Reset (the sidebar's Reset, request of 26 November 2026): stops every quote being filled,
+   * discards every form kept for Stop & make PDF (no PDF), closes the insurers' pop-up tabs and
+   * sends every open insurer back to its home page. The advisor stays signed in.
+   */
+  resetAll(): Promise<ResetSummary>;
+  /**
    * Finishes the form the last run left for the advisor (request of 20 November 2026): once the
    * advisor has filled the rest and pressed the insurer's premium button, reads the premium from
    * the insurer's page (waiting up to `waitMs`), or takes the `amount` the advisor typed, and
@@ -117,6 +123,18 @@ export interface QuoteService {
     travellerId?: string;
     insurerIds: string[];
   }): Promise<QuoteCompareResult>;
+}
+
+/** What a reset did. */
+export interface ResetSummary {
+  /** Quotes being filled that were stopped. */
+  stopped: number;
+  /** Forms kept for Stop & make PDF that were put away. */
+  discarded: number;
+  /** Pop-up tabs closed. */
+  closedTabs: number;
+  /** Insurers sent back to their home page. */
+  sentHome: number;
 }
 
 /** One insurer's latest quote, for the screens' progress. */
@@ -280,7 +298,11 @@ export function createQuoteService(deps: {
    * The insurer tabs' host: told which insurers are being filled, so their tabs keep drawing
    * (a hidden tab draws nothing: combined runs, 26 November 2026).
    */
-  portals?: { setWorking: (insurerIds: string[]) => void };
+  portals?: {
+    setWorking: (insurerIds: string[]) => void;
+    /** Closes every insurer's pop-up tabs (their own pages stay); how many were closed. */
+    closePopups?: () => number;
+  };
   /** Saves a run's trace for support (a file of the app's own); returns its name, or null. */
   diagnose?: (name: string, data: unknown) => string | null;
   /**
@@ -581,6 +603,8 @@ export function createQuoteService(deps: {
   const resetPortal = async (
     insurerId: string,
     worked: WebContents | null = lastWorkedPage(),
+    /** The insurer's main home page whichever of its sites the tab is on (a full reset). */
+    main = false,
   ): Promise<void> => {
     const portal = findPortal(insurerId);
     if (!portal?.homeUrl) return;
@@ -597,8 +621,10 @@ export function createQuoteService(deps: {
       }
     };
     const on = siteOf(wc.getURL());
-    const home =
-      (portal.siteHomeUrls ?? []).find((u) => on !== null && siteOf(u) === on) ?? portal.homeUrl;
+    const home = main
+      ? portal.homeUrl
+      : ((portal.siteHomeUrls ?? []).find((u) => on !== null && siteOf(u) === on) ??
+        portal.homeUrl);
     try {
       // A home address differing only after "#" (Niva Bupa's, ICICI's) does not load the page
       // again: the single-page app keeps its old screens (Ionic keeps a calculator left half-way,
@@ -798,6 +824,40 @@ export function createQuoteService(deps: {
         stopped = true;
       }
       return stopped;
+    },
+    resetAll: async () => {
+      // 1. Every quote being filled: stopped, and waited for (bounded) so nothing runs on.
+      const running = [...active.values()];
+      const stopped = running.filter((run) => run.stop()).length;
+      await Promise.race([Promise.allSettled(running.map((run) => run.done)), pauseMs(15_000)]);
+      // 2. Every form kept for Stop & make PDF: put away (no PDF), its wait for a premium ended.
+      let discarded = 0;
+      for (const [id, p] of [...pendings]) {
+        p.stopWatching = true;
+        pendings.delete(id);
+        setProgress(id, {
+          state: 'cancelled',
+          message: 'Reset: the form was put away and no PDF was saved.',
+          watching: false,
+          adjust: false,
+        });
+        discarded += 1;
+      }
+      latestPending = null;
+      // 3. The pop-up tabs (calculators, e-proposal forms): closed; each insurer's own page stays.
+      const closedTabs = deps.portals?.closePopups?.() ?? 0;
+      // 4. Every open insurer: back to its home page (signed in still).
+      const open = INSURER_PORTALS.map((p) => p.id).filter((id) =>
+        deps.windowsOf(id).some((w) => !w.isDestroyed()),
+      );
+      await Promise.all(open.map((id) => resetPortal(id, null, true)));
+      deps.logger.log('info', 'quote.reset', {
+        stopped,
+        discarded,
+        closedTabs,
+        sentHome: open.length,
+      });
+      return { stopped, discarded, closedTabs, sentHome: open.length };
     },
     finish: async ({ waitMs, amount, insurerId, plans }) => {
       const p = pendings.get(insurerId ?? latestPending ?? '');

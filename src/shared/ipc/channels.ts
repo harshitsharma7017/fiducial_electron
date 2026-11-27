@@ -39,6 +39,7 @@ export const IPC_CHANNELS = {
   importsCommit: 'imports:commit',
   quotesRun: 'quotes:run',
   quotesCancel: 'quotes:cancel',
+  quotesResetAll: 'quotes:reset-all',
   quotesFinish: 'quotes:finish',
   quotesProgress: 'quotes:progress',
   quotesCompare: 'quotes:compare',
