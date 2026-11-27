@@ -43,6 +43,7 @@ import {
   INSURER_PORTALS,
   mayFillLogin,
   mayNavigate,
+  secureUpgrade,
   type InsurerPortal,
 } from '../../shared/insurers/portals';
 import type { Logger } from '../logging/logger';
@@ -260,6 +261,7 @@ export function createPortalWindows(deps: {
               }
             : null,
         adopt: (options) => host.adoptPopup(id, options),
+        upgrade: (url) => secureUpgrade(portal, url),
         onBlocked: (_kind, url) => {
           const origin = originOf(url) ?? schemeOf(url);
           const list = (blocked.get(id) ?? []).filter((o) => o !== origin);
@@ -493,8 +495,15 @@ export function createPortalWindows(deps: {
       await startup;
       // A session past its 12 hours is ended before anything is shown.
       if (deps.clock.expired().includes(id)) await endSession(id, 'expired');
-      if (host.portalOf(id)) {
+      const page = host.portalOf(id);
+      if (page) {
         host.showPortal(id);
+        // A tab left off its site (blank, or an error page: a navigation that was refused) goes
+        // to the sign-in page, rather than showing nothing.
+        if (!page.isDestroyed() && !mayNavigate(portal, page.webContents.getURL(), true)) {
+          void page.webContents.loadURL(portal.startUrl).catch(() => undefined);
+          return;
+        }
         // If the page is on its login page (an earlier fill failed, or the insurer signed the
         // advisor out), try again. Filled or typed boxes are left as they are.
         void refill.get(id)?.();

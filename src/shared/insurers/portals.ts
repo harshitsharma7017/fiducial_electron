@@ -389,6 +389,27 @@ function hashMatches(hash: string, prefix: string): boolean {
 }
 
 /** Whether a frame may navigate to `url` in this portal's window. */
+/**
+ * The secure address for a plain-http one on the portal's own site, or null. Some insurer pages
+ * still send the browser to http:// addresses of their own site (United India, 27 November 2026:
+ * after its session ends it redirects to its login page over http, which the app blocked, leaving a
+ * blank tab). Such a navigation is loaded over https instead; anything else stays blocked.
+ */
+export function secureUpgrade(portal: InsurerPortal, url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' || parsed.username || parsed.password) return null;
+  // Only the default port: http://host:8080 is another service, not the same site over https.
+  if (parsed.port !== '') return null;
+  parsed.protocol = 'https:';
+  const secure = parsed.toString();
+  return mayNavigate(portal, secure, true) ? secure : null;
+}
+
 export function mayNavigate(portal: InsurerPortal, url: string, isMainFrame: boolean): boolean {
   let parsed: URL;
   try {

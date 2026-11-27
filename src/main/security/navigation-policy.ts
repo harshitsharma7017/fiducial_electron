@@ -35,6 +35,11 @@ export interface SessionPolicy {
    * window). Gets Electron's options for the pop-up, which carry its contents, and returns them.
    */
   adopt?(options: BrowserWindowConstructorOptions): WebContents;
+  /**
+   * For a page (main frame) navigation or redirect the rule refuses: an allowed address to load
+   * instead (an insurer's own site over https for its http address), or null to block it.
+   */
+  upgrade?(url: string): string | null;
   onBlocked?(kind: 'navigation' | 'redirect' | 'popup', url: string): void;
 }
 
@@ -83,9 +88,24 @@ export function installNavigationPolicy(logger: Logger): void {
       logger.warn('security.popup-blocked', { targetScheme: schemeOf(url) });
       return { action: 'deny' };
     });
+    /** Loads the allowed address the policy gives instead, if any (checked by the rule again). */
+    const upgraded = (url: string, isMainFrame: boolean): boolean => {
+      const to = isMainFrame ? (policy()?.upgrade?.(url) ?? null) : null;
+      if (!to || !rule()(to, true)) return false;
+      logger.info('security.navigation-upgraded', {
+        targetScheme: schemeOf(url),
+        upgradedScheme: schemeOf(to),
+      });
+      // After this navigation is cancelled.
+      setImmediate(() => {
+        if (!contents.isDestroyed()) void contents.loadURL(to).catch(() => undefined);
+      });
+      return true;
+    };
     contents.on('will-frame-navigate', (event) => {
       if (!rule()(event.url, event.isMainFrame)) {
         event.preventDefault();
+        if (upgraded(event.url, event.isMainFrame)) return;
         if (event.isMainFrame) policy()?.onBlocked?.('navigation', event.url);
         logger.warn('security.navigation-blocked', { targetScheme: schemeOf(event.url) });
       }
@@ -93,6 +113,7 @@ export function installNavigationPolicy(logger: Logger): void {
     contents.on('will-redirect', (event) => {
       if (!rule()(event.url, event.isMainFrame)) {
         event.preventDefault();
+        if (upgraded(event.url, event.isMainFrame)) return;
         if (event.isMainFrame) policy()?.onBlocked?.('redirect', event.url);
         logger.warn('security.redirect-blocked', { targetScheme: schemeOf(event.url) });
       }

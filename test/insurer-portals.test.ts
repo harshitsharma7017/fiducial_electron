@@ -7,6 +7,7 @@ import {
   insurerPortalSchema,
   mayFillLogin,
   mayNavigate,
+  secureUpgrade,
   usesSavedLogin,
   type InsurerPortal,
 } from '../src/shared/insurers/portals';
@@ -198,5 +199,40 @@ describe('mayNavigate', () => {
     expect(mayNavigate(portal('new-india'), 'about:srcdoc', false)).toBe(true);
     expect(mayNavigate(portal('new-india'), 'javascript:alert(1)', false)).toBe(false);
     expect(mayNavigate(portal('new-india'), 'data:text/html,x', false)).toBe(false);
+  });
+});
+
+describe('secureUpgrade', () => {
+  it('loads an insurer’s own http address over https (United India’s login, after its session ends)', () => {
+    const uiic = portal('united-india');
+    expect(secureUpgrade(uiic, 'http://www.uiic.in/GCWebPortal/login/LoginAction.do?p=login')).toBe(
+      'https://www.uiic.in/GCWebPortal/login/LoginAction.do?p=login',
+    );
+    expect(secureUpgrade(uiic, 'http://www.uiic.in/')).toBe('https://www.uiic.in/');
+  });
+
+  it('upgrades nothing outside the insurer’s own site, and never another port or a login in the address', () => {
+    const uiic = portal('united-india');
+    for (const url of [
+      'http://210.212.234.62:8080/UserManualDownload/FreqAskedQuestions.jsp',
+      'http://www.uiic.in:8080/x',
+      'http://evil.example/www.uiic.in',
+      'http://www.uiic.in.evil.example/',
+      'http://user:pw@www.uiic.in/',
+      'https://evil.example/',
+      'https://www.uiic.in/already-secure',
+      'ftp://www.uiic.in/',
+      'not a url',
+    ]) {
+      expect(secureUpgrade(uiic, url)).toBeNull();
+    }
+  });
+
+  it('follows each insurer’s own domains (HDFC ERGO’s hdfcergo.com addresses)', () => {
+    const hdfc = portal('hdfc-ergo');
+    expect(secureUpgrade(hdfc, 'http://pie.hdfcergo.com/Dashboard')).toBe(
+      'https://pie.hdfcergo.com/Dashboard',
+    );
+    expect(secureUpgrade(hdfc, 'http://hdfcergo.com.evil.example/')).toBeNull();
   });
 });

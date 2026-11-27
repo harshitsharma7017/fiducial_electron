@@ -19,6 +19,7 @@ export const LOG_EVENTS = [
   'ipc.call',
   'security.navigation-blocked',
   'security.redirect-blocked',
+  'security.navigation-upgraded',
   'security.popup-blocked',
   'security.permission-denied',
   'security.download-blocked',
@@ -75,6 +76,8 @@ const FIELD_SCHEMAS = {
   permission: token(/^[a-z][a-z-]{0,39}$/),
   /** URL scheme only (for example "https"); full URLs are never logged. */
   targetScheme: token(/^[a-z][a-z0-9+.-]{0,19}$/),
+  /** The scheme a refused navigation was loaded over instead (https). */
+  upgradedScheme: token(/^[a-z][a-z0-9+.-]{0,19}$/),
   reason: z.enum([
     'crashed',
     'killed',
