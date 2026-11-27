@@ -95,6 +95,8 @@ export const insurerPortalViewSchema = z
     lastFill: z.enum(FILL_OUTCOMES).nullable(),
     /** When the insurer's saved session ends (ISO time), or null if none is running. */
     sessionEndsAt: z.iso.datetime().nullable(),
+    /** The insurer's page is open on its sign-in page (the advisor has not signed in yet). */
+    signInPending: z.boolean(),
     /** Why the last session ended, if it ended while the app was running. */
     lastSessionEnd: z.enum(['expired', 'signed-out']).nullable(),
     /** Origins the portal tried to open that are not on its allowed list (at most 5). */

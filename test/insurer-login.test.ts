@@ -185,6 +185,8 @@ function service(enabled: boolean, credentials = memoryCredentials()) {
         open: opened.includes(id),
         lastFill: null,
         sessionEndsAt: opened.includes(id) ? new Date(Date.UTC(2026, 10, 2, 22, 0)) : null,
+        // Just opened: still on its sign-in page.
+        onSignInPage: opened.includes(id),
         lastSessionEnd: null,
         blockedOrigins: [],
       }),
@@ -237,7 +239,9 @@ describe('the insurer service', () => {
       loginSaved: true,
       windowOpen: true,
       sessionEndsAt: '2026-11-02T22:00:00.000Z',
+      signInPending: true,
     });
+    expect(list.portals.find((p) => p.id === 'bajaj-allianz')?.signInPending).toBe(false);
     expect(list.portals.find((p) => p.id === 'bajaj-allianz')?.sessionEndsAt).toBeNull();
     expect(JSON.stringify(list)).not.toContain(LOGIN.username);
     expect(JSON.stringify(list)).not.toContain(LOGIN.password);

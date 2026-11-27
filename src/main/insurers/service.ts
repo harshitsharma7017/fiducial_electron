@@ -74,6 +74,7 @@ export function createInsurerService(deps: {
             windowOpen: window.open,
             lastFill: window.lastFill,
             sessionEndsAt: window.sessionEndsAt?.toISOString() ?? null,
+            signInPending: window.onSignInPage,
             lastSessionEnd: window.lastSessionEnd,
             blockedOrigins: window.blockedOrigins,
             recording: deps.recorder?.status(portal.id) ?? null,

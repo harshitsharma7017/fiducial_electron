@@ -384,6 +384,7 @@ describe('the client service and IPC channels', () => {
           open: false,
           lastFill: null,
           sessionEndsAt: null,
+          onSignInPage: false,
           lastSessionEnd: null,
           blockedOrigins: [],
         }),

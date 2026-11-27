@@ -4,7 +4,7 @@
 // client, a vehicle or a travel client, then runs one insurer or several for it (ComparePanel,
 // VehicleComparePanel, TravelComparePanel), each from the details saved with it. The lists are
 // read when the page is shown, so one added or edited elsewhere is there.
-import { Scale } from 'lucide-react';
+import { Car, HeartPulse, Plane, Scale, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ClientSummary } from '../../../shared/contracts/client';
 import type { VehicleSummary } from '../../../shared/contracts/vehicle';
@@ -17,22 +17,25 @@ import { TravelComparePanel } from './TravelCompare';
 
 type Kind = 'client' | 'vehicle' | 'traveller';
 
-const KINDS: { kind: Kind; tab: string; empty: string; text: string }[] = [
+const KINDS: { kind: Kind; tab: string; icon: LucideIcon; empty: string; text: string }[] = [
   {
     kind: 'client',
     tab: 'Health client',
+    icon: HeartPulse,
     empty: 'No health clients yet',
     text: 'Add a health client first (Health clients), then come back to compare insurers for them.',
   },
   {
     kind: 'vehicle',
     tab: 'Vehicle',
+    icon: Car,
     empty: 'No vehicles yet',
     text: 'Add a vehicle first (Vehicles), then come back to compare insurers for it.',
   },
   {
     kind: 'traveller',
     tab: 'Travel client',
+    icon: Plane,
     empty: 'No travel clients yet',
     text: 'Add a travel client first (Travel clients), then come back to compare insurers for them.',
   },
@@ -89,74 +92,97 @@ export function ComparePage(props: { active: boolean }): React.JSX.Element {
           {error}
         </p>
       )}
-      <div className="form-tabs" role="tablist" aria-label="Quote for">
-        {KINDS.map((k) => (
-          <button
-            key={k.kind}
-            type="button"
-            role="tab"
-            aria-selected={kind === k.kind}
-            onClick={() => setKind(k.kind)}
-          >
-            {k.tab}
-          </button>
-        ))}
+      <div className="compare-page">
+        <section className="compare-section compare-subject" aria-label="Quote for">
+          <div className="compare-subject-kind">
+            <span className="compare-subject-label">Quote for</span>
+            <div className="compare-kinds" role="tablist" aria-label="Quote for">
+              {KINDS.map((k) => {
+                const Icon = k.icon;
+                return (
+                  <button
+                    key={k.kind}
+                    type="button"
+                    role="tab"
+                    aria-selected={kind === k.kind}
+                    onClick={() => setKind(k.kind)}
+                  >
+                    <Icon size={15} aria-hidden="true" />
+                    {k.tab}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {!(list && list.length === 0) &&
+            (kind === 'client' ? (
+              <label className="compare-client">
+                Health client
+                <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
+                  <option value="">{clients ? 'Choose a client…' : 'Loading clients…'}</option>
+                  {(clients ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} · {c.pincode}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : kind === 'traveller' ? (
+              <label className="compare-client">
+                Travel client
+                <select value={travellerId} onChange={(e) => setTravellerId(e.target.value)}>
+                  <option value="">
+                    {travellers ? 'Choose a travel client…' : 'Loading travel clients…'}
+                  </option>
+                  {(travellers ?? []).map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} · {t.pincode}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label className="compare-client">
+                Vehicle
+                <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
+                  <option value="">{vehicles ? 'Choose a vehicle…' : 'Loading vehicles…'}</option>
+                  {(vehicles ?? []).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} · {v.condition === 'new' ? 'new' : 'renewal'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+        </section>
+        {list && list.length === 0 ? (
+          <EmptyState icon={Scale} title={shown.empty} text={shown.text} />
+        ) : (
+          <>
+            {!(kind === 'client' ? client : kind === 'vehicle' ? vehicle : traveller) && list && (
+              <p className="compare-choose">
+                Choose{' '}
+                {kind === 'client'
+                  ? 'a health client'
+                  : kind === 'vehicle'
+                    ? 'a vehicle'
+                    : 'a travel client'}{' '}
+                above to see the insurers that can quote {kind === 'vehicle' ? 'it' : 'them'}.
+              </p>
+            )}
+            {/* Kept per client or vehicle: choosing another starts afresh. */}
+            {kind === 'client' && client && (
+              <ComparePanel key={client.id} client={client} iciciApi={iciciApi} />
+            )}
+            {kind === 'vehicle' && vehicle && (
+              <VehicleComparePanel key={vehicle.id} vehicleId={vehicle.id} iciciApi={iciciApi} />
+            )}
+            {kind === 'traveller' && traveller && (
+              <TravelComparePanel key={traveller.id} travellerId={traveller.id} />
+            )}
+          </>
+        )}
       </div>
-      {list && list.length === 0 ? (
-        <EmptyState icon={Scale} title={shown.empty} text={shown.text} />
-      ) : (
-        <div className="compare-page">
-          {kind === 'client' ? (
-            <label className="compare-client">
-              Health client
-              <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
-                <option value="">{clients ? 'Choose a client…' : 'Loading clients…'}</option>
-                {(clients ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} · {c.pincode}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : kind === 'traveller' ? (
-            <label className="compare-client">
-              Travel client
-              <select value={travellerId} onChange={(e) => setTravellerId(e.target.value)}>
-                <option value="">
-                  {travellers ? 'Choose a travel client…' : 'Loading travel clients…'}
-                </option>
-                {(travellers ?? []).map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} · {t.pincode}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <label className="compare-client">
-              Vehicle
-              <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)}>
-                <option value="">{vehicles ? 'Choose a vehicle…' : 'Loading vehicles…'}</option>
-                {(vehicles ?? []).map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} · {v.condition === 'new' ? 'new' : 'renewal'}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {/* Kept per client or vehicle: choosing another starts afresh. */}
-          {kind === 'client' && client && (
-            <ComparePanel key={client.id} client={client} iciciApi={iciciApi} />
-          )}
-          {kind === 'vehicle' && vehicle && (
-            <VehicleComparePanel key={vehicle.id} vehicleId={vehicle.id} iciciApi={iciciApi} />
-          )}
-          {kind === 'traveller' && traveller && (
-            <TravelComparePanel key={traveller.id} travellerId={traveller.id} />
-          )}
-        </div>
-      )}
     </>
   );
 }

@@ -123,6 +123,11 @@ export interface PortalWindowState {
   lastFill: FillOutcome | null;
   /** When the running session ends, or null if none is running. */
   sessionEndsAt: Date | null;
+  /**
+   * The insurer's own page is on its sign-in page now (the session's clock runs from the moment
+   * the portal opens, before the advisor signs in): what the screens call "waiting for sign-in".
+   */
+  onSignInPage: boolean;
   /** Why the last session ended, if it ended while the app was running. */
   lastSessionEnd: SessionEnd | null;
   /** Origins the portal tried to open that are not allowed (newest last, at most 5). */
@@ -505,6 +510,16 @@ export function createPortalWindows(deps: {
         open: host.portalOf(id) !== null,
         lastFill: lastFill.get(id) ?? null,
         sessionEndsAt: deps.clock.endsAt(id),
+        onSignInPage: (() => {
+          const page = host.portalOf(id);
+          const portal = findPortal(id);
+          return (
+            !!page &&
+            !page.isDestroyed() &&
+            !!portal &&
+            mayFillLogin(portal, page.webContents.getURL())
+          );
+        })(),
         lastSessionEnd: lastEnd.get(id) ?? null,
         blockedOrigins: blocked.get(id) ?? [],
       };

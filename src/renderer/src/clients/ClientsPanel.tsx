@@ -7,9 +7,10 @@
 // vault, and only its last four digits are ever shown. Vehicles are not part of a client: see
 // ../vehicles/VehiclesPanel.tsx.
 import { HeartPulse, MapPin, Pencil, Plus, Trash2, Users, Zap } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { FormGrid, FormSection, Optional } from '../ui/FormSection';
+import { FormShell } from '../ui/FormShell';
 import { InsurerAvatar } from '../insurers/branding';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { plural } from '../ui/format';
@@ -18,7 +19,7 @@ import { RecordPage, type RecordItem } from '../ui/RecordPage';
 import { toast } from '../ui/toast';
 import { IciciApiHealthPanel, useIciciApiReady } from '../quote/IciciApiPanels';
 import { QuoteWorkspace, type QuoteOption } from '../quote/QuoteWorkspace';
-import { isInsurerNamePaused, isInsurerPaused } from '../../../shared/insurers/availability';
+import { isInsurerPaused } from '../../../shared/insurers/availability';
 import { IciciElevatePanel } from '../quote/IciciNysaPanels';
 import {
   ageOn,
@@ -297,18 +298,8 @@ export function ClientsPanel(): React.JSX.Element | null {
   const toDelete = confirmDelete ? clients?.find((c) => c.id === confirmDelete) : undefined;
   const items: RecordItem[] | null =
     clients?.map((c) => {
-      const options = healthQuoteOptions(c, iciciApi).filter(
-        (o) => !isInsurerNamePaused(o.insurer),
-      );
+      // Quotes start from the card's Quote button; its menu only edits and deletes.
       const menu: MenuEntry[] = [
-        { heading: 'Quote with' },
-        ...options.map((o) => ({
-          label: `${o.insurer}: ${o.label}`,
-          disabled: !!o.unavailable,
-          ...(o.unavailable ? { hint: o.unavailable } : {}),
-          onSelect: () => setQuote({ id: c.id, product: o.key }),
-        })),
-        'separator',
         { label: 'Edit client', icon: Pencil, onSelect: () => void edit(c) },
         {
           label: 'Delete client',
@@ -601,11 +592,6 @@ function ClientForm(props: {
   const [tab, setTab] = useState<'basic' | 'additional'>('basic');
   const [insurer, setInsurer] = useState<QuoteChoiceInsurer>('united-india');
   const set = (patch: Partial<Draft>) => onChange({ ...d, ...patch });
-  // Back to the top of the form when the tab or insurer changes (one scroll area for both).
-  const body = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    body.current?.scrollTo({ top: 0 });
-  }, [tab, insurer]);
   const insurers = QUOTE_CHOICE_INSURERS.filter((i) => !isInsurerPaused(i));
   const filled = insurers.filter((i) => insurerMarked(d, i)).length;
 
@@ -641,73 +627,38 @@ function ClientForm(props: {
   };
 
   return (
-    <form className="client-form cf" onSubmit={(e) => void submit(e)}>
-      <div className="cf-tabs" role="tablist" aria-label="Client details">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'basic'}
-          onClick={() => setTab('basic')}
-        >
-          <span className="cf-tab-step" aria-hidden="true">
-            1
-          </span>
-          <span className="cf-tab-text">
-            Basic details
-            <small>Client, members, quote details</small>
-          </span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'additional'}
-          onClick={() => setTab('additional')}
-        >
-          <span className="cf-tab-step" aria-hidden="true">
-            2
-          </span>
-          <span className="cf-tab-text">
-            Additional details
-            <small>
-              Per insurer · {filled} of {insurers.length} filled
-            </small>
-          </span>
-        </button>
-      </div>
-      <div className="cf-body" ref={body}>
-        {tab === 'basic' && <BasicDetails draft={d} set={set} />}
-        {tab === 'additional' && (
-          <AdditionalDetails
-            draft={d}
-            insurers={insurers}
-            insurer={insurer}
-            onInsurer={setInsurer}
-            onChange={(details) => set({ details })}
-            onChoices={(choices) => set({ choices })}
-            onAadhaarChange={(aadhaar) => set({ aadhaar })}
-          />
-        )}
-      </div>
-      <footer className="cf-footer">
-        <div className="cf-footer-status">
-          {error ? (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          ) : (
-            <p className="muted">Stored encrypted on this computer.</p>
-          )}
-        </div>
-        <div className="cf-footer-actions">
-          <button type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button type="submit" className="primary" disabled={busy}>
-            {busy ? 'Saving…' : 'Save client'}
-          </button>
-        </div>
-      </footer>
-    </form>
+    <FormShell
+      label="Client details"
+      tabs={[
+        { id: 'basic', title: 'Basic details', hint: 'Client, members, quote details' },
+        {
+          id: 'additional',
+          title: 'Additional details',
+          hint: `Per insurer · ${filled} of ${insurers.length} filled`,
+        },
+      ]}
+      tab={tab}
+      onTab={setTab}
+      scrollKey={`${tab}-${insurer}`}
+      onSubmit={(e) => void submit(e)}
+      onCancel={props.onCancel}
+      busy={busy}
+      saveLabel="Save client"
+      error={error}
+    >
+      {tab === 'basic' && <BasicDetails draft={d} set={set} />}
+      {tab === 'additional' && (
+        <AdditionalDetails
+          draft={d}
+          insurers={insurers}
+          insurer={insurer}
+          onInsurer={setInsurer}
+          onChange={(details) => set({ details })}
+          onChoices={(choices) => set({ choices })}
+          onAadhaarChange={(aadhaar) => set({ aadhaar })}
+        />
+      )}
+    </FormShell>
   );
 }
 

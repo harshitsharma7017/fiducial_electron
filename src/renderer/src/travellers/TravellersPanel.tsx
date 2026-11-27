@@ -8,6 +8,8 @@
 import { Cake, MapPin, Pencil, Plane, Trash2, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { FormGrid, FormSection, Optional } from '../ui/FormSection';
+import { FormShell } from '../ui/FormShell';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { shortDate } from '../ui/format';
 import type { MenuEntry } from '../ui/Menu';
@@ -266,13 +268,8 @@ export function TravellersPanel(): React.JSX.Element | null {
   const toDelete = confirmDelete ? travellers?.find((t) => t.id === confirmDelete) : undefined;
   const items: RecordItem[] | null =
     travellers?.map((t) => {
+      // Quotes start from the card's Quote button; its menu only edits and deletes.
       const menu: MenuEntry[] = [
-        { heading: 'Quote with' },
-        ...TRAVEL_OPTIONS.map((o) => ({
-          label: `${o.insurer}: ${o.label}`,
-          onSelect: () => setQuote({ id: t.id, product: o.key }),
-        })),
-        'separator',
         { label: 'Edit travel client', icon: Pencil, onSelect: () => void edit(t) },
         {
           label: 'Delete travel client',
@@ -331,8 +328,10 @@ export function TravellersPanel(): React.JSX.Element | null {
       <Modal
         open={draft !== null}
         title={draft?.id ? 'Edit travel client' : 'New travel client'}
-        subtitle="Travel client"
+        subtitle={draft?.id && draft.name ? `Travel client · ${draft.name}` : 'Travel client'}
         onClose={() => setDraft(null)}
+        size="xl"
+        fill
       >
         {draft && (
           <TravellerForm
@@ -485,144 +484,170 @@ function TravellerForm(props: {
     }
   };
 
+  const tripGiven = !!(d.trip.departureDate || d.trip.returnDate || d.trip.destination);
   return (
-    <form className="login-form client-form" onSubmit={(e) => void submit(e)}>
-      <div className="form-tabs" role="tablist" aria-label="Travel client details">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'basic'}
-          onClick={() => setTab('basic')}
-        >
-          Basic details
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'additional'}
-          onClick={() => setTab('additional')}
-        >
-          Additional details
-        </button>
-      </div>
+    <FormShell
+      label="Travel client details"
+      tabs={[
+        { id: 'basic', title: 'Basic details', hint: 'Traveller, contact, personal details' },
+        {
+          id: 'additional',
+          title: 'Additional details',
+          hint: tripGiven ? 'Trip, passport, proposal · trip saved' : 'Trip, passport, proposal',
+        },
+      ]}
+      tab={tab}
+      onTab={setTab}
+      onSubmit={(e) => void submit(e)}
+      onCancel={props.onCancel}
+      busy={busy}
+      saveLabel="Save travel client"
+      error={error}
+    >
       {tab === 'basic' && (
-        <>
-          <label>
-            Name (as on the passport)
-            <input
-              value={d.name}
-              onChange={(e) => set({ name: e.target.value })}
-              maxLength={100}
-              required
-            />
-          </label>
-          <div className="member-row">
-            <label>
-              Mobile
-              <input
-                value={d.phone}
-                onChange={(e) => set({ phone: e.target.value })}
-                inputMode="tel"
-                maxLength={16}
-              />
-            </label>
-            <label>
-              E-mail
-              <input
-                type="email"
-                value={d.email}
-                onChange={(e) => set({ email: e.target.value })}
-                maxLength={254}
-              />
-            </label>
-          </div>
-          <div className="member-row">
-            <label>
-              Pincode
-              <input
-                value={d.pincode}
-                onChange={(e) => set({ pincode: e.target.value.replace(/\D/g, '') })}
-                inputMode="numeric"
-                maxLength={6}
-                required
-              />
-            </label>
-            <label>
-              Date of birth
-              <input
-                type="date"
-                value={d.dateOfBirth}
-                onChange={(e) => set({ dateOfBirth: e.target.value })}
-                required
-              />
-            </label>
-          </div>
-          <div className="member-row">
-            <label>
-              Gender
-              <select
-                value={d.gender}
-                onChange={(e) => set({ gender: e.target.value as Gender | '' })}
-              >
-                <option value="">Not given</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="transgender">Transgender</option>
-              </select>
-            </label>
-            <label>
-              Marital status
-              <select
-                value={d.maritalStatus}
-                onChange={(e) => set({ maritalStatus: e.target.value as MaritalStatus | '' })}
-              >
-                <option value="">Not given</option>
-                {(Object.keys(MARITAL_LABELS) as MaritalStatus[]).map((k) => (
-                  <option key={k} value={k}>
-                    {MARITAL_LABELS[k]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label>
-            Occupation (as the travel forms list it)
-            <select
-              value={d.occupation}
-              onChange={(e) => set({ occupation: e.target.value as TravelOccupation | '' })}
+        <div className="cf-stack">
+          <FormSection
+            title="Traveller"
+            description="The proposer and insured, as on the passport."
+          >
+            <FormGrid columns={4}>
+              <label>
+                Name (as on the passport)
+                <input
+                  value={d.name}
+                  onChange={(e) => set({ name: e.target.value })}
+                  maxLength={100}
+                  required
+                />
+              </label>
+              <label>
+                <span>
+                  Mobile <Optional />
+                </span>
+                <input
+                  value={d.phone}
+                  onChange={(e) => set({ phone: e.target.value })}
+                  inputMode="tel"
+                  maxLength={16}
+                />
+              </label>
+              <label>
+                <span>
+                  E-mail <Optional />
+                </span>
+                <input
+                  type="email"
+                  value={d.email}
+                  onChange={(e) => set({ email: e.target.value })}
+                  maxLength={254}
+                />
+              </label>
+              <label>
+                Pincode
+                <input
+                  value={d.pincode}
+                  onChange={(e) => set({ pincode: e.target.value.replace(/\D/g, '') })}
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                />
+              </label>
+            </FormGrid>
+          </FormSection>
+          <div className="cf-pair">
+            <FormSection
+              title="Personal details"
+              description="The forms price plans by age and ask these of the insured."
             >
-              <option value="">Not given</option>
-              {TRAVEL_OCCUPATION_LIST.map((o) => (
-                <option key={o} value={o}>
-                  {TRAVEL_OCCUPATION_LABELS[o]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Notes (optional)
-            <textarea
-              value={d.notes}
-              onChange={(e) => set({ notes: e.target.value })}
-              maxLength={1000}
-              rows={2}
-            />
-          </label>
-        </>
+              <FormGrid columns={2}>
+                <label>
+                  Date of birth
+                  <input
+                    type="date"
+                    value={d.dateOfBirth}
+                    onChange={(e) => set({ dateOfBirth: e.target.value })}
+                    required
+                  />
+                </label>
+                <label>
+                  Gender
+                  <select
+                    value={d.gender}
+                    onChange={(e) => set({ gender: e.target.value as Gender | '' })}
+                  >
+                    <option value="">Not given</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="transgender">Transgender</option>
+                  </select>
+                </label>
+                <label>
+                  Marital status
+                  <select
+                    value={d.maritalStatus}
+                    onChange={(e) => set({ maritalStatus: e.target.value as MaritalStatus | '' })}
+                  >
+                    <option value="">Not given</option>
+                    {(Object.keys(MARITAL_LABELS) as MaritalStatus[]).map((k) => (
+                      <option key={k} value={k}>
+                        {MARITAL_LABELS[k]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Occupation (as the travel forms list it)
+                  <select
+                    value={d.occupation}
+                    onChange={(e) => set({ occupation: e.target.value as TravelOccupation | '' })}
+                  >
+                    <option value="">Not given</option>
+                    {TRAVEL_OCCUPATION_LIST.map((o) => (
+                      <option key={o} value={o}>
+                        {TRAVEL_OCCUPATION_LABELS[o]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </FormGrid>
+            </FormSection>
+            <FormSection title="Notes">
+              <FormGrid columns={2}>
+                <label className="span-full">
+                  <span className="visually-hidden">Notes</span>
+                  <textarea
+                    aria-label="Notes"
+                    value={d.notes}
+                    onChange={(e) => set({ notes: e.target.value })}
+                    maxLength={1000}
+                    rows={3}
+                    placeholder="Optional"
+                  />
+                </label>
+              </FormGrid>
+            </FormSection>
+          </div>
+        </div>
       )}
       {tab === 'additional' && (
-        <>
+        <div className="cf-stack">
           <p className="insurer-note">
             The trip, passport and proposal details the travel quotes ask (United India&rsquo;s
             Overseas Travel and Overseas Mediclaim, HDFC ERGO, ICICI Lombard). Compare quotes asks
             only the plan: everything else comes from here. Stored encrypted.
           </p>
-          <fieldset>
-            <legend>Trip</legend>
-            <p className="insurer-note">
-              Where to and when: Compare quotes fills every insurer&rsquo;s travel form from it.
-            </p>
-            <div className="member-row">
+          <FormSection
+            title="Trip"
+            description="Where to and when: Compare quotes fills every insurer’s travel form from it."
+            actions={
+              tripGiven && (
+                <button type="button" className="btn-sm" onClick={() => set({ trip: EMPTY_TRIP })}>
+                  Clear the trip
+                </button>
+              )
+            }
+          >
+            <FormGrid columns={3}>
               <label>
                 Departure
                 <input
@@ -658,66 +683,59 @@ function TravellerForm(props: {
                   ))}
                 </select>
               </label>
-            </div>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={d.trip.student}
-                onChange={(e) => set({ trip: { ...d.trip, student: e.target.checked } })}
-              />
-              Travelling to study (ICICI&rsquo;s Student Medical Travel, United India&rsquo;s
-              Studies)
-            </label>
-            {(d.trip.departureDate || d.trip.returnDate || d.trip.destination) && (
-              <button type="button" onClick={() => set({ trip: EMPTY_TRIP })}>
-                Clear the trip
-              </button>
-            )}
-          </fieldset>
-          <fieldset>
-            <legend>Passport</legend>
-            <p className="insurer-note">
-              The passport number is kept apart, in the same secure vault as insurer passwords;
-              after saving, only its last four characters are shown.
-            </p>
-            <label>
-              Passport number
-              {pp.lastFour && !pp.remove && !pp.input ? (
-                <span className="insurer-mode">
-                  Saved, ending {pp.lastFour}{' '}
-                  <button type="button" onClick={() => setPassport({ remove: true })}>
-                    Remove
-                  </button>
-                </span>
-              ) : null}
-              {pp.remove && !pp.input ? (
-                <span className="insurer-mode">
-                  Will be removed when you save.{' '}
-                  <button type="button" onClick={() => setPassport({ remove: false })}>
-                    Keep it
-                  </button>
-                </span>
-              ) : null}
-              <input
-                value={pp.input}
-                onChange={(e) => setPassport({ input: e.target.value })}
-                maxLength={20}
-                autoComplete="off"
-                placeholder={
-                  pp.lastFour ? 'Type a new number to replace it' : 'for example Z1234567'
-                }
-              />
-            </label>
-            <label>
-              Issuing authority
-              <input
-                value={d.issuingAuthority}
-                onChange={(e) => set({ issuingAuthority: e.target.value })}
-                maxLength={80}
-                placeholder="for example Passport Office, Bengaluru"
-              />
-            </label>
-            <div className="member-row">
+              <label className="check span-full">
+                <input
+                  type="checkbox"
+                  checked={d.trip.student}
+                  onChange={(e) => set({ trip: { ...d.trip, student: e.target.checked } })}
+                />
+                Travelling to study (ICICI&rsquo;s Student Medical Travel, United India&rsquo;s
+                Studies)
+              </label>
+            </FormGrid>
+          </FormSection>
+          <FormSection
+            title="Passport"
+            description="The number is kept apart, in the same secure vault as insurer passwords; after saving, only its last four characters are shown."
+          >
+            <FormGrid columns={2}>
+              <label>
+                Passport number
+                {pp.lastFour && !pp.remove && !pp.input ? (
+                  <span className="insurer-mode">
+                    Saved, ending {pp.lastFour}{' '}
+                    <button type="button" onClick={() => setPassport({ remove: true })}>
+                      Remove
+                    </button>
+                  </span>
+                ) : null}
+                {pp.remove && !pp.input ? (
+                  <span className="insurer-mode">
+                    Will be removed when you save.{' '}
+                    <button type="button" onClick={() => setPassport({ remove: false })}>
+                      Keep it
+                    </button>
+                  </span>
+                ) : null}
+                <input
+                  value={pp.input}
+                  onChange={(e) => setPassport({ input: e.target.value })}
+                  maxLength={20}
+                  autoComplete="off"
+                  placeholder={
+                    pp.lastFour ? 'Type a new number to replace it' : 'for example Z1234567'
+                  }
+                />
+              </label>
+              <label>
+                Issuing authority
+                <input
+                  value={d.issuingAuthority}
+                  onChange={(e) => set({ issuingAuthority: e.target.value })}
+                  maxLength={80}
+                  placeholder="for example Passport Office, Bengaluru"
+                />
+              </label>
               <label>
                 Issue date
                 <input
@@ -734,8 +752,8 @@ function TravellerForm(props: {
                   onChange={(e) => set({ expiryDate: e.target.value })}
                 />
               </label>
-            </div>
-          </fieldset>
+            </FormGrid>
+          </FormSection>
           <ProposalFields
             value={d.proposal}
             onChange={(proposal) => set({ proposal })}
@@ -743,21 +761,8 @@ function TravellerForm(props: {
             onAadhaarChange={(aadhaar) => set({ aadhaar })}
             occupation={false}
           />
-        </>
+        </div>
       )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="insurer-actions">
-        <button type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Save travel client'}
-        </button>
-        <button type="button" onClick={props.onCancel}>
-          Cancel
-        </button>
-      </div>
-    </form>
+    </FormShell>
   );
 }

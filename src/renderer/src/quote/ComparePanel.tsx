@@ -6,7 +6,18 @@
 // presses Stop & make PDF on its card; the app reads the premium that page shows then, saves the
 // insurer's PDF, and makes the comparison PDF again from every insurer saved so far. Nothing is
 // ever submitted.
-import { ExternalLink, FileDown, Square } from 'lucide-react';
+import {
+  ChevronDown,
+  CircleCheck,
+  ExternalLink,
+  FileDown,
+  FileText,
+  Loader2,
+  Play,
+  RefreshCw,
+  Square,
+  TriangleAlert,
+} from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   hdfcMstFromChoices,
@@ -186,13 +197,15 @@ function buildRun(
 /** A run that ended (or never started) and why. */
 const SETTLED: QuoteProgressView['state'][] = ['ready', 'refused', 'failed', 'cancelled'];
 
-const STATE_NAMES: Record<QuoteProgressView['state'], string> = {
-  running: 'Filling',
-  'handed-over': 'Filled: check it',
-  ready: 'PDF saved',
-  refused: 'Not started',
-  failed: 'Stopped',
-  cancelled: 'Discarded',
+/** How a run's state is shown: its name and tone (the card's edge and badge follow it). */
+const STATUS: Record<QuoteProgressView['state'] | 'waiting', { label: string; tone: string }> = {
+  waiting: { label: 'Starting', tone: 'info' },
+  running: { label: 'Running', tone: 'info' },
+  'handed-over': { label: 'Needs your check', tone: 'warning' },
+  ready: { label: 'PDF saved', tone: 'success' },
+  refused: { label: 'Not started', tone: 'neutral' },
+  failed: { label: 'Failed', tone: 'danger' },
+  cancelled: { label: 'Stopped', tone: 'stopped' },
 };
 
 interface Started {
@@ -246,6 +259,8 @@ export function CompareRunner(props: {
   >(null);
   const [amounts, setAmounts] = useState<Partial<Record<string, string>>>({});
   const [stopping, setStopping] = useState<Partial<Record<string, boolean>>>({});
+  /** Each result's issues, shown or folded away (each insurer's on its own). */
+  const [expanded, setExpanded] = useState<Partial<Record<string, boolean>>>({});
 
   // The insurers' progress, while this screen is open (a long poll: answers when something moves).
   useEffect(() => {
@@ -346,6 +361,7 @@ export function CompareRunner(props: {
     setComparison(null);
     setComparedKey('');
     setAmounts({});
+    setExpanded({});
     setBatch({ at, started });
     // All at the same time; each insurer's result comes in through its progress.
     for (const [i, request] of requests) {
@@ -396,205 +412,363 @@ export function CompareRunner(props: {
   };
 
   const anyPicked = rows.some((r) => picked[r.id] && !r.blocked);
+  const pickedCount = rows.filter((r) => picked[r.id] && !r.blocked).length;
   return (
-    <div className="quote-panel">
-      {props.intro}
-      {props.blocked && <p className="error">{props.blocked}</p>}
+    <div className="quote-panel compare-runner">
+      {props.intro && <div className="compare-intro">{props.intro}</div>}
+      {props.blocked && (
+        <p className="error" role="alert">
+          {props.blocked}
+        </p>
+      )}
       {props.details}
-      <fieldset className="compare-pick" disabled={filling || !!props.blocked}>
-        <legend>Insurers</legend>
-        {rows.map((row) => {
-          const i = row.id;
-          const missing = picked[i] && row.missing ? row.missing(productOf(i)) : [];
-          const options = productsFor(i);
-          return (
-            <div key={i} className="compare-pick-row">
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={!!picked[i] && !row.blocked}
-                  disabled={!!row.blocked}
-                  onChange={(e) => setPicked((p) => ({ ...p, [i]: e.target.checked }))}
-                />
-                {row.name}
-              </label>
-              {options.length > 1 ? (
-                <select
-                  aria-label={`${row.name} product`}
-                  value={productOf(i)}
-                  disabled={!picked[i]}
-                  onChange={(e) => setProducts((p) => ({ ...p, [i]: e.target.value }))}
-                >
-                  {options.map(([key, name]) => (
-                    <option key={key} value={key}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="compare-pick-product">{options[0]?.[1] ?? ''}</span>
-              )}
-              {row.blocked && <span className="compare-hint">{row.blocked}</span>}
-              {missing.length > 0 && (
-                <span className="compare-hint">
-                  Needs {missing.join('; ')}. It will be skipped until then.
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </fieldset>
-      <div className="insurer-actions">
-        <button
-          type="button"
-          className="primary"
-          disabled={filling || !!props.blocked || !anyPicked}
-          onClick={() => void start()}
-        >
-          {filling
-            ? 'Filling…'
-            : `Run ${rows.filter((r) => picked[r.id] && !r.blocked).length || ''} selected`}
-        </button>
-        {filling && (
-          <button type="button" onClick={cancelAll}>
-            <Square size={14} aria-hidden="true" /> Cancel all
-          </button>
-        )}
-      </div>
 
-      {batch && (
-        <div className="compare-cards">
-          {startedIds.map((i) => {
-            const s = batch.started[i]!;
-            const p = progressFor(i);
-            const state: QuoteProgressView['state'] | 'waiting' = s.error
-              ? 'refused'
-              : (p?.state ?? 'waiting');
-            const productName = productsFor(i).find(([k]) => k === s.product)?.[1] ?? s.product;
-            const kept = p?.state === 'handed-over';
+      <section className="compare-section" aria-labelledby="compare-insurers-title">
+        <header className="compare-section-head">
+          <div>
+            <h3 id="compare-insurers-title">Insurers</h3>
+            <p>Choose the insurers to quote, and each one&rsquo;s product or plan.</p>
+          </div>
+          <span className="compare-count">
+            {pickedCount} of {rows.filter((r) => !r.blocked).length} selected
+          </span>
+        </header>
+        <fieldset className="compare-grid" disabled={filling || !!props.blocked}>
+          <legend className="visually-hidden">Insurers</legend>
+          {rows.map((row) => {
+            const i = row.id;
+            const on = !!picked[i] && !row.blocked;
+            const missing = picked[i] && row.missing ? row.missing(productOf(i)) : [];
+            const options = productsFor(i);
             return (
-              <section key={i} className={`compare-card compare-${state}`} aria-live="polite">
-                <header>
-                  <InsurerAvatar name={nameOf(i)} />
-                  <div>
-                    <strong>{nameOf(i)}</strong>
-                    <span>{productName}</span>
-                  </div>
-                  <span className="compare-state">
-                    {state === 'waiting' ? 'Starting' : STATE_NAMES[state]}
-                  </span>
-                </header>
-                {state === 'running' && p?.step && <p className="compare-step">{p.step}…</p>}
-                {s.error && <p>{s.error}</p>}
-                {!s.error && p && p.state !== 'running' && p.message && <p>{p.message}</p>}
-                {p?.premium && (
-                  <p className="premium">
-                    {kept ? `Shown now: ${p.premium.label}` : p.premium.label}{' '}
-                    <strong>₹{p.premium.amount}</strong>
-                  </p>
-                )}
-                {kept && p.toDo && p.toDo.length > 0 && (
-                  <>
-                    <p>
-                      <strong>Still to do in the insurer&rsquo;s tab:</strong>
-                    </p>
-                    <ul>
-                      {p.toDo.map((t) => (
-                        <li key={t}>{t}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                {kept && (
-                  <p className="compare-hint">
-                    Check the form in its tab and change anything you need, then press Stop &amp;
-                    make PDF: the premium shown then is saved, with what you changed.
-                  </p>
-                )}
-                <div className="insurer-actions">
-                  {kept && (
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={!!stopping[i]}
-                      onClick={() => void stopAndPdf(i)}
-                    >
-                      <Square size={14} aria-hidden="true" />{' '}
-                      {stopping[i] ? 'Reading the premium…' : 'Stop & make PDF'}
-                    </button>
-                  )}
-                  {(state === 'running' || kept || state === 'failed') && (
-                    <button type="button" onClick={() => void showInsurerTab(i)}>
-                      <ExternalLink size={14} aria-hidden="true" /> Open tab
-                    </button>
-                  )}
-                  {(state === 'running' || kept) && (
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => void window.fqf.quotes.cancel(i).catch(() => null)}
-                    >
-                      {state === 'running' ? 'Cancel' : 'Discard'}
-                    </button>
-                  )}
-                  {p?.pdf && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void openQuotePdf(p.pdf!.name).then(
-                          (ok) => ok || toast('The PDF could not be opened.'),
-                        )
-                      }
-                    >
-                      <FileDown size={14} aria-hidden="true" /> Open PDF
-                    </button>
-                  )}
-                </div>
-                {kept && (
-                  <form
-                    className="compare-amount"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const amount = amounts[i]?.trim();
-                      if (amount) void stopAndPdf(i, amount);
-                    }}
+              <div
+                key={i}
+                className="compare-option"
+                data-selected={on}
+                data-blocked={!!row.blocked}
+              >
+                <label className="compare-option-head">
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    disabled={!!row.blocked}
+                    onChange={(e) => setPicked((p) => ({ ...p, [i]: e.target.checked }))}
+                  />
+                  <InsurerAvatar name={row.name} />
+                  <span className="compare-option-name">{row.name}</span>
+                </label>
+                {options.length > 1 ? (
+                  <select
+                    aria-label={`${row.name} product`}
+                    value={productOf(i)}
+                    disabled={!on}
+                    onChange={(e) => setProducts((p) => ({ ...p, [i]: e.target.value }))}
                   >
-                    <label>
-                      Or type the premium shown
-                      <input
-                        inputMode="decimal"
-                        placeholder="₹"
-                        value={amounts[i] ?? ''}
-                        onChange={(e) => setAmounts((a) => ({ ...a, [i]: e.target.value }))}
-                      />
-                    </label>
-                    <button type="submit" disabled={!amounts[i]?.trim() || !!stopping[i]}>
-                      Save PDF
-                    </button>
-                  </form>
+                    {options.map(([key, name]) => (
+                      <option key={key} value={key}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="compare-option-product">{options[0]?.[1] ?? '—'}</span>
                 )}
-              </section>
+                {row.blocked && <p className="compare-option-note">{row.blocked}</p>}
+                {missing.length > 0 && (
+                  <p className="compare-option-note" data-tone="warning">
+                    <TriangleAlert size={13} aria-hidden="true" />
+                    <span>Needs {missing.join('; ')}. It will be skipped until then.</span>
+                  </p>
+                )}
+              </div>
             );
           })}
+        </fieldset>
+        <div className="compare-run-bar">
+          <button
+            type="button"
+            className="primary"
+            disabled={filling || !!props.blocked || !anyPicked}
+            onClick={() => void start()}
+          >
+            {filling ? (
+              <>
+                <Loader2 size={15} className="spin" aria-hidden="true" /> Filling…
+              </>
+            ) : (
+              <>
+                <Play size={15} aria-hidden="true" /> Run {pickedCount || ''} selected
+              </>
+            )}
+          </button>
+          {filling && (
+            <button type="button" onClick={cancelAll}>
+              <Square size={14} aria-hidden="true" /> Cancel all
+            </button>
+          )}
+          {!anyPicked && !filling && !props.blocked && (
+            <span className="compare-run-hint">Select at least one insurer to run.</span>
+          )}
         </div>
+      </section>
+
+      {batch && (
+        <section className="compare-section" aria-labelledby="compare-results-title">
+          <header className="compare-section-head">
+            <div>
+              <h3 id="compare-results-title">Results</h3>
+              <p>Each insurer&rsquo;s form, filled in its own tab.</p>
+            </div>
+          </header>
+          <div className="compare-grid">
+            {startedIds.map((i) => {
+              const s = batch.started[i]!;
+              const p = progressFor(i);
+              const state: QuoteProgressView['state'] | 'waiting' = s.error
+                ? 'refused'
+                : (p?.state ?? 'waiting');
+              const status = STATUS[state];
+              const productName = productsFor(i).find(([k]) => k === s.product)?.[1] ?? s.product;
+              const kept = p?.state === 'handed-over';
+              // The issues, only as the run reported them: why it could not start or stopped, and
+              // what is left to fill by hand.
+              const reason =
+                s.error ??
+                (p && (p.state === 'failed' || p.state === 'refused') ? p.message : null);
+              const toDo = kept ? (p.toDo ?? []) : [];
+              const issues = (reason ? 1 : 0) + toDo.length;
+              const summary = !s.error && p && kept ? p.message : null;
+              const shown = !!expanded[i];
+              const settledOk = state === 'ready' || kept;
+              return (
+                <article
+                  key={i}
+                  className="compare-result"
+                  data-tone={status.tone}
+                  aria-live="polite"
+                >
+                  <header className="compare-result-head">
+                    <InsurerAvatar name={nameOf(i)} />
+                    <div className="compare-result-title">
+                      <strong>{nameOf(i)}</strong>
+                      <span title={productName}>{productName}</span>
+                    </div>
+                    <span className={`status status-${status.tone}`}>
+                      {state === 'running' || state === 'waiting' ? (
+                        <Loader2 size={12} className="spin" aria-hidden="true" />
+                      ) : (
+                        <span className="status-dot" aria-hidden="true" />
+                      )}
+                      {status.label}
+                    </span>
+                  </header>
+                  {(state === 'running' || state === 'waiting') && (
+                    <p className="compare-result-line">
+                      {p?.step ? `${p.step}…` : 'Opening the insurer’s form…'}
+                    </p>
+                  )}
+                  {state === 'cancelled' && p?.message && (
+                    <p className="compare-result-line">{p.message}</p>
+                  )}
+                  {p?.premium && (
+                    <p className="compare-result-premium">
+                      <span>{kept ? `Shown now: ${p.premium.label}` : p.premium.label}</span>
+                      <strong>₹{p.premium.amount}</strong>
+                    </p>
+                  )}
+                  {(issues > 0 || summary || settledOk) && (
+                    <div className="compare-issues">
+                      {issues > 0 || summary ? (
+                        <button
+                          type="button"
+                          className="compare-issues-toggle"
+                          aria-expanded={shown}
+                          aria-controls={`compare-issues-${i}`}
+                          onClick={() => setExpanded((x) => ({ ...x, [i]: !x[i] }))}
+                        >
+                          <TriangleAlert size={14} aria-hidden="true" />
+                          {issues > 0
+                            ? `${issues} issue${issues > 1 ? 's' : ''}`
+                            : 'What the run did'}
+                          <span className="compare-issues-action">
+                            {shown ? 'Hide details' : 'View details'}
+                            <ChevronDown size={14} aria-hidden="true" data-open={shown} />
+                          </span>
+                        </button>
+                      ) : (
+                        <p className="compare-issues-ok">
+                          <CircleCheck size={14} aria-hidden="true" /> No issues
+                        </p>
+                      )}
+                      {shown && (
+                        <div className="compare-issues-body" id={`compare-issues-${i}`}>
+                          {reason && <p className="compare-issues-reason">{reason}</p>}
+                          {summary && <p>{summary}</p>}
+                          {toDo.length > 0 && (
+                            <>
+                              <p className="compare-issues-label">
+                                Still to do in the insurer&rsquo;s tab
+                              </p>
+                              <ol>
+                                {toDo.map((t) => (
+                                  <li key={t}>{t}</li>
+                                ))}
+                              </ol>
+                            </>
+                          )}
+                          {kept && (
+                            <p className="compare-issues-hint">
+                              Check the form in its tab and change anything you need, then press
+                              Stop &amp; make PDF: the premium shown then is saved, with what you
+                              changed.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="compare-result-actions">
+                    {kept && (
+                      <button
+                        type="button"
+                        className="primary btn-sm"
+                        disabled={!!stopping[i]}
+                        onClick={() => void stopAndPdf(i)}
+                      >
+                        {stopping[i] ? (
+                          <Loader2 size={14} className="spin" aria-hidden="true" />
+                        ) : (
+                          <Square size={14} aria-hidden="true" />
+                        )}
+                        {stopping[i] ? 'Reading the premium…' : 'Stop & make PDF'}
+                      </button>
+                    )}
+                    {(state === 'running' || kept || state === 'failed') && (
+                      <button
+                        type="button"
+                        className="btn-sm"
+                        onClick={() => void showInsurerTab(i)}
+                      >
+                        <ExternalLink size={14} aria-hidden="true" /> Open tab
+                      </button>
+                    )}
+                    {(state === 'running' || kept) && (
+                      <button
+                        type="button"
+                        className="ghost btn-sm"
+                        onClick={() => void window.fqf.quotes.cancel(i).catch(() => null)}
+                      >
+                        {state === 'running' ? 'Cancel' : 'Discard'}
+                      </button>
+                    )}
+                    {p?.pdf && (
+                      <button
+                        type="button"
+                        className="btn-sm"
+                        onClick={() =>
+                          void openQuotePdf(p.pdf!.name).then(
+                            (ok) => ok || toast('The PDF could not be opened.'),
+                          )
+                        }
+                      >
+                        <FileDown size={14} aria-hidden="true" /> Open PDF
+                      </button>
+                    )}
+                  </div>
+                  {kept && (
+                    <form
+                      className="compare-amount"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const amount = amounts[i]?.trim();
+                        if (amount) void stopAndPdf(i, amount);
+                      }}
+                    >
+                      <label>
+                        Or type the premium shown
+                        <input
+                          inputMode="decimal"
+                          placeholder="₹"
+                          value={amounts[i] ?? ''}
+                          onChange={(e) => setAmounts((a) => ({ ...a, [i]: e.target.value }))}
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        className="btn-sm"
+                        disabled={!amounts[i]?.trim() || !!stopping[i]}
+                      >
+                        Save PDF
+                      </button>
+                    </form>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {batch && (
-        <div role="status" className="compare-summary">
-          <p>
-            <strong>Comparison PDF.</strong>{' '}
-            {comparison?.phase === 'making'
-              ? 'Making it…'
-              : comparison?.phase === 'done'
-                ? `Saved in Downloads: ${comparison.pdf} (${comparison.insurers} insurer${comparison.insurers > 1 ? 's' : ''}).`
-                : comparison?.phase === 'error'
-                  ? comparison.message
-                  : `Made each time you press Stop & make PDF on an insurer (${withPdf.length} of ${startedIds.length} saved so far).`}
-          </p>
-          <div className="insurer-actions">
+        <section
+          className="compare-section compare-report"
+          aria-labelledby="compare-report-title"
+          role="status"
+        >
+          <div className="compare-report-main">
+            <span className="compare-report-icon" aria-hidden="true">
+              <FileText size={20} />
+            </span>
+            <div>
+              <h3 id="compare-report-title">Comparison PDF</h3>
+              <p>
+                <strong>
+                  {withPdf.length} of {startedIds.length}
+                </strong>{' '}
+                insurer PDF{startedIds.length > 1 ? 's' : ''} saved.{' '}
+                {comparison?.phase === 'making'
+                  ? 'Making the comparison…'
+                  : comparison?.phase === 'done'
+                    ? `Saved in Downloads: ${comparison.pdf} (${comparison.insurers} insurer${comparison.insurers > 1 ? 's' : ''}).`
+                    : comparison?.phase === 'error'
+                      ? comparison.message
+                      : 'It is made each time you press Stop & make PDF on an insurer.'}
+              </p>
+              <div
+                className="compare-report-bar"
+                role="progressbar"
+                aria-label="Insurer PDFs saved"
+                aria-valuemin={0}
+                aria-valuemax={startedIds.length}
+                aria-valuenow={withPdf.length}
+              >
+                <span
+                  style={{
+                    width: `${startedIds.length ? (withPdf.length / startedIds.length) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="compare-report-actions">
+            <button
+              type="button"
+              className={comparison?.phase === 'done' ? 'btn-sm' : 'primary btn-sm'}
+              disabled={withPdf.length === 0 || comparison?.phase === 'making'}
+              title={withPdf.length === 0 ? 'Save at least one insurer’s PDF first' : undefined}
+              onClick={() => void compare()}
+            >
+              {comparison?.phase === 'making' ? (
+                <Loader2 size={14} className="spin" aria-hidden="true" />
+              ) : (
+                <RefreshCw size={14} aria-hidden="true" />
+              )}
+              {comparison?.phase === 'done' ? 'Make it again' : 'Make comparison PDF'}
+            </button>
             {comparison?.phase === 'done' && (
               <button
                 type="button"
+                className="primary btn-sm"
                 onClick={() =>
                   void openQuotePdf(comparison.pdf).then(
                     (ok) => ok || toast('The PDF could not be opened.'),
@@ -604,15 +778,8 @@ export function CompareRunner(props: {
                 <FileDown size={14} aria-hidden="true" /> Open comparison
               </button>
             )}
-            <button
-              type="button"
-              disabled={withPdf.length === 0 || comparison?.phase === 'making'}
-              onClick={() => void compare()}
-            >
-              Make it again
-            </button>
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

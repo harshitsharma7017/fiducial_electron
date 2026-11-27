@@ -1,19 +1,12 @@
 // Presentation helpers shared by the dashboard and the insurer cards: a monogram tile for each
 // insurer, and one place that decides how a portal's connection is described.
-import type { InsurerPortalView } from '../../../shared/ipc/contract';
+import type { PortalStatus } from '../../../shared/insurers/portal-status';
 
-export type StatusTone = 'success' | 'info' | 'neutral';
-
-export interface PortalStatus {
-  tone: StatusTone;
-  label: string;
-}
-
-export function portalStatus(portal: InsurerPortalView): PortalStatus {
-  if (portal.sessionEndsAt) return { tone: 'success', label: 'Signed in' };
-  if (portal.windowOpen) return { tone: 'info', label: 'Portal open' };
-  return { tone: 'neutral', label: 'Not connected' };
-}
+export {
+  portalStatus,
+  type PortalStatus,
+  type StatusTone,
+} from '../../../shared/insurers/portal-status';
 
 /** Time a session ends, with "tomorrow" when it is not today. */
 export function endTime(iso: string): string {

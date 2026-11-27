@@ -6,6 +6,7 @@
 import { Car, Pencil, Tag, Trash2, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { FormShell } from '../ui/FormShell';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { RecordPage, type RecordItem } from '../ui/RecordPage';
 import { toast } from '../ui/toast';
@@ -107,9 +108,8 @@ export function VehiclesPanel(): React.JSX.Element | null {
           : { label: 'Pre-owned', tone: 'neutral' as const },
       updatedAt: v.updatedAt,
       primary: { label: 'Motor quote', icon: Zap, onClick: () => setQuoting(v.id) },
+      // The motor quote starts from the card's button; its menu only edits and deletes.
       menu: [
-        { label: 'Motor quote', icon: Zap, onSelect: () => setQuoting(v.id) },
-        'separator',
         { label: 'Edit vehicle', icon: Pencil, onSelect: () => void edit(v) },
         {
           label: 'Delete vehicle',
@@ -164,8 +164,10 @@ export function VehiclesPanel(): React.JSX.Element | null {
       <Modal
         open={draft !== null}
         title={draft?.id ? 'Edit vehicle' : 'New vehicle'}
-        subtitle="Vehicle"
+        subtitle={draft?.id && draft.name ? `Vehicle · ${draft.name}` : 'Vehicle'}
         onClose={() => setDraft(null)}
+        size="xl"
+        fill
       >
         {draft && (
           <VehicleForm
@@ -259,68 +261,55 @@ function VehicleForm(props: {
     }
   };
 
+  const patch = (change: Partial<Draft['vehicle']>) =>
+    onChange({ ...d, vehicle: { ...d.vehicle, ...change } });
   return (
-    <form className="login-form client-form" onSubmit={(e) => void submit(e)}>
-      <div className="form-tabs" role="tablist" aria-label="Vehicle details">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'basic'}
-          onClick={() => setTab('basic')}
-        >
-          Basic details
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'additional'}
-          onClick={() => setTab('additional')}
-        >
-          Additional details
-        </button>
-      </div>
+    <FormShell
+      label="Vehicle details"
+      tabs={[
+        { id: 'basic', title: 'Basic details', hint: 'Vehicle, value, previous policy' },
+        {
+          id: 'additional',
+          title: 'Additional details',
+          hint: d.vehicle.quote.registrationNumber.trim()
+            ? `Quote details · ${d.vehicle.quote.registrationNumber.trim().toUpperCase()}`
+            : 'Quote details, owner',
+        },
+      ]}
+      tab={tab}
+      onTab={setTab}
+      onSubmit={(e) => void submit(e)}
+      onCancel={props.onCancel}
+      busy={busy}
+      saveLabel="Save vehicle"
+      error={error}
+    >
       {tab === 'basic' && (
-        <>
-          <label>
-            Name (for you to find it, for example &ldquo;Swift &ndash; Ramesh&rdquo;)
-            <input
-              value={d.name}
-              onChange={(e) => onChange({ ...d, name: e.target.value })}
-              maxLength={100}
-              required
-            />
-          </label>
-          <VehicleFields value={d.vehicle} onChange={(vehicle) => onChange({ ...d, vehicle })} />
-        </>
+        <div className="cf-stack">
+          <VehicleFields
+            value={d.vehicle}
+            onChange={(vehicle) => onChange({ ...d, vehicle })}
+            lead={
+              <label className="span-2">
+                Name (for you to find it, for example &ldquo;Swift &ndash; Ramesh&rdquo;)
+                <input
+                  value={d.name}
+                  onChange={(e) => onChange({ ...d, name: e.target.value })}
+                  maxLength={100}
+                  required
+                />
+              </label>
+            }
+          />
+        </div>
       )}
       {tab === 'additional' && (
-        <>
-          <VehicleQuoteDetailsFields
-            value={d.vehicle}
-            onChange={(patch) => onChange({ ...d, vehicle: { ...d.vehicle, ...patch } })}
-          />
-          {asksNewIndiaDetails(d.vehicle) && (
-            <NewIndiaFields
-              value={d.vehicle}
-              onChange={(patch) => onChange({ ...d, vehicle: { ...d.vehicle, ...patch } })}
-            />
-          )}
-        </>
+        <div className="cf-stack">
+          <VehicleQuoteDetailsFields value={d.vehicle} onChange={patch} />
+          {asksNewIndiaDetails(d.vehicle) && <NewIndiaFields value={d.vehicle} onChange={patch} />}
+        </div>
       )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="insurer-actions">
-        <button type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Save vehicle'}
-        </button>
-        <button type="button" onClick={props.onCancel}>
-          Cancel
-        </button>
-      </div>
-    </form>
+    </FormShell>
   );
 }
 

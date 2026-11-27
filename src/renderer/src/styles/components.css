@@ -851,67 +851,10 @@ button.kpi-card:hover {
 /* Insurer portal cards and older list rows                                                    */
 /* ------------------------------------------------------------------------------------------ */
 
-.insurer-list {
-  display: grid;
-  gap: var(--space-3);
-  margin: var(--space-4) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.insurer-cards {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
-}
-
-.insurer-row {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-  transition:
-    border-color var(--dur) var(--ease),
-    box-shadow var(--dur) var(--ease);
-}
-
-.insurer-row:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
-}
-
-.insurer-row[data-menu-open='true'] {
-  z-index: 5;
-}
-
-.insurer-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.insurer-identity {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
 .insurer-mode {
   display: block;
   font-size: var(--text-xs);
   color: var(--text-2);
-}
-
-.insurer-badges {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
 }
 
 .insurer-actions {
@@ -919,11 +862,6 @@ button.kpi-card:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-}
-
-.insurer-card > .insurer-actions {
-  margin-top: auto;
-  padding-top: var(--space-4);
 }
 
 .insurer-note {
@@ -2062,159 +2000,578 @@ label.check input {
 }
 
 /* Compare insurers (quote/ComparePanel.tsx): the insurers chosen, then a card per insurer. */
-.compare-pick {
+/* Compare quotes (quote/ComparePage.tsx, quote/ComparePanel.tsx): what to quote for, the insurers
+   in a two-column grid of cards, their results in the same grid (each one's issues folded away
+   until asked for), and the comparison PDF. */
+.compare-page {
   display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
+  gap: var(--space-5);
+}
+
+.compare-section {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
 }
 
-.compare-pick legend {
-  padding: 0 var(--space-1);
-  font-size: var(--text-sm);
-  color: var(--text-2);
-}
-
-.compare-pick-row {
-  display: grid;
-  grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
-  gap: var(--space-1) var(--space-3);
-  align-items: center;
-}
-
-.compare-pick-row .compare-hint {
-  grid-column: 2;
-}
-
-.compare-pick-product {
-  font-size: var(--text-sm);
-  color: var(--text-2);
-}
-
-.compare-hint {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--text-2);
-}
-
-.compare-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+.compare-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: var(--space-3);
 }
 
-.compare-card {
-  display: grid;
-  align-content: start;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+.compare-section-head h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.compare-section-head p {
+  margin: 2px 0 0;
   font-size: var(--text-sm);
+  color: var(--text-2);
+}
+
+.compare-count {
+  padding: 4px var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--primary-text);
+  background: var(--primary-soft);
+  border-radius: var(--radius-pill);
+}
+
+/* Quote for: the kind of client, then which one. */
+.compare-subject {
+  grid-template-columns: auto minmax(0, 28rem);
+  align-items: end;
+  justify-content: start;
+  gap: var(--space-4) var(--space-6);
+}
+
+.compare-subject-kind {
+  display: grid;
+  gap: 6px;
+}
+
+.compare-subject-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text);
+}
+
+.compare-kinds {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
   background: var(--surface-muted);
   border: 1px solid var(--border);
-  border-top: 3px solid var(--border);
   border-radius: var(--radius-md);
 }
 
-.compare-card p,
-.compare-card ul {
-  margin: 0;
+.modal-backdrop .compare-kinds button,
+.app .compare-kinds button {
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
-.compare-card ul {
-  padding-left: var(--space-5);
+.app .compare-kinds button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-hover);
+  border-color: transparent;
 }
 
-.compare-card header {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
+.app .compare-kinds button[aria-selected='true'],
+.app .compare-kinds button[aria-selected='true']:hover:not(:disabled) {
+  color: var(--primary-text);
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow-xs);
 }
 
-.compare-card header > div {
+.compare-client {
   display: grid;
-  flex: 1;
+  gap: 6px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text);
+}
+
+.compare-choose {
+  margin: 0;
+  padding: var(--space-5);
+  font-size: var(--text-sm);
+  text-align: center;
+  color: var(--text-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+/* The instructions, and a saved trip or vehicle's details, as one callout. */
+.compare-runner {
+  gap: var(--space-5);
+}
+
+.quote-panel .compare-intro .insurer-note,
+.compare-runner > .insurer-note {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--text-2);
+  background: var(--primary-soft);
+  border: 0;
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+}
+
+.compare-intro .insurer-note strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--text-md);
+  color: var(--text);
+}
+
+.compare-runner > .insurer-note {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+}
+
+/* Two columns of cards (one on a narrow window). */
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* An insurer to choose. */
+.compare-option {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+
+.compare-option:hover {
+  border-color: var(--border-strong);
+}
+
+.compare-option[data-selected='true'] {
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.compare-option[data-blocked='true'] {
+  background: var(--surface-muted);
+}
+
+.compare-option[data-blocked='true'] .compare-option-head {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.compare-option-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.compare-option-name {
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.compare-option-product {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-md);
+  padding: 0 11px;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.compare-option-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  color: var(--text-2);
+}
+
+.compare-option-note[data-tone='warning'] {
+  color: var(--warning);
+}
+
+.compare-option-note svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.compare-run-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.compare-run-hint {
+  font-size: var(--text-sm);
+  color: var(--text-3);
+}
+
+/* A result: its edge and badge follow its state. */
+.compare-result {
+  --tone: var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--tone);
+  border-radius: var(--radius-md);
+}
+
+.compare-result[data-tone='info'] {
+  --tone: var(--primary);
+}
+
+.compare-result[data-tone='success'] {
+  --tone: var(--success);
+}
+
+.compare-result[data-tone='warning'] {
+  --tone: var(--warning);
+}
+
+.compare-result[data-tone='danger'] {
+  --tone: var(--danger);
+}
+
+.compare-result[data-tone='stopped'] {
+  --tone: #c2550c;
+}
+
+.status-stopped {
+  --tone: #c2550c;
+  --tone-soft: rgba(234, 88, 12, 0.11);
+}
+
+.compare-result-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.compare-result-title {
+  display: grid;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.compare-card header > div span {
+.compare-result-title strong {
+  font-size: var(--text-md);
+  color: var(--text);
+}
+
+.compare-result-title span {
+  overflow: hidden;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--text-2);
 }
 
-.compare-state {
-  font-weight: var(--weight-bold);
+.compare-result-head .status {
+  flex: none;
+}
+
+.compare-result-line {
+  margin: 0;
+  overflow-wrap: anywhere;
   color: var(--text-2);
 }
 
-.compare-running {
-  border-top-color: var(--primary);
+.compare-result-premium {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-2);
+  background: var(--surface-muted);
+  border-radius: var(--radius-sm);
 }
 
-.compare-handed-over {
-  border-top-color: var(--warning, var(--primary));
+.compare-result-premium span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.compare-handed-over .compare-state {
-  color: var(--warning, var(--primary));
+.compare-result-premium strong {
+  font-size: var(--text-lg);
+  color: var(--text);
 }
 
-.compare-ready {
-  border-top-color: var(--success);
+/* Issues: a count, folded away until asked for. */
+.compare-issues {
+  display: grid;
+  gap: var(--space-2);
 }
 
-.compare-ready .compare-state {
+.app .compare-issues-toggle {
+  justify-content: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--warning);
+  background: var(--warning-soft);
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+.app .compare-issues-toggle:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  border-color: transparent;
+}
+
+.compare-issues-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  font-size: var(--text-xs);
+}
+
+.compare-issues-action svg {
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.compare-issues-action svg[data-open='true'] {
+  transform: rotate(180deg);
+}
+
+.compare-issues-ok {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-sm);
   color: var(--success);
 }
 
-.compare-failed,
-.compare-refused {
-  border-top-color: var(--danger, var(--border));
-}
-
-.compare-step {
+.compare-issues-body {
+  display: grid;
+  gap: var(--space-2);
+  max-height: 16rem;
+  padding: var(--space-3);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
   color: var(--text-2);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
 }
 
-.compare-card .premium {
+.compare-issues-body p,
+.compare-issues-body ol {
   margin: 0;
 }
 
-.compare-card .premium strong {
-  font-size: var(--text-xl, var(--text-md));
+.compare-issues-body ol {
+  display: grid;
+  gap: 4px;
+  padding-left: var(--space-5);
+  color: var(--text);
+}
+
+.compare-issues-reason {
+  color: var(--text);
+}
+
+.compare-issues-label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
+.compare-issues-hint {
+  font-size: var(--text-xs);
+  color: var(--text-3);
+}
+
+.compare-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: auto;
 }
 
 .compare-amount {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
   align-items: end;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
 }
 
 .compare-amount label {
   display: grid;
-  gap: 2px;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-2);
 }
 
 .compare-amount input {
   width: 9rem;
+  min-height: var(--control-sm);
 }
 
-.compare-pick-row .compare-adjust {
-  grid-column: 2;
-  font-size: var(--text-sm);
-}
-
-/* Compare quotes, its own page (quote/ComparePage.tsx): the client chosen, then the panel. */
-.compare-page {
-  display: grid;
+/* The comparison PDF: how many insurers' PDFs are saved, and making it. */
+.quote-panel .compare-report[role='status'] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-4);
+  padding: var(--space-5);
+  font-size: var(--text-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  animation: none;
 }
 
-.compare-client {
+.compare-report-main {
+  display: flex;
+  flex: 1 1 22rem;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.compare-report-main > div {
   display: grid;
-  gap: var(--space-1);
-  max-width: 28rem;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+}
+
+.compare-report-main h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.compare-report-main p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-2);
+}
+
+.compare-report-main p strong {
+  color: var(--text);
+}
+
+.compare-report-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--primary-text);
+  background: var(--primary-soft);
+  border-radius: var(--radius-md);
+}
+
+.compare-report-bar {
+  height: 6px;
+  max-width: 22rem;
+  overflow: hidden;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+
+.compare-report-bar span {
+  display: block;
+  height: 100%;
+  background: var(--success);
+  border-radius: var(--radius-pill);
+  transition: width var(--dur) var(--ease);
+}
+
+.compare-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 760px) {
+  .compare-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .compare-subject {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .compare-kinds {
+    display: flex;
+    overflow-x: auto;
+  }
 }
 
 /* Which plan for the PDF (quote/PlanChoice.tsx). */
@@ -2294,6 +2651,11 @@ label.check input {
 
 .form-cols > .span-full {
   grid-column: 1 / -1;
+}
+
+.form-cols-3 > .span-2,
+.form-cols-4 > .span-2 {
+  grid-column: span 2;
 }
 
 .form-cols > label {
@@ -2747,6 +3109,10 @@ label.check input {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .form-cols > .span-2 {
+    grid-column: auto;
+  }
+
   .form-section-head {
     flex-wrap: wrap;
   }
@@ -2810,5 +3176,231 @@ label.check input {
 
   .cf-footer-actions > button {
     flex: 1 1 0;
+  }
+}
+
+/* ------------------------------------------------------------------------------------------ */
+/* Insurer portals (insurers/InsurerPortals.tsx): a summary, then a card per insurer            */
+/* ------------------------------------------------------------------------------------------ */
+
+.portal-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.portal-summary li {
+  --tone: var(--text-2);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+
+.portal-summary li strong {
+  font-weight: var(--weight-semibold);
+  color: var(--tone);
+}
+
+.portal-summary li[data-tone='success'] {
+  --tone: var(--success);
+}
+
+.portal-summary li[data-tone='warning'] {
+  --tone: var(--warning);
+}
+
+.portal-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portal-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  transition:
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+
+.portal-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.portal-card[data-menu-open='true'] {
+  z-index: 5;
+}
+
+/* The two facts: the sign-in saved, the session. */
+/* Name and status on one line, how it signs in across beneath: the same height on every card. */
+.portal-card-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  align-items: center;
+}
+
+.portal-card-head .avatar {
+  grid-row: 1 / 3;
+  width: 40px;
+  height: 40px;
+  font-size: var(--text-sm);
+}
+
+.portal-card-head h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.portal-card-head .status {
+  justify-self: end;
+}
+
+.portal-card-head p {
+  grid-column: 2 / 4;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+}
+
+.portal-facts {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.portal-facts > div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.portal-facts dt {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-3);
+}
+
+.portal-facts dd {
+  --tone: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text);
+}
+
+.portal-facts dd span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.portal-facts dd svg {
+  flex: none;
+  color: var(--tone);
+}
+
+.portal-facts dd[data-tone='success'] {
+  --tone: var(--success);
+}
+
+.portal-facts dd[data-tone='warning'] {
+  --tone: var(--warning);
+}
+
+.portal-facts dd[data-tone='info'] {
+  --tone: var(--primary-text);
+}
+
+/* Two rows of actions at the foot of every card: the main pair, then Sign out, Forget sign-in and
+   the menu. */
+.portal-card-actions {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.portal-card-main-actions {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--space-2);
+}
+
+.portal-card-more-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.portal-card-more {
+  margin-left: auto;
+}
+
+.portal-card-notes {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.portal-card-notes p {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+@media (max-width: 760px) {
+  .portal-card {
+    padding: var(--space-4);
+  }
+
+  .portal-card-main-actions > button {
+    min-height: var(--control-md);
   }
 }
