@@ -167,8 +167,9 @@ export interface FqfApi {
 export const API_SHAPE = {
   app: ['getInfo'],
   insurers: ['list', 'saveLogin', 'forgetLogin', 'openPortal', 'signOut', 'record'],
-  quotes: ['run', 'cancel', 'resetAll', 'finish', 'openPdf', 'progress', 'compare'],
+  // In the bridge's order (src/preload/index.ts): the smoke test compares them as written.
   iciciApi: ['status', 'save', 'test'],
+  quotes: ['run', 'cancel', 'resetAll', 'finish', 'openPdf', 'progress', 'compare'],
   clients: ['list', 'get', 'save', 'delete', 'exportAll'],
   portals: ['tabs', 'show', 'close', 'setBounds'],
   travellers: ['list', 'get', 'save', 'delete'],

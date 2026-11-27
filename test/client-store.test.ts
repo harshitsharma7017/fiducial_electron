@@ -148,7 +148,9 @@ const unusedQuotes = {
   resetAll: () => Promise.reject(new Error('not used')),
 };
 
-describe('the client store', () => {
+// Opening the encrypted store is slow on CI's Windows machines (8.7 s for the first test of the
+// 1.1.0 release build, 27 November 2026): more time than vitest's default 5 s.
+describe('the client store', { timeout: 30_000 }, () => {
   it('saves a client and reads it back, normalised', async () => {
     const store = await open(place());
     const saved = store.save(null, CLIENT);
